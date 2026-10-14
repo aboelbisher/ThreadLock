@@ -8,3 +8,7 @@
 -keep class com.wlw.WlwActivity { *; }
 -keep class com.wlw.WlwService { *; }
 -keep class * implements com.wlw.WlwService { *; }
+
+# The engine's frame pacing (Swappy, third_party/swappy) creates these from C++ and registers their
+# native methods by name.
+-keep class com.google.androidgamesdk.** { *; }

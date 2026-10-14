@@ -40,7 +40,9 @@ android {
     sourceSets {
         getByName("main") {
             assets.srcDirs("../../assets")  // same assets folder the desktop build uses
-            java.srcDirs("../../external/WLWengine/engine/wlw/platform/android/java")  // the native bridge's Kotlin half
+            java.srcDirs(
+                "../../external/WLWengine/engine/wlw/platform/android/java",  // the native bridge's Kotlin half
+                "../../external/WLWengine/third_party/swappy/java")  // the engine's frame pacing (Swappy)
         }
     }
 
