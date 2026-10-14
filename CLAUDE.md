@@ -46,7 +46,6 @@ tests/threadlock_rules_tests.cpp
 assets/fonts/                 LilitaOne (OFL), the same font as Bluzzle
 android/                      Gradle project: ThreadlockActivity (WlwActivity, no SDK services yet)
 external/WLWengine/           the engine
-dev_checks/                   NOT in git: the engine step-4/5 check Systems (they include Bluzzle's headers)
 ```
 
 ## Rules model (threadlock_rules.h)
