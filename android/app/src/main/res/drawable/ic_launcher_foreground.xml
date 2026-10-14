@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app icon's foreground: a blue and an amber stream crossing (108dp canvas; the launcher
+     crops to the middle 72dp, so the drawing stays inside the 66dp safe zone). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#3DA1FF" android:strokeWidth="9" android:strokeLineCap="round"
+        android:pathData="M36,32 L72,76" />
+    <path android:strokeColor="#FFAB29" android:strokeWidth="9" android:strokeLineCap="round"
+        android:pathData="M72,32 L36,76" />
+    <path android:fillColor="#D4E3F2" android:pathData="M54,46 a8,8 0 1 1 0,16 a8,8 0 1 1 0,-16 z" />
+</vector>

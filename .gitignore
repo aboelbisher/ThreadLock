@@ -1,0 +1,33 @@
+# ---- Build output ----
+build/
+out/
+CMakeUserPresets.json
+
+# ---- vcpkg (vcpkg itself is the vcpkg/ submodule) ----
+vcpkg_installed/
+
+# ---- IDEs / OS ----
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+xcuserdata/
+.DS_Store
+Thumbs.db
+
+# ---- Android (android/) ----
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+android/.idea/
+android/.kotlin/
+*.iml
+captures/
+
+# ---- Release signing: never in git ----
+android/keystore.properties
+*.jks
+*.keystore
