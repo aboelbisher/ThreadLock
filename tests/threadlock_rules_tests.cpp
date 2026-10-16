@@ -1,191 +1,390 @@
-// Tests for Threadlock's rules (threadlock_rules.h): level 1 with every way of placing the pieces
-// that matters, the tray, blocking, and determinism.
-#include <cstdio>
+// Tests for Threadlock's rules v2 (threadlock_rules.h): every piece, every way to fail, the tray and
+// sockets, determinism. Levels are written as JSON, the same format as assets/levels.
+#include <string>
+#include <utility>
 #include <vector>
 
-#include "../src/threadlock_rules.h"
+#include "doctest.h"
+#include "test_levels.h"
 
 using namespace threadlock;
 
-static int g_failures = 0;
-#define CHECK(cond)                                             \
-  do {                                                          \
-    if (!(cond)) {                                              \
-      std::printf("  FAILED: %s (line %d)\n", #cond, __LINE__); \
-      ++g_failures;                                             \
-    }                                                           \
-  } while (0)
+namespace {
 
-struct RunResult {
-  bool solved = false;
-  int ticks = 0;
-  int collisions = 0;
-  Cup blue, amber;
-  std::vector<Event> events;
+struct Run {
+  Outcome outcome;
+  std::vector<std::pair<int, Event>> timed;  // (tick, event)
+
+  int Count(EventType type) const {
+    int n = 0;
+    for (const auto& [tick, e] : timed) n += e.type == type;
+    return n;
+  }
+  int FirstTick(EventType type, int node, Color color = Color::None) const {
+    for (const auto& [tick, e] : timed) {
+      if (e.type == type && e.node == node && (color == Color::None || e.bead.a == color)) return tick;
+    }
+    return -1;
+  }
 };
 
-static RunResult Run(Board& board) {
-  RunResult result;
+Run RunBoard(Board& board) {
+  Run run;
   board.Start();
-  for (int i = 0; i < 2000 && !board.Finished(); ++i) {
-    for (const Event& e : board.Tick()) {
-      if (e.type == EventType::Collide) ++result.collisions;
-      result.events.push_back(e);
+  while (board.Running()) {
+    for (const Event& e : board.Tick()) run.timed.push_back({board.Ticks(), e});
+  }
+  run.outcome = board.GetOutcome();
+  return run;
+}
+
+int NodeOf(const Level& level, const char* id) {
+  const int n = level.NodeIndex(id);
+  REQUIRE(n >= 0);
+  return n;
+}
+
+int PieceOf(const Board& board, PieceType type, int nth = 0) {
+  for (int i = 0; i < board.PieceCount(); ++i) {
+    if (board.PieceInfo(i).piece.type == type && nth-- == 0) return i;
+  }
+  FAIL("no such piece in the tray");
+  return -1;
+}
+
+}  // namespace
+
+TEST_SUITE("rules") {
+  TEST_CASE("beads parse, print and mix") {
+    std::vector<Bead> beads;
+    REQUIRE(ParseBeads("B+A*3 B A", beads));
+    CHECK(beads.size() == 5);
+    CHECK(beads[0] == Bead::Blend(Color::Amber, Color::Blue));  // blends are kept in one order
+    CHECK(beads[0].Drops() == 2);
+    CHECK(BeadsText(beads) == "B+A*3 B A");
+    CHECK(!ParseBeads("B*0", beads));
+    CHECK(!ParseBeads("X", beads));
+    CHECK(Mix(Color::Blue, Color::Amber) == Color::Green);
+    CHECK(Mix(Color::Rose, Color::Green) == Color::Pearl);
+    CHECK(Mix(Color::Blue, Color::Blue) == Color::Blue);
+    CHECK(Mix(Color::Blue, Color::Rose) == Color::Mud);
+  }
+
+  TEST_CASE("cells follow the drawn length") {
+    const Level level = MakeLevel(kTwoCups);
+    CHECK(level.pipes[0].cells == 7);   // spout (r 22) to fork (r 5), 98 apart: 71 drawn
+    CHECK(level.pipes[1].cells == 30);  // the blue lane
+    CHECK(level.pipes[2].cells == 14);  // amber: 14 + the pass socket's tick + 15 = 30 too
+    CHECK(level.pipes[3].cells == 15);  // the amber bend sits a little lower to make it 15
+    CHECK(level.nodes[static_cast<size_t>(NodeOf(level, "x"))].dwell == 3);
+  }
+
+  TEST_CASE("an empty fork follows its flap: the blend lands whole, in the wrong cup") {
+    const Level level = MakeLevel(kTwoCups);
+    Board board(level);
+    const Run run = RunBoard(board);
+    CHECK(run.outcome.over);
+    CHECK(!run.outcome.solved);
+    CHECK(run.outcome.failure == Failure::WrongCup);
+    CHECK(run.Count(EventType::Collide) == 0);
+    CHECK(board.Cup(NodeOf(level, "cb")).count == 12);  // nothing is lost: 6 blends = 12 drops
+    CHECK(board.Cup(NodeOf(level, "ca")).count == 0);
+  }
+
+  TEST_CASE("Two Cups: a separator alone makes mud at the crossing") {
+    const Level level = MakeLevel(kTwoCups);
+    Board board(level);
+    REQUIRE(board.Place(PieceOf(board, PieceType::Separator), NodeOf(level, "f")));
+    const Run run = RunBoard(board);
+    CHECK(!run.outcome.solved);
+    CHECK(run.outcome.failure == Failure::Mud);
+    CHECK(run.outcome.fail_node == NodeOf(level, "x"));
+    CHECK(run.outcome.fail_tick == 39);  // both halves enter on tick 39
+    CHECK(run.Count(EventType::Collide) == 6);
+  }
+
+  TEST_CASE("Two Cups: separator + turnstile, amber waits 3 ticks") {
+    const Level level = MakeLevel(kTwoCups);
+    Board board(level);
+    board.Place(PieceOf(board, PieceType::Separator), NodeOf(level, "f"));
+    board.Place(PieceOf(board, PieceType::Turnstile), NodeOf(level, "x"));
+    const Run run = RunBoard(board);
+    CHECK(run.outcome.solved);
+    CHECK(run.outcome.pieces == 2);
+    // Blue (lane 0, the arrow's side) enters at 39; amber enters at 42, the tick blue leaves.
+    CHECK(run.FirstTick(EventType::Enter, NodeOf(level, "x"), Color::Blue) == 39);
+    CHECK(run.FirstTick(EventType::Enter, NodeOf(level, "x"), Color::Amber) == 42);
+    CHECK(run.Count(EventType::Wait) >= 6);
+  }
+
+  TEST_CASE("Two Cups: the turnstile's arrow picks who goes first") {
+    const Level level = MakeLevel(kTwoCups);
+    Board board(level);
+    board.Place(PieceOf(board, PieceType::Separator), NodeOf(level, "f"));
+    const int turnstile = PieceOf(board, PieceType::Turnstile);
+    board.Place(turnstile, NodeOf(level, "x"));
+    board.SetSetting(turnstile, 1);
+    const Run run = RunBoard(board);
+    CHECK(run.outcome.solved);
+    CHECK(run.FirstTick(EventType::Enter, NodeOf(level, "x"), Color::Amber) == 39);
+    CHECK(run.FirstTick(EventType::Enter, NodeOf(level, "x"), Color::Blue) == 42);
+  }
+
+  TEST_CASE("Two Cups: separator + short tank solves one tick slower, with near misses") {
+    const Level level = MakeLevel(kTwoCups);
+    Board turnstile_board(level), tank_board(level);
+    turnstile_board.Place(PieceOf(turnstile_board, PieceType::Separator), NodeOf(level, "f"));
+    turnstile_board.Place(PieceOf(turnstile_board, PieceType::Turnstile), NodeOf(level, "x"));
+    tank_board.Place(PieceOf(tank_board, PieceType::Separator), NodeOf(level, "f"));
+    tank_board.Place(PieceOf(tank_board, PieceType::TankShort), NodeOf(level, "t"));
+    const Run with_turnstile = RunBoard(turnstile_board);
+    const Run with_tank = RunBoard(tank_board);
+    CHECK(with_tank.outcome.solved);
+    CHECK(with_tank.outcome.ticks == with_turnstile.outcome.ticks + 1);
+    CHECK(with_tank.Count(EventType::NearMiss) == 6);       // amber enters the tick after blue leaves
+    CHECK(with_turnstile.Count(EventType::NearMiss) == 0);  // a lock isn't a near miss
+  }
+
+  TEST_CASE("sockets have shapes") {
+    const Level level = MakeLevel(kTwoCups);
+    Board board(level);
+    const int tank = PieceOf(board, PieceType::TankShort);
+    CHECK(!board.CanPlace(tank, NodeOf(level, "x")));  // pipe sockets only
+    CHECK(!board.CanPlace(tank, NodeOf(level, "f")));
+    CHECK(!board.CanPlace(PieceOf(board, PieceType::Separator), NodeOf(level, "x")));
+    CHECK(!board.CanPlace(PieceOf(board, PieceType::Turnstile), NodeOf(level, "t")));
+    CHECK(!board.CanPlace(tank, NodeOf(level, "s")));  // not a socket
+    CHECK(board.CanPlace(tank, NodeOf(level, "t")));
+  }
+
+  TEST_CASE("placing: one piece per socket, displaced pieces go back to the tray") {
+    const Level level = MakeLevel(kTwoForks);
+    Board board(level);
+    const int flipper = PieceOf(board, PieceType::Flipper);
+    const int overflow = PieceOf(board, PieceType::Overflow);
+    REQUIRE(board.Place(flipper, NodeOf(level, "a")));
+    CHECK(board.PieceAt(NodeOf(level, "a")) == flipper);
+    REQUIRE(board.Place(flipper, NodeOf(level, "b")));  // it moves
+    CHECK(board.PieceAt(NodeOf(level, "a")) == -1);
+    REQUIRE(board.Place(overflow, NodeOf(level, "b")));  // takes the socket: the flipper goes back
+    CHECK(board.PieceNode(flipper) == -1);
+    CHECK(board.PlacedCount() == 1);
+    board.Unplace(overflow);
+    CHECK(board.PlacedCount() == 0);
+  }
+
+  TEST_CASE("the same colour may share a junction; different colours make mud") {
+    {
+      const Level level = MakeLevel(Crossing("B*4", "B*4"));
+      Board board(level);
+      const Run run = RunBoard(board);
+      CHECK(run.Count(EventType::Collide) == 0);
+      CHECK(run.outcome.solved);
+    }
+    {
+      const Level level = MakeLevel(Crossing("B*4", "A*4"));
+      Board board(level);
+      const Run run = RunBoard(board);
+      CHECK(run.Count(EventType::Collide) == 4);
+      CHECK(run.outcome.failure == Failure::Mud);
     }
   }
-  result.solved = board.Solved();
-  result.ticks = board.Ticks();
-  result.blue = board.CupAt(TwoCups::kCupBlue);
-  result.amber = board.CupAt(TwoCups::kCupAmber);
-  return result;
-}
 
-static void TestNoPiecesIsMud() {
-  Board board(TwoCups::Make());
-  const RunResult r = Run(board);
-  CHECK(board.Finished() && !r.solved);
-  CHECK(r.blue.mud && r.amber.mud);
-  CHECK(r.blue.count == 6 && r.amber.count == 6);  // nothing is lost, it's just mud
-}
-
-static void TestFilterOnlyRacesAtTheCrossing() {
-  Board board(TwoCups::Make());
-  CHECK(board.Place(Piece::Filter, TwoCups::kSplit));
-  const RunResult r = Run(board);
-  CHECK(!r.solved);
-  CHECK(r.collisions == 6);  // every pour's halves meet
-  CHECK(r.blue.mud && r.amber.mud);
-}
-
-static void TestFilterAndTurnstileSolves() {
-  Board board(TwoCups::Make());
-  board.Place(Piece::Filter, TwoCups::kSplit);
-  board.Place(Piece::Turnstile, TwoCups::kCross);
-  const RunResult r = Run(board);
-  CHECK(r.solved);
-  CHECK(r.collisions == 0);
-  CHECK(r.blue.count == 6 && !r.blue.mud && r.amber.count == 6 && !r.amber.mud);
-}
-
-static void TestFilterAndTankSolves() {
-  Board board(TwoCups::Make());
-  board.Place(Piece::Filter, TwoCups::kSplit);
-  board.Place(Piece::Tank, TwoCups::kTank);
-  const RunResult r = Run(board);
-  CHECK(r.solved);
-  CHECK(r.collisions == 0);
-}
-
-static void TestAllThreeSolves() {
-  Board board(TwoCups::Make());
-  board.Place(Piece::Filter, TwoCups::kSplit);
-  board.Place(Piece::Tank, TwoCups::kTank);
-  board.Place(Piece::Turnstile, TwoCups::kCross);
-  CHECK(Run(board).solved);
-}
-
-static void TestWrongSocketsDontHelp() {
-  {
-    Board board(TwoCups::Make());  // a tank at the crossing holds both lanes there together
-    board.Place(Piece::Filter, TwoCups::kSplit);
-    board.Place(Piece::Tank, TwoCups::kCross);
-    const RunResult r = Run(board);
-    CHECK(!r.solved && r.collisions == 6);
+  TEST_CASE("a bridge keeps the lanes apart: no mud, no waiting") {
+    const Level level = MakeLevel(Crossing("B*4", "A*4", "\"bridge\""));
+    Board board(level);
+    board.Place(PieceOf(board, PieceType::Bridge), NodeOf(level, "x"));
+    const Run run = RunBoard(board);
+    CHECK(run.outcome.solved);
+    CHECK(run.Count(EventType::Wait) == 0);
   }
-  {
-    Board board(TwoCups::Make());  // a turnstile on the amber lane alone never has to choose
-    board.Place(Piece::Filter, TwoCups::kSplit);
-    board.Place(Piece::Turnstile, TwoCups::kTank);
-    CHECK(!Run(board).solved);
-  }
-  {
-    Board board(TwoCups::Make());  // no filter: the crossing is fixed but the mix is never sorted
-    board.Place(Piece::Turnstile, TwoCups::kCross);
-    board.Place(Piece::Filter, TwoCups::kTank);
-    const RunResult r = Run(board);
-    CHECK(!r.solved && r.collisions == 0 && r.blue.mud);
-  }
-}
 
-static void TestTray() {
-  Board board(TwoCups::Make());
-  CHECK(!board.Place(Piece::Filter, TwoCups::kSource));  // not a socket
-  CHECK(!board.Place(Piece::Filter, TwoCups::kCupBlue));
-  CHECK(board.Place(Piece::Filter, TwoCups::kSplit));
-  CHECK(board.NodeOf(Piece::Filter) == TwoCups::kSplit);
-  CHECK(board.Place(Piece::Filter, TwoCups::kCross));  // moves, one of each
-  CHECK(board.PieceAt(TwoCups::kSplit) == Piece::None && board.NodeOf(Piece::Filter) == TwoCups::kCross);
-  CHECK(board.Place(Piece::Tank, TwoCups::kCross));  // takes the socket, the filter goes back
-  CHECK(board.NodeOf(Piece::Filter) == -1 && board.PieceAt(TwoCups::kCross) == Piece::Tank);
-  board.Remove(Piece::Tank);
-  CHECK(board.NodeOf(Piece::Tank) == -1);
-}
-
-static void TestTurnstileMakesAmberWait() {
-  Board board(TwoCups::Make());
-  board.Place(Piece::Filter, TwoCups::kSplit);
-  board.Place(Piece::Turnstile, TwoCups::kCross);
-  board.Start();
-  bool amber_blocked = false, blue_blocked = false;
-  for (int i = 0; i < 2000 && !board.Finished(); ++i) {
-    board.Tick();
-    amber_blocked |= board.Blocked(TwoCups::kTankToCross);
-    blue_blocked |= board.Blocked(TwoCups::kBlueToCross);
-  }
-  CHECK(amber_blocked);  // waiting for the blue half to turn through
-  CHECK(!blue_blocked);  // blue goes first and never stops
-}
-
-static void TestTankHoldsAndTimings() {
-  Board board(TwoCups::Make());
-  board.Place(Piece::Filter, TwoCups::kSplit);
-  board.Place(Piece::Tank, TwoCups::kTank);
-  board.Start();
-  int first_split = -1, first_blue_cross = -1, first_amber_cross = -1;
-  bool held = false;
-  for (int i = 0; i < 2000 && !board.Finished(); ++i) {
-    for (const Event& e : board.Tick()) {
-      if (e.type != EventType::EnterNode) continue;
-      if (e.node == TwoCups::kSplit && first_split < 0) first_split = board.Ticks();
-      if (e.node == TwoCups::kCross && e.liquid == Liquid::Blue && first_blue_cross < 0) first_blue_cross = board.Ticks();
-      if (e.node == TwoCups::kCross && e.liquid == Liquid::Amber && first_amber_cross < 0) first_amber_cross = board.Ticks();
+  TEST_CASE("a merge: same colours queue, different ones collide") {
+    {
+      const Level level = MakeLevel(Merge("B*3", "B*3", 6, "B"));
+      Board board(level);
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.solved);
+      CHECK(run.Count(EventType::Collide) == 0);
+      CHECK(board.Cup(NodeOf(level, "c")).count == 6);
     }
-    held |= board.Blocked(TwoCups::kAmberToTank);
+    {
+      const Level level = MakeLevel(Merge("B*3", "A*3", 6, "B"));
+      Board board(level);
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.failure == Failure::Mud);
+    }
   }
-  CHECK(held);
-  CHECK(first_split == 8);                           // poured at tick 1, 7 cells of feed
-  CHECK(first_blue_cross == first_split + 32);       // 1 tick in the split + 31 cells
-  CHECK(first_amber_cross == first_blue_cross + 6);  // the tank's hold
-}
 
-static void TestDeterministic() {
-  Board a(TwoCups::Make()), b(TwoCups::Make());
-  a.Place(Piece::Filter, TwoCups::kSplit);
-  b.Place(Piece::Filter, TwoCups::kSplit);
-  const RunResult ra = Run(a), rb = Run(b);
-  CHECK(ra.ticks == rb.ticks && ra.events.size() == rb.events.size());
-  bool same = ra.events.size() == rb.events.size();
-  for (size_t i = 0; same && i < ra.events.size(); ++i) {
-    same = ra.events[i].type == rb.events[i].type && ra.events[i].blob == rb.events[i].blob &&
-           ra.events[i].node == rb.events[i].node && ra.events[i].segment == rb.events[i].segment &&
-           ra.events[i].liquid == rb.events[i].liquid;
+  TEST_CASE("a mixer makes two green from a blue and an amber") {
+    const Level level = MakeLevel(Merge("B*3", "A*3", 6, "G", "\"mixer\""));
+    Board board(level);
+    board.Place(PieceOf(board, PieceType::Mixer), NodeOf(level, "m"));
+    const Run run = RunBoard(board);
+    CHECK(run.outcome.solved);
+    CHECK(run.Count(EventType::Mix) == 3);
+    CHECK(board.Cup(NodeOf(level, "c")).count == 6);
   }
-  CHECK(same);
-  const RunResult again = Run(a);  // Start() really resets
-  CHECK(again.ticks == ra.ticks && again.events.size() == ra.events.size());
-}
 
-int main() {
-  TestNoPiecesIsMud();
-  TestFilterOnlyRacesAtTheCrossing();
-  TestFilterAndTurnstileSolves();
-  TestFilterAndTankSolves();
-  TestAllThreeSolves();
-  TestWrongSocketsDontHelp();
-  TestTray();
-  TestTurnstileMakesAmberWait();
-  TestTankHoldsAndTimings();
-  TestDeterministic();
-  if (g_failures == 0) std::printf("All rules tests passed.\n");
-  return g_failures == 0 ? 0 : 1;
+  TEST_CASE("a mixer whose partner never comes: THREADLOCKED") {
+    const Level level = MakeLevel(Merge("B*4", "A*3", 6, "G", "\"mixer\""));
+    Board board(level);
+    board.Place(PieceOf(board, PieceType::Mixer), NodeOf(level, "m"));
+    const Run run = RunBoard(board);
+    CHECK(run.outcome.jammed);
+    CHECK(!run.outcome.solved);
+    CHECK(run.outcome.failure == Failure::Jam);
+    CHECK(run.Count(EventType::Jammed) == 1);
+    CHECK(board.Jam().lonely == NodeOf(level, "m"));
+    CHECK(board.Cup(NodeOf(level, "c")).count == 6);
+  }
+
+  TEST_CASE("flipper alternates, overflow counts") {
+    const Level level = MakeLevel(kTwoForks);
+    Board board(level);
+    board.Place(PieceOf(board, PieceType::Overflow), NodeOf(level, "a"));  // 2 to the left cup...
+    board.Place(PieceOf(board, PieceType::Flipper), NodeOf(level, "b"));   // ...the other 4 split 2 / 2
+    const Run run = RunBoard(board);
+    CHECK(run.outcome.solved);
+    CHECK(board.Cup(NodeOf(level, "c1")).count == 2);
+    CHECK(board.Cup(NodeOf(level, "c2")).count == 2);
+    CHECK(board.Cup(NodeOf(level, "c3")).count == 2);
+  }
+
+  TEST_CASE("halving can't make thirds: spill") {
+    const Level level = MakeLevel(kTwoForks);
+    Board board(level);
+    board.Place(PieceOf(board, PieceType::Flipper), NodeOf(level, "a"));
+    board.Place(PieceOf(board, PieceType::Overflow), NodeOf(level, "b"));
+    const Run run = RunBoard(board);
+    CHECK(!run.outcome.solved);
+    CHECK(board.Cup(NodeOf(level, "c1")).count == 3);
+    CHECK(board.Cup(NodeOf(level, "c1")).spilled);
+    CHECK(board.Cup(NodeOf(level, "c3")).count == 1);
+    CHECK(run.outcome.failure == Failure::Spill);
+    CHECK(run.Count(EventType::Spill) == 1);
+  }
+
+  TEST_CASE("a dry cup") {
+    const Level level = MakeLevel(Merge("B*2", "B*2", 6, "B"));
+    Board board(level);
+    const Run run = RunBoard(board);
+    CHECK(run.outcome.failure == Failure::Dry);
+    CHECK(run.outcome.fail_node == NodeOf(level, "c"));
+  }
+
+  TEST_CASE("a tappable flap") {
+    const Level level = MakeLevel(kTwoForks);
+    Board board(level);
+    CHECK(board.FlapTappable(NodeOf(level, "a")));
+    CHECK(!board.FlapTappable(NodeOf(level, "b")));
+    board.SetFlap(NodeOf(level, "a"), 1);
+    CHECK(board.Flap(NodeOf(level, "a")) == 1);
+    board.SetFlap(NodeOf(level, "b"), 0);  // no handle: stays
+    CHECK(board.Flap(NodeOf(level, "b")) == 1);
+    board.Place(PieceOf(board, PieceType::Flipper), NodeOf(level, "a"));
+    CHECK(!board.FlapTappable(NodeOf(level, "a")));  // a piece covers it
+  }
+
+  TEST_CASE("two turnstiles taken in opposite orders: a circle of waiting") {
+    const Level level = MakeLevel(kTwoLocks);
+    Board board(level);
+    board.Place(PieceOf(board, PieceType::Turnstile, 0), NodeOf(level, "x1"));
+    const int second = PieceOf(board, PieceType::Turnstile, 1);
+    board.Place(second, NodeOf(level, "x2"));
+    board.SetSetting(second, 1);  // x2 lets amber go first, x1 blue: opposite lock orders
+    const Run run = RunBoard(board);
+    CHECK(run.outcome.jammed);
+    const JamReport jam = board.Jam();
+    CHECK(jam.cycle.size() == 2);
+    CHECK(jam.lonely == -1);
+  }
+
+  TEST_CASE("bridge one crossing, lock the other: no circle") {
+    const Level level = MakeLevel(kTwoLocks);
+    Board board(level);
+    board.Place(PieceOf(board, PieceType::Turnstile, 0), NodeOf(level, "x1"));
+    board.Place(PieceOf(board, PieceType::Bridge), NodeOf(level, "x2"));
+    const Run run = RunBoard(board);
+    CHECK(run.outcome.solved);
+  }
+
+  TEST_CASE("a twin gate lets drops go in pairs") {
+    const Level level = MakeLevel(kTwins);
+    const int p = NodeOf(level, "p"), q = NodeOf(level, "q");
+    Board board(level);
+    {
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.solved);
+      CHECK(run.FirstTick(EventType::Leave, q) == run.FirstTick(EventType::Leave, p) + 4);
+    }
+    board.Stop();
+    const int gate = PieceOf(board, PieceType::TwinGate);
+    REQUIRE(board.Place(gate, p));
+    CHECK(board.PieceAt(q) == gate);  // it covers both halves
+    const Run run = RunBoard(board);
+    CHECK(run.outcome.solved);
+    CHECK(run.FirstTick(EventType::Leave, q) == run.FirstTick(EventType::Leave, p));
+  }
+
+  TEST_CASE("locked and preplaced pieces") {
+    const Level level = MakeLevel(kRepair);
+    Board board(level);
+    // 0 = the tray's separator, 1 = the locked separator, 2 = the preplaced tank
+    CHECK(board.PieceNode(1) == NodeOf(level, "f"));
+    CHECK(board.Locked(1));
+    CHECK(!board.CanPlace(0, NodeOf(level, "f")));  // a locked piece keeps its socket
+    board.Unplace(1);
+    CHECK(board.PieceNode(1) == NodeOf(level, "f"));
+    CHECK(board.PieceNode(2) == NodeOf(level, "t"));
+    CHECK(board.PlacedCount() == 1);  // locked pieces don't count for Lean
+    board.Unplace(2);
+    CHECK(board.PlacedCount() == 0);
+    board.ClearPieces();
+    CHECK(board.PieceNode(2) == NodeOf(level, "t"));  // back where the level put it
+  }
+
+  TEST_CASE("runs are deterministic and Start resets") {
+    const Level level = MakeLevel(kTwoCups);
+    Board a(level), b(level);
+    a.Place(PieceOf(a, PieceType::Separator), NodeOf(level, "f"));
+    b.Place(PieceOf(b, PieceType::Separator), NodeOf(level, "f"));
+    const Run ra = RunBoard(a), rb = RunBoard(b);
+    REQUIRE(ra.timed.size() == rb.timed.size());
+    bool same = true;
+    for (size_t i = 0; i < ra.timed.size(); ++i) {
+      const Event& x = ra.timed[i].second;
+      const Event& y = rb.timed[i].second;
+      same &= ra.timed[i].first == rb.timed[i].first && x.type == y.type && x.drop == y.drop && x.node == y.node &&
+              x.bead == y.bead;
+    }
+    CHECK(same);
+    a.Stop();
+    const Run again = RunBoard(a);
+    CHECK(again.outcome.ticks == ra.outcome.ticks);
+    CHECK(again.timed.size() == ra.timed.size());
+  }
+
+  TEST_CASE("pieces can't move while running") {
+    const Level level = MakeLevel(kTwoCups);
+    Board board(level);
+    board.Start();
+    CHECK(!board.Place(0, NodeOf(level, "f")));
+    board.Stop();
+    CHECK(board.Place(0, NodeOf(level, "f")));
+  }
+
+  TEST_CASE("bad levels are reported") {
+    std::vector<std::string> errors;
+    Level level;
+    CHECK(
+        !ParseLevel(R"({"id": "x", "nodes": [{"id": "s", "kind": "spout", "at": [0, 0], "beads": "B"}], "pipes": []})",
+                    level, errors));
+    CHECK(!errors.empty());
+    errors.clear();
+    CHECK(!ParseLevel("not json", level, errors));
+    errors.clear();
+    CHECK(!ParseLevel(R"({"id": "x", "nodes": [{"id": "s", "kind": "spout", "at": [0, 0], "beads": "Q"}]})", level,
+                      errors));
+  }
 }
