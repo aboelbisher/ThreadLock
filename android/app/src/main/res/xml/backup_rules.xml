@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older: the same rules as data_extraction_rules.xml. -->
+<full-backup-content>
+    <include domain="file" path="Threadlock/progress.json" />
+    <include domain="file" path="Threadlock/progress.json.bak" />
+</full-backup-content>

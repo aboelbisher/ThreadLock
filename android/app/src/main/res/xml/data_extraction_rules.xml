@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+: what Auto Backup copies to the player's Google account and to a new phone.
+     The progress (stars, daily streak, achievements) is backed up. device.json stays on this
+     device: it holds the device id (a copied id would make two phones count as one when progress
+     from both is merged), the settings and the hints. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="Threadlock/progress.json" />
+        <include domain="file" path="Threadlock/progress.json.bak" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="Threadlock/progress.json" />
+        <include domain="file" path="Threadlock/progress.json.bak" />
+    </device-transfer>
+</data-extraction-rules>
