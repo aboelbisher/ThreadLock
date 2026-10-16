@@ -1,0 +1,257 @@
+{
+  "world": 2,
+  "name": "Fair Shares",
+  "accent": "A",
+  "levels": [
+    {
+      "id": "2-1", "name": "Half and Half", "intro": "Cups now want an exact count. Too many spills.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 60], "beads": "B*6", "beat": 10},
+        {"id": "f", "kind": "fork", "at": [180, 220], "socket": true},
+        {"id": "cl", "kind": "cup", "at": [90, 470], "want": "B", "count": 3},
+        {"id": "cr", "kind": "cup", "at": [270, 470], "want": "B", "count": 3}
+      ],
+      "pipes": [["s", "f"], ["f", "cl", [[90, 290]]], ["f", "cr", [[270, 290]]]],
+      "tray": ["flipper"]
+    },
+    {
+      "id": "2-2", "name": "Flip Side", "intro": "An odd count: which side goes first?",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 60], "beads": "A*5", "beat": 10},
+        {"id": "f", "kind": "fork", "at": [180, 220], "socket": true},
+        {"id": "cl", "kind": "cup", "at": [90, 470], "want": "A", "count": 2},
+        {"id": "cr", "kind": "cup", "at": [270, 470], "want": "A", "count": 3}
+      ],
+      "pipes": [["s", "f"], ["f", "cl", [[90, 290]]], ["f", "cr", [[270, 290]]]],
+      "tray": ["flipper"]
+    },
+    {
+      "id": "2-3", "name": "One for You", "intro": "An overflow: the first few go its way.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 60], "beads": "B*6", "beat": 10},
+        {"id": "f", "kind": "fork", "at": [180, 220], "socket": true},
+        {"id": "cl", "kind": "cup", "at": [90, 470], "want": "B", "count": 2},
+        {"id": "cr", "kind": "cup", "at": [270, 470], "want": "B", "count": 4}
+      ],
+      "pipes": [["s", "f"], ["f", "cl", [[90, 290]]], ["f", "cr", [[270, 290]]]],
+      "tray": ["flipper", {"type": "overflow", "n": 2}]
+    },
+    {
+      "id": "2-4", "name": "Two Forks", "intro": "Halve it, then halve it again.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 50], "beads": "B*8", "beat": 9},
+        {"id": "f1", "kind": "fork", "at": [180, 150], "socket": true},
+        {"id": "f2", "kind": "fork", "at": [255, 290], "socket": true},
+        {"id": "ca", "kind": "cup", "at": [75, 480], "want": "B", "count": 4},
+        {"id": "cb", "kind": "cup", "at": [195, 480], "want": "B", "count": 2},
+        {"id": "cc", "kind": "cup", "at": [310, 480], "want": "B", "count": 2}
+      ],
+      "pipes": [["s", "f1"], ["f1", "ca", [[75, 210]]], ["f1", "f2", [[255, 210]]], ["f2", "cb", [[195, 360]]], ["f2", "cc", [[310, 360]]]],
+      "tray": ["flipper", "flipper"]
+    },
+    {
+      "id": "2-5", "name": "Three Ways", "intro": "Halving can't make thirds.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 50], "beads": "B*6", "beat": 10},
+        {"id": "a", "kind": "fork", "at": [180, 150], "socket": true},
+        {"id": "b", "kind": "fork", "at": [255, 290], "socket": true},
+        {"id": "c1", "kind": "cup", "at": [75, 480], "want": "B", "count": 2},
+        {"id": "c2", "kind": "cup", "at": [195, 480], "want": "B", "count": 2},
+        {"id": "c3", "kind": "cup", "at": [310, 480], "want": "B", "count": 2}
+      ],
+      "pipes": [["s", "a"], ["a", "c1", [[75, 210]]], ["a", "b", [[255, 210]]], ["b", "c2", [[195, 360]]], ["b", "c3", [[310, 360]]]],
+      "tray": ["flipper", "flipper", {"type": "overflow", "n": 2}]
+    },
+    {
+      "id": "2-6", "name": "Handles", "intro": "A flap with a handle can be tapped.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 50], "beads": "A*7", "beat": 9},
+        {"id": "f1", "kind": "fork", "at": [180, 150], "socket": true},
+        {"id": "f2", "kind": "fork", "at": [250, 300], "flap": 1, "tap": true},
+        {"id": "ca", "kind": "cup", "at": [80, 480], "want": "A", "count": 3},
+        {"id": "cb", "kind": "cup", "at": [200, 480], "want": "A", "count": 4},
+        {"id": "d", "kind": "drain", "at": [320, 470]}
+      ],
+      "pipes": [["s", "f1"], ["f1", "ca", [[80, 210]]], ["f1", "f2", [[250, 210]]], ["f2", "cb", [[200, 370]]], ["f2", "d", [[320, 370]]]],
+      "tray": [{"type": "overflow", "n": 3}]
+    },
+    {
+      "id": "2-7", "name": "Odd One Out", "intro": "Seven drops: who gets the odd one?",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 50], "beads": "B*7", "beat": 9},
+        {"id": "f1", "kind": "fork", "at": [180, 150], "socket": true},
+        {"id": "f2", "kind": "fork", "at": [255, 290], "socket": true},
+        {"id": "ca", "kind": "cup", "at": [75, 480], "want": "B", "count": 3},
+        {"id": "cb", "kind": "cup", "at": [195, 480], "want": "B", "count": 2},
+        {"id": "cc", "kind": "cup", "at": [310, 480], "want": "B", "count": 2}
+      ],
+      "pipes": [["s", "f1"], ["f1", "ca", [[75, 210]]], ["f1", "f2", [[255, 210]]], ["f2", "cb", [[195, 360]]], ["f2", "cc", [[310, 360]]]],
+      "tray": ["flipper", "flipper"]
+    },
+    {
+      "id": "2-8", "name": "Cascade", "type": "spectacle", "intro": "Sit back and watch it share.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 40], "beads": "A*12", "beat": 7},
+        {"id": "f1", "kind": "fork", "at": [180, 120], "socket": true},
+        {"id": "f2", "kind": "fork", "at": [95, 250], "socket": true},
+        {"id": "f3", "kind": "fork", "at": [265, 250], "socket": true},
+        {"id": "c1", "kind": "cup", "at": [45, 480], "want": "A", "count": 3},
+        {"id": "c2", "kind": "cup", "at": [140, 480], "want": "A", "count": 3},
+        {"id": "c3", "kind": "cup", "at": [220, 480], "want": "A", "count": 3},
+        {"id": "c4", "kind": "cup", "at": [315, 480], "want": "A", "count": 3}
+      ],
+      "pipes": [["s", "f1"], ["f1", "f2", [[95, 170]]], ["f1", "f3", [[265, 170]]], ["f2", "c1", [[45, 330]]], ["f2", "c2", [[140, 330]]], ["f3", "c3", [[220, 330]]], ["f3", "c4", [[315, 330]]]],
+      "tray": ["flipper"],
+      "placed": [{"piece": "flipper", "at": "f2", "locked": true}, {"piece": "flipper", "at": "f3", "locked": true}]
+    },
+    {
+      "id": "2-9", "name": "Waste Not", "intro": "A drain takes anything. Only two may go.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 50], "beads": "B*8", "beat": 9},
+        {"id": "f1", "kind": "fork", "at": [180, 150], "socket": true},
+        {"id": "f2", "kind": "fork", "at": [250, 290], "socket": true},
+        {"id": "ca", "kind": "cup", "at": [80, 480], "want": "B", "count": 3},
+        {"id": "cb", "kind": "cup", "at": [200, 480], "want": "B", "count": 3},
+        {"id": "d", "kind": "drain", "at": [320, 470]}
+      ],
+      "pipes": [["s", "f1"], ["f1", "ca", [[80, 210]]], ["f1", "f2", [[250, 210]]], ["f2", "cb", [[200, 360]]], ["f2", "d", [[320, 360]]]],
+      "tray": [{"type": "overflow", "n": 3}, {"type": "overflow", "n": 2}]
+    },
+    {
+      "id": "2-10", "name": "Every Other", "intro": "Sort first, then share.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 40], "beads": "B+A*6", "beat": 10},
+        {"id": "f", "kind": "fork", "at": [180, 120], "socket": true},
+        {"id": "g", "kind": "fork", "at": [90, 270], "socket": true},
+        {"id": "c1", "kind": "cup", "at": [45, 480], "want": "B", "count": 3},
+        {"id": "c2", "kind": "cup", "at": [140, 480], "want": "B", "count": 3},
+        {"id": "c3", "kind": "cup", "at": [275, 480], "want": "A", "count": 6}
+      ],
+      "pipes": [["s", "f"], ["f", "g", [[90, 180]]], ["f", "c3", [[275, 180]]], ["g", "c1", [[45, 350]]], ["g", "c2", [[140, 350]]]],
+      "tray": ["separator", "flipper"]
+    },
+    {
+      "id": "2-11", "name": "Sorted Shares", "intro": "Counts on both colours, and a crossing.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 40], "beads": "B+A*6", "beat": 12},
+        {"id": "f", "kind": "fork", "at": [180, 110], "socket": true},
+        {"id": "x", "kind": "cross", "at": [180, 230], "socket": true},
+        {"id": "gb", "kind": "fork", "at": [270, 330], "socket": true},
+        {"id": "ga", "kind": "fork", "at": [90, 330], "socket": true},
+        {"id": "a1", "kind": "cup", "at": [40, 490], "want": "A", "count": 2},
+        {"id": "a2", "kind": "cup", "at": [135, 490], "want": "A", "count": 4},
+        {"id": "b1", "kind": "cup", "at": [225, 490], "want": "B", "count": 3},
+        {"id": "b2", "kind": "cup", "at": [320, 490], "want": "B", "count": 3}
+      ],
+      "pipes": [["s", "f"], ["f", "x", [[100, 160]]], ["f", "x", [[260, 160]]], ["x", "gb", [[270, 280]]], ["x", "ga", [[90, 280]]], ["ga", "a1", [[40, 400]]], ["ga", "a2", [[135, 400]]], ["gb", "b1", [[225, 400]]], ["gb", "b2", [[320, 400]]]],
+      "tray": ["separator", "turnstile", "flipper", {"type": "overflow", "n": 2}]
+    },
+    {
+      "id": "2-12", "name": "Count Down", "intro": "Five, two, one, one.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 40], "beads": "B*9", "beat": 8},
+        {"id": "f1", "kind": "fork", "at": [180, 120], "socket": true},
+        {"id": "f2", "kind": "fork", "at": [240, 230], "socket": true},
+        {"id": "f3", "kind": "fork", "at": [280, 340], "socket": true},
+        {"id": "c1", "kind": "cup", "at": [50, 490], "want": "B", "count": 5},
+        {"id": "c2", "kind": "cup", "at": [140, 490], "want": "B", "count": 2},
+        {"id": "c3", "kind": "cup", "at": [230, 490], "want": "B", "count": 1},
+        {"id": "c4", "kind": "cup", "at": [320, 490], "want": "B", "count": 1}
+      ],
+      "pipes": [["s", "f1"], ["f1", "c1", [[50, 180]]], ["f1", "f2", [[240, 170]]], ["f2", "c2", [[140, 290]]], ["f2", "f3", [[280, 280]]], ["f3", "c3", [[230, 400]]], ["f3", "c4", [[320, 400]]]],
+      "tray": [{"type": "overflow", "n": 5}, {"type": "overflow", "n": 2}, "flipper"]
+    },
+    {
+      "id": "2-13", "name": "Fix It", "type": "repair", "intro": "One piece is wrong. Fix it.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 50], "beads": "A*7", "beat": 9},
+        {"id": "f1", "kind": "fork", "at": [180, 150], "socket": true},
+        {"id": "f2", "kind": "fork", "at": [255, 290], "socket": true},
+        {"id": "ca", "kind": "cup", "at": [75, 480], "want": "A", "count": 3},
+        {"id": "cb", "kind": "cup", "at": [195, 480], "want": "A", "count": 2},
+        {"id": "cc", "kind": "cup", "at": [310, 480], "want": "A", "count": 2}
+      ],
+      "pipes": [["s", "f1"], ["f1", "ca", [[75, 210]]], ["f1", "f2", [[255, 210]]], ["f2", "cb", [[195, 360]]], ["f2", "cc", [[310, 360]]]],
+      "tray": [],
+      "placed": [{"piece": "flipper", "at": "f1"}, {"piece": "flipper", "at": "f2", "locked": true}]
+    },
+    {
+      "id": "2-14", "name": "Two Spouts", "intro": "Each colour has its own shares to make.",
+      "nodes": [
+        {"id": "sb", "kind": "spout", "at": [80, 40], "beads": "B*6", "beat": 10},
+        {"id": "sa", "kind": "spout", "at": [280, 40], "beads": "A*5", "beat": 10},
+        {"id": "fb", "kind": "fork", "at": [80, 150], "socket": true},
+        {"id": "fa", "kind": "fork", "at": [280, 150], "socket": true},
+        {"id": "x", "kind": "cross", "at": [180, 300], "socket": true},
+        {"id": "b1", "kind": "cup", "at": [40, 490], "want": "B", "count": 2},
+        {"id": "a1", "kind": "cup", "at": [130, 490], "want": "A", "count": 3},
+        {"id": "b2", "kind": "cup", "at": [230, 490], "want": "B", "count": 4},
+        {"id": "a2", "kind": "cup", "at": [320, 490], "want": "A", "count": 2}
+      ],
+      "pipes": [["sb", "fb"], ["sa", "fa"], ["fb", "b1", [[40, 220]]], ["fb", "x", [[110, 230]]], ["fa", "x", [[250, 230]]], ["fa", "a2", [[320, 220]]], ["x", "b2", [[230, 380]]], ["x", "a1", [[130, 380]]]],
+      "tray": ["flipper", {"type": "overflow", "n": 2}, "turnstile"]
+    },
+    {
+      "id": "2-15", "name": "Fair Shares", "intro": "Five cups, every count different.",
+      "nodes": [
+        {"id": "sb", "kind": "spout", "at": [90, 40], "beads": "B*7", "beat": 8},
+        {"id": "sa", "kind": "spout", "at": [270, 40], "beads": "A*8", "beat": 8},
+        {"id": "fb1", "kind": "fork", "at": [90, 130], "socket": true},
+        {"id": "fb2", "kind": "fork", "at": [130, 260], "socket": true},
+        {"id": "fa", "kind": "fork", "at": [270, 200], "socket": true},
+        {"id": "b4", "kind": "cup", "at": [35, 490], "want": "B", "count": 4},
+        {"id": "b1", "kind": "cup", "at": [105, 490], "want": "B", "count": 1},
+        {"id": "b2", "kind": "cup", "at": [175, 490], "want": "B", "count": 2},
+        {"id": "a3", "kind": "cup", "at": [250, 490], "want": "A", "count": 3},
+        {"id": "a5", "kind": "cup", "at": [325, 490], "want": "A", "count": 5}
+      ],
+      "pipes": [["sb", "fb1"], ["fb1", "b4", [[35, 190]]], ["fb1", "fb2", [[130, 190]]], ["fb2", "b1", [[105, 360]]], ["fb2", "b2", [[175, 360]]], ["sa", "fa"], ["fa", "a3", [[250, 300]]], ["fa", "a5", [[325, 300]]]],
+      "tray": ["flipper", "flipper", {"type": "overflow", "n": 4}, {"type": "overflow", "n": 3}]
+    },
+    {
+      "id": "2-C1", "name": "Primes", "type": "challenge", "intro": "Eleven drops: two, three and six.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 40], "beads": "B*11", "beat": 7},
+        {"id": "f1", "kind": "fork", "at": [180, 120], "socket": true},
+        {"id": "f2", "kind": "fork", "at": [110, 250], "socket": true},
+        {"id": "f3", "kind": "fork", "at": [250, 250], "socket": true},
+        {"id": "c2", "kind": "cup", "at": [50, 490], "want": "B", "count": 2},
+        {"id": "c3", "kind": "cup", "at": [150, 490], "want": "B", "count": 3},
+        {"id": "c6", "kind": "cup", "at": [240, 490], "want": "B", "count": 6},
+        {"id": "d", "kind": "drain", "at": [320, 470]}
+      ],
+      "pipes": [["s", "f1"], ["f1", "f2", [[110, 170]]], ["f1", "f3", [[250, 170]]], ["f2", "c2", [[50, 330]]], ["f2", "c3", [[150, 330]]], ["f3", "c6", [[240, 330]]], ["f3", "d", [[320, 330]]]],
+      "tray": ["flipper", "flipper", {"type": "overflow", "n": 3}]
+    },
+    {
+      "id": "2-C2", "name": "Lopsided", "type": "challenge", "intro": "Three, one, two, one. Every piece counts.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 36], "beads": "A*7", "beat": 8},
+        {"id": "f1", "kind": "fork", "at": [180, 120], "socket": true, "flap": 1, "tap": true},
+        {"id": "f2", "kind": "fork", "at": [95, 245], "socket": true, "flap": 1, "tap": true},
+        {"id": "f3", "kind": "fork", "at": [265, 245], "socket": true, "flap": 1},
+        {"id": "c1", "kind": "cup", "at": [45, 495], "want": "A", "count": 3},
+        {"id": "c2", "kind": "cup", "at": [140, 495], "want": "A", "count": 1},
+        {"id": "c3", "kind": "cup", "at": [220, 495], "want": "A", "count": 2},
+        {"id": "c4", "kind": "cup", "at": [315, 495], "want": "A", "count": 1}
+      ],
+      "pipes": [["s", "f1"], ["f1", "f2", [[95, 170]]], ["f1", "f3", [[265, 170]]], ["f2", "c1", [[45, 330]]], ["f2", "c2", [[140, 330]]], ["f3", "c3", [[220, 330]]], ["f3", "c4", [[315, 330]]]],
+      "tray": [{"type": "overflow", "n": 3}, {"type": "overflow", "n": 3}, "flipper"]
+    },
+    {
+      "id": "2-C3", "name": "Exact Change", "type": "challenge", "intro": "Three overflows, no flipper.",
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [180, 40], "beads": "B*10", "beat": 7},
+        {"id": "f1", "kind": "fork", "at": [180, 120], "socket": true},
+        {"id": "f2", "kind": "fork", "at": [100, 250], "socket": true},
+        {"id": "f3", "kind": "fork", "at": [260, 250], "socket": true},
+        {"id": "c1", "kind": "cup", "at": [45, 490], "want": "B", "count": 1},
+        {"id": "c2", "kind": "cup", "at": [140, 490], "want": "B", "count": 3},
+        {"id": "c3", "kind": "cup", "at": [220, 490], "want": "B", "count": 4},
+        {"id": "c4", "kind": "cup", "at": [315, 490], "want": "B", "count": 2}
+      ],
+      "pipes": [["s", "f1"], ["f1", "f2", [[100, 170]]], ["f1", "f3", [[260, 170]]], ["f2", "c1", [[45, 330]]], ["f2", "c2", [[140, 330]]], ["f3", "c3", [[220, 330]]], ["f3", "c4", [[315, 330]]]],
+      "tray": [{"type": "overflow", "n": 4}, {"type": "overflow", "n": 1}, {"type": "overflow", "n": 6}]
+    }
+  ]
+}
