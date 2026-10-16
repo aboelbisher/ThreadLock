@@ -6,25 +6,16 @@ read `external/WLWengine/CLAUDE.md` for the engine's rules). The first game is B
 (`Desktop\dev\Bluzzle`, a block puzzle, on Google Play). The owner has a C++ background and learns
 game-engine concepts by building games: explain concepts in chat, keep learning material out of the repo.
 - **Mobile only:** Android first (then iOS). Desktop builds are only the engine's dev target; don't run or
-  polish the desktop game. Pure C++ rule tests run on the PC.
+  polish the desktop game. Pure C++ rules, solver and generator tests run on the PC.
 
 ## The game
-A fluid "routing" puzzle for regular people. Glowing liquid flows through pipes; the player places
-physical-looking pieces in sockets, then taps play and watches. Each piece is a concurrency idea, but
-players never see those words:
-| Piece | What it does | The idea behind it |
-|---|---|---|
-| Colour filter | splits the mixed liquid: blue one way, amber the other | branching |
-| Turnstile | one blob through at a time, the others wait | mutex |
-| Tank | holds a blob for a moment, then lets it go | buffer |
-| Counter gate (later) | opens after N blobs have arrived | semaphore |
-| Mixer (later) | outputs a new colour only when both inputs are there | logic gate |
-Two colours inside a crossing at the same time = **mud** (a race condition). Cups want one pure colour.
-Play is **place, then watch** (deterministic: the same pieces always give the same run).
-
-Level 1, "Two Cups": the source pours a blue+amber mix; the cups are swapped (blue cup right, amber
-left), so the two streams must cross. Filter only -> every pour's halves meet at the crossing -> mud.
-Solutions: filter + turnstile at the crossing, or filter + tank on the amber lane (or all three).
+**DESIGN.md is the design** (the one rule, rules v2, the ten pieces, eight worlds, stars, screens, sound,
+ads, and the six decisions taken on 2026-10-16). In short: glowing liquid flows through pipes; the player
+places pieces in sockets, taps play and watches. Different colours in one junction at once = **mud** (a race
+condition); every piece is a concurrency idea (separator = branching, turnstile = mutex, tank = sleep,
+flipper = round-robin, overflow = counting semaphore, bridge = don't share, mixer = join, twin gate =
+barrier), every failure a real bug (mud, spill, dry, THREADLOCKED). Stars: Solve / Lean (≤ par pieces) /
+Swift (≤ par time). Launch scope: worlds 1–4 (60 levels + 12 challenges), the daily puzzle and the Lab.
 
 Competition (researched before the pitch): Auditorium (PC, old) is the closest; mobile pipe puzzles are
 static. Zachtronics games (SpaceChem, Opus Magnum) are the model for "integer sim + animated view".
@@ -33,88 +24,124 @@ static. Zachtronics games (SpaceChem, Opus Magnum) are the model for "integer si
 - Earlier ideas the owner rejected: Epicycles (Fourier), Silhouette (shadows), Ripple (waves). Don't re-pitch.
 - Engine work for this game, steps 1-5, all in the engine's main: scenes + viewports, blend modes, post passes,
   `fx::FlowParticles` (20k dots along paths), `scene::AddThreshold` (liquid), `app::Quality` (tiers).
-- 2026-10-14: concept approved from a browser mock, then this feel test was built. The owner's verdict:
-  "the concept is good". The first mock was a desktop-style page and got "we're talking about a mobile
-  game here": concept mocks are one portrait phone screen, playable by touch.
+- 2026-10-14: concept approved from a browser mock, then a one-level feel test ("Two Cups"). Concept mocks
+  are one portrait phone screen, playable by touch.
+- 2026-10-16: the full design (DESIGN.md), then the game built from it: rules v2, solver, generator,
+  level tool, 72 levels, view v2, map, daily, Lab, saves, sounds, ads.
 
 ## Layout
 ```
-src/threadlock_rules.{h,cpp}  the rules: plain C++, no engine includes (tested on their own)
-src/threadlock_app.{h,cpp}    the game's one wlw::app::System: input, drawing, the liquid
+src/threadlock_rules.{h,cpp}  rules v2: liquids/beads, pieces, the level graph, Board (the simulation). No engine includes.
+src/level_io.{h,cpp}          level files (JSON) + the pars file; WriteLevel (tool: format, search)
+src/solver.{h,cpp}            every placement, run each: pars (Lean/Swift), solutions, NextHint
+src/generator.{h,cpp}         daily puzzle + Lab: 4 templates (race, shares, mixer, shared pipe), solver-filtered
+src/catalog.{h,cpp}           loads assets/levels/world*.json + pars.json (platform::ReadFile)
+src/progress.{h,cpp}          saves (kit::SaveStore): progress.json (mergeable: star bits, counters, daily log,
+                              achievements) + device.json (settings, hints, ad pacing, Lab); unlock rules
+src/threadlock_app.{h,cpp}    the one System: services (catalog, progress, feedback, liquid, ads) + navigation, toasts,
+                              debug panel (WLW_DEBUG_UI)
+src/level_screen.{h,cpp}      the level screen: drag/tap/long-press, run loop (1x/2x/4x), result card, Show me, hints
+src/map_screen.{h,cpp}        the scrolling map (worlds, star gates), daily + Lab cards
+src/menus.{h,cpp}             overlays: settings (palettes), achievements, daily (streak, archive), Lab
+src/board_view.{h,cpp}        drawing any level from data: pipes (Picture layer), pieces/cups/spouts/markers (Overlay),
+                              the drops for the liquid; hit tests. DrawPiece = the piece art
+src/liquid.{h,cpp}            metaball liquid: blobs per drop from the rules' state -> SpriteBatch -> RGBA16F viewport
+                              (blur + threshold) -> Picture layer, bloom on the screen
+src/audio_synth.{h,cpp}       every sound synthesized at startup (instruments per colour, chords, thud, grind...)
+src/feedback.{h,cpp}          sounds + haptics for board events
+src/palette.h, ui_parts.h     colours/palettes, theme, small UI helpers
 src/main.cpp                  MakeApp() + WLW_MAIN
-tests/threadlock_rules_tests.cpp
-assets/fonts/                 LilitaOne (OFL), the same font as Bluzzle
-android/                      Gradle project: ThreadlockActivity (WlwActivity, no SDK services yet)
-external/WLWengine/           the engine
+assets/levels/                world1-4.json (handmade levels) + pars.json (generated by the tool: don't edit by hand)
+tools/threadlock_tool.cpp     the level tool (below)
+tests/                        doctest: rules, solver, content (every shipped level + generated ones)
+android/                      Gradle project: ThreadlockActivity (WlwActivity + AdMobService)
+external/WLWengine/           the engine (pinned at v0.1.0)
 ```
 
-## Rules model (threadlock_rules.h)
-- A `Level` is a graph: `Node`s (Source, Pass, Split, Cross, Cup; `socket` = a piece may go there;
-  `dwell` = ticks a blob spends inside, the crossing is 3 = one blob long) joined by `Segment`s measured in
-  cells. `TwoCups::Make()` builds level 1 and names its node / segment ids.
-- `Board::Tick()`: (1) blobs in nodes count down and leave (a Split makes two halves: Blue/Amber with a
-  filter, else Mud/Mud); (2) blobs on segments move one cell, front first, or enter the end node (a busy
-  turnstile = wait); (3) the source pours every `pour_every` ticks; (4) two lanes inside a Cross at once =
-  all mud (`Collide`). Returns events: EnterSegment, EnterNode (with the segment it came by), Collide,
-  CupFilled, Finished. Integers only, so runs are deterministic (a test checks it).
-- A tank adds `tank_hold` (6) ticks. A turnstile adds no time; it only makes others wait. (A first
-  version gave it turning time, and then a turnstile on the amber lane alone solved the level by delay.
-  The tests caught it.)
-- `Blocked(segment)`: a blob waiting at its end, or held by a tank there. The view piles dots up there.
+## Rules v2 (threadlock_rules.h)
+- A `Level` is a graph of `Node`s (Spout, Fork, Pass = pipe socket, Cross, Merge, Cup, Drain) joined by one-way
+  `Pipe`s drawn as polylines. `Level::Finalize()` derives everything else: a pipe's cells = round(drawn length
+  between node edges / 10), node dwell (junction 3, fork/pass 1), crossing lanes (each in pairs with the
+  straightest out). Board units: 360 x 600, y down.
+- `Board::Tick()`: dwell timers count down, then every move that can happen this tick is resolved to a fixed
+  point (a drop leaving makes room for the one behind in the same tick: queues move together, a lock frees on
+  the tick its drop leaves). Contested places: turnstile arrow, then lane order; exits by entry order. Then
+  collisions (different beads inside an unlocked crossing/merge = mud), then the end (all landed, or frozen =
+  THREADLOCKED with a JamReport: stuck nodes, the cycle, a lonely mixer/twin).
+- Events for the view/sound: Pour, Enter, Leave, Split, Mix, Collide, NearMiss, Wait, Land, Spill, CupFull,
+  Finished, Jammed. `Outcome` = the first failure (kind, node, tick) for "Show me".
+- Deadlocks that don't depend on turnstile arrows need one-cell links between locks (3-8, 3-11, 3-13): with
+  longer links some arrow setting always lets traffic through (priority only decides same-tick arrivals).
+- **Determinism across devices** (pars are baked on the PC, the daily is generated on each phone and must be
+  the same for everyone): pipe cells use doubles + plain `sqrt` (never `std::hypot` / float sums), and the
+  generator makes one random draw per statement (C++ leaves argument order unspecified: MSVC and clang differ).
+  The test "generated levels are the same on every device" pins fingerprints; run the tests on a phone too.
 
-## View (threadlock_app.cpp)
-- Board units: a 360 x 760 portrait board, y down, centred in the UI canvas (reference 360 x 800, so the
-  status bar fits). The liquid camera shows canvas units (world = (x, -y)), so dots line up with the pieces.
-- Liquid: `FlowParticles` -> `SpriteBatch` -> offscreen RGBA16F viewport with blur + threshold -> drawn as
-  an image on a Picture canvas layer (pipes under it), with bloom on the screen. Pieces, cups and text are
-  on the Overlay canvas.
-- One path per rules segment, speed = length / (cells x 0.125 s tick). **Junctions re-emit** (like Niagara
-  event handlers): on EnterSegment the view emits a burst of dots (40 x density) at the path's start; the
-  previous path's dots fade at its dead end under the piece. The crossing has a short path per lane.
-  `SetStop` at a path's end while the rules say Blocked. Cups = a wide path with a stop at the bottom, so
-  arriving dots queue and fill the cup. The source = two self-looping circles.
-- Quality tiers (`App().Quality()`, 3 levels): density 0.3 / 0.6 / 1.0, liquid scale 0.35 / 0.5 / 0.5,
-  bloom 0.125 / 0.25 / 0.25, dot size 13 / density^0.25.
-- Input: drag pieces from the tray to a socket (the piece floats 56 units above the finger; it snaps
-  within 52); dropping on a filled socket sends that piece back to the tray; a tap leaves it in place.
-  The round button: play / stop / back to editing.
+## The level tool (PC)
+```
+threadlock_tool check                  every level: valid, solvable, pars current, empty board fails
+threadlock_tool bake                   solve all, write assets/levels/pars.json (run after any level change)
+threadlock_tool format                 rewrite the world files in one layout (a node per line)
+threadlock_tool solve <id>             cells per pipe, every solution, how small placements fail
+threadlock_tool timing <id> [lean|swift]   when each drop enters each junction
+threadlock_tool render <id> <png> [none|lean|swift] [tick]   the board (+ drops at a tick): check layouts
+threadlock_tool daily <yyyymmdd> <png> / lab <seed> <easy|medium|hard> <png>
+threadlock_tool search <kind> <difficulty> <seed> <count> <min pieces> <max solutions> [png dir]
+                                       generated machines as level JSON (a start for hard levels)
+```
+Level design loop: draft JSON -> `solve`/`render` -> move bends (cells follow length) -> `bake` -> tests.
 
 ## Build / test / run (Windows PC)
-Rules tests (no vcpkg needed), from a VS developer shell:
+PC tests and the tool without CMake/vcpkg, from a VS developer shell (repo root):
 ```
-cl /nologo /std:c++20 /EHsc /W4 /WX tests\threadlock_rules_tests.cpp src\threadlock_rules.cpp
+cl /nologo /std:c++20 /EHsc /W4 /WX /O2 /external:W0 /external:I external\WLWengine\third_party\tinygltf ^
+   /external:I external\WLWengine\third_party\doctest /Fe:build\pc\threadlock_tests.exe ^
+   tests\*.cpp src\threadlock_rules.cpp src\level_io.cpp src\solver.cpp src\generator.cpp
+(the tool: tools\threadlock_tool.cpp + the same four sources, plus /external:I ...\third_party\stb)
 ```
-(CMake also defines `threadlock_rules_tests` for desktop builds; those need the engine's vcpkg submodule:
-`git submodule update --init --recursive`.)
-VS is at `C:\Program Files\Microsoft Visual Studio\18\Community` (vswhere fails, harmless):
-`Import-Module "$vs\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"; Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments "-arch=x64"`.
+CMake (desktop) also defines `threadlock_tests` and `threadlock_tool`; those need the engine's vcpkg submodule
+(`git submodule update --init --recursive`). VS is at `C:\Program Files\Microsoft Visual Studio\18\Community`
+(vswhere fails, harmless): `Import-Module "$vs\Common7\Tools\Microsoft.VisualStudio.DevShell.dll";
+Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments "-arch=x64"`.
+Format with the engine's clang-format and style (the code follows it; this repo's own .clang-format doesn't
+match the code): `clang-format -i --style=file:<engine>/.clang-format src/* tests/* tools/*`.
+
+The same tests on a phone (ARM64, the NDK's clang), from Git Bash with `MSYS_NO_PATHCONV=1`:
+```
+$NDK/toolchains/llvm/prebuilt/windows-x86_64/bin/clang++.exe --target=aarch64-linux-android24 -std=c++20 -O2 \
+  -static-libstdc++ -isystem external/WLWengine/third_party/tinygltf -isystem external/WLWengine/third_party/doctest \
+  tests/*.cpp src/threadlock_rules.cpp src/level_io.cpp src/solver.cpp src/generator.cpp -o build/android-tests/threadlock_tests
+adb -s <serial> push build/android-tests/threadlock_tests /data/local/tmp/tl/   (+ assets/levels/*.json to /data/local/tmp/tl/assets/levels/)
+adb -s <serial> shell "cd /data/local/tmp/tl && ./threadlock_tests"
+```
 
 Android (JAVA_HOME = a JDK 21 from `%USERPROFILE%\.jdks\jbr-21*`):
 ```
 cd android; .\gradlew.bat assembleDebug -q
-adb -s emulator-5554 install -r app\build\outputs\apk\debug\app-debug.apk
-adb -s emulator-5554 shell am start -n com.aboelbisher.threadlock/.ThreadlockActivity
-adb -s emulator-5554 logcat -s WLW
+adb -s 9B221FFAZ002VK install -r app\build\outputs\apk\debug\app-debug.apk
+adb -s 9B221FFAZ002VK shell am start -n com.aboelbisher.threadlock/.ThreadlockActivity
+adb -s 9B221FFAZ002VK logcat -s WLW
 ```
-Always install with `adb -s <serial>`: the owner's Pixel 4 (serial 9B221FFAZ002VK) may be plugged in and
-has Bluzzle with saves (never uninstall it). Screenshots: `cmd /c "adb exec-out screencap -p > file.png"`
-(PowerShell's `>` corrupts PNGs). Emulator (1080 x 2400): board point (x, y) = pixels (3x, 3(y + 9.2));
-e.g. tray filter (186, 2164), play button (900, 2164); drag with `input swipe x1 y1 x2 y2 900` to a finger
-point 56 units below the socket.
+Always `adb -s <serial>`: the owner's Pixel 4 (9B221FFAZ002VK, PIN-locked when idle: ask the owner to unlock
+it) has Bluzzle with saves (never uninstall it). Ask before using an emulator. Screenshots:
+`cmd /c "adb -s <serial> exec-out screencap -p > file.png"` (PowerShell's `>` corrupts PNGs).
+Ads: AdMob through the kit; **Google's sample app id and test units** until Threadlock has its own (manifest +
+MakeAdsConfig in threadlock_app.cpp). The debug build has the ImGui panel (Threadlock window: jump to any level,
+open everything, hints, wipe, ads).
 
 ## How the owner works
-- Design first: concept + API + "how big engines do it", then wait for his go. Then build, verify
-  (tests, Android build, emulator screenshots), show the results, and wait for approval before committing.
+- Design first: concept + API + "how big engines do it", then wait for his go. Then build, verify (tests,
+  Android build, phone screenshots), show the results, and wait for approval before committing.
 - Small focused commits; never amend or force-push pushed commits. Don't delete files without asking.
 - Engine changes go to the engine repo first (`Desktop\dev\WLWengine`, also used by Bluzzle), then bump
   the submodule here (and in Bluzzle).
 - Research competitors before pitching new game ideas.
 
 ## Next steps
-1. Try it on the Pixel 4 (separate app id, safe next to Bluzzle): feel, readability, and performance
-   (GPU ms per tier; the emulator has no GPU timer). Optimize FlowParticles' WriteTo first if hot.
-2. Look: each pour reads as separate beads, not a stream; cup liquid edges are ragged. Tune blob length /
-   dot counts / threshold, or make a pour a longer stream.
-3. More levels with the later pieces (counter gate, mixer); a level format; then menus, save, sound.
-4. Engine ideas if the look needs them: an on_arrive hook / per-colour routing in FlowParticles (instead
-   of re-emitting at junctions), thermal input for Quality.
+1. Play it on the Pixel 4 (checked 2026-10-16: levels 1-1..1-4, mud + Show me, the solved/failed cards, the
+   map, daily, settings, hints, the 3-8 THREADLOCKED picture all work). Still to tune: feel, the liquid look,
+   performance per quality tier; check Lab, achievements, palettes and ads in play.
+2. Playtest World 1 with 5-10 people (DESIGN.md §10 step 4); adjust levels with the tool.
+3. Launch work: Threadlock's own AdMob app + units, analytics (Firebase via a kit bridge), store page, closed
+   test. Then worlds 5-8 as updates (collector, bell, gates, layered glasses, ink, clock gates, rings).
+4. A desktop level editor (Dear ImGui, live run) would speed up level design beyond the tool.
