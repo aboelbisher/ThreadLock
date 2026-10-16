@@ -1,91 +1,105 @@
 #pragma once
 
-#include <array>
+#include <deque>
+#include <functional>
 #include <memory>
-#include <vector>
+#include <string>
 
-#include <glm/glm.hpp>
-
-#include "threadlock_rules.h"
+#include "catalog.h"
+#include "feedback.h"
+#include "liquid.h"
+#include "palette.h"
+#include "progress.h"
 #include "wlw/app/application.h"
 #include "wlw/app/system.h"
-#include "wlw/fx/flow_particles.h"
-#include "wlw/scene/orthographic_camera.h"
-#include "wlw/scene/post_effects.h"
-#include "wlw/scene/sprite_batch.h"
-#include "wlw/scene/viewport.h"
+#include "wlw/kit/ad_pacing.h"
+#include "wlw/kit/ads.h"
 #include "wlw/ui/font.h"
+#include "wlw/ui/ui_context.h"
 
+// The game's one system: the services every screen shares (levels, progress, sounds, the liquid,
+// ads) and the moves between screens. The screens (level_screen.h, map_screen.h, menus.h) are
+// the game's states on the engine's ScreenStack.
 namespace threadlock {
 
-// The game's one system: the board (rules) and how it looks. The rules tick at a fixed rate and
-// report events; the liquid is FlowParticles dots drawn into an offscreen viewport (blur +
-// threshold = liquid) that the screen shows under the board's pieces.
-//
-// Positions are "board units": a 360 x 760 portrait board, y down, placed in the middle of the
-// UI canvas (TwoCups' layout below). The liquid's camera shows the same units (world = (x, -y)).
+// Where a level came from: the handmade worlds, today's (or an archived) daily puzzle, the Lab.
+struct LevelSource {
+  enum Kind { Main, Daily, Lab } kind = Main;
+  int date = 0;          // Daily: yyyymmdd
+  bool archive = false;  // Daily: a missed day, played from the archive
+  int difficulty = 0;    // Daily / Lab
+};
+
 class ThreadlockApp : public wlw::app::System {
  public:
   static wlw::app::AppConfig MakeConfig();
 
   void OnStart() override;
-  void OnFixedUpdate(float dt) override;
   void OnUpdate(float dt) override;
   void OnRenderUI(wlw::ui::UIContext& ui) override;
+  void OnDebugUI() override;
+  bool OnBack() override;
+  void OnAppPaused() override;
+  void OnShutdown() override;
+
+  // ---- Services ----
+  Catalog& GetCatalog() { return catalog_; }
+  Progress& GetProgress() { return *progress_; }
+  Feedback& GetFeedback() { return feedback_; }
+  Liquid& GetLiquid() { return liquid_; }
+  const wlw::ui::Font& GetFont() const { return *font_; }
+  const Palette& GetPalette() const { return PaletteByKey(progress_->settings.palette); }
+  wlw::app::Application& Services() { return App(); }
+  float Time() const { return time_; }
+  bool Calm() const { return progress_->settings.reduced_motion; }  // the reduced-motion setting
+  int Today() const;
+  void ApplySettings();  // progress settings -> sound, haptics
+
+  // ---- Moving between screens ----
+  void OpenLevel(const Level* level, const LevelSource& source = {});
+  void OpenMap(const Level* focus = nullptr);
+  void OpenDaily(int date, bool archive);
+  void OpenLab();
+  void OpenSettings();
+  void OpenAchievements();
+  void OpenDailyMenu();
+  void OpenLabMenu();
+  // A generated level (daily / Lab), kept alive as long as a screen may use it.
+  const Level* Keep(Level level);
+
+  // ---- Ads (DESIGN.md §11) ----
+  wlw::kit::Ads& GetAds() { return *ads_; }
+  // A rewarded ad the player chose to watch: `reward` runs if they watched it through.
+  void OfferRewarded(std::function<void()> reward);
+  // A solved level counts towards the interstitial pacing.
+  void LevelSolved();
+  // Before leaving a solved level (Next / Map): shows an interstitial if one is due and allowed,
+  // then runs `then` (at once if none). `allowed` = our own rules (not after a finale, the daily...).
+  void BetweenLevels(bool allowed, std::function<void()> then);
+
+  // A short message over everything (a new achievement, a reward).
+  void Toast(std::string text);
 
  private:
-  enum class Phase { Edit, Run, Done };
+  void DrawFakeAd(wlw::ui::UIContext& ui);
+  void DrawToasts(wlw::ui::UIContext& ui);
+  void SaveAdPacing();
 
-  struct Drag {
-    Piece piece = Piece::None;
-    int from = -1;          // the socket it came from (-1 = the tray)
-    glm::vec2 start{0.0f};  // board units
-    glm::vec2 at{0.0f};
-  };
-
-  void ApplyQuality(int level);
-  void ResetLiquid();  // empty pipes, the source's swirl refilled
-  void StartRun();
-  void StopRun();
-  void HandleEvents(const std::vector<Event>& events);
-  void Burst(int path, Liquid liquid);  // one blob's dots at the start of `path`
-  void UpdateStops();
-  void HandleInput(const wlw::ui::UIContext& ui);
-
-  glm::vec2 ToCanvas(glm::vec2 board) const { return board + offset_; }
-  glm::vec2 SocketPos(int node) const;
-  glm::vec2 PiecePos(Piece piece) const;  // in a socket or the tray
-  int SocketNear(glm::vec2 board) const;  // -1 = none close enough
-
-  void DrawBackground(wlw::ui::Canvas& canvas);  // under the liquid (Picture layer)
-  void DrawBoard(wlw::ui::Canvas& canvas);       // over it (Overlay)
-  void DrawPiece(wlw::ui::Canvas& canvas, Piece piece, glm::vec2 board, float scale, float alpha, float spin);
-
-  Board board_{TwoCups::Make()};
-  Phase phase_ = Phase::Edit;
-  float tick_clock_ = 0.0f;
-  float time_ = 0.0f;
-  float collide_flash_ = 0.0f;
-  float spin_ = 0.0f, spin_target_ = 0.0f;  // the turnstile's arms
-  Drag drag_;
-  bool dragging_ = false;
-  glm::vec2 offset_{0.0f};  // board units -> canvas units
-
-  // Liquid
-  std::unique_ptr<wlw::fx::FlowParticles> flow_;
-  std::shared_ptr<wlw::scene::SpriteBatch> dots_;
-  std::shared_ptr<wlw::scene::Viewport> liquid_;
-  std::shared_ptr<wlw::scene::OrthographicCamera> camera_;
-  wlw::scene::Bloom bloom_;
-  wlw::ui::Canvas* picture_ = nullptr;
-  std::vector<int> segment_path_;      // per rules segment: its FlowParticles path
-  std::vector<bool> segment_stopped_;  // what UpdateStops last set
-  std::array<int, 2> through_path_{};  // the crossing's lanes: blue lane, amber lane
-  std::array<int, 2> cup_path_{};      // blue cup, amber cup
-  std::array<int, 2> swirl_path_{};    // the source's two loops
-  float density_ = 1.0f;
-
+  Catalog catalog_;
+  std::unique_ptr<Progress> progress_;
+  Feedback feedback_;
+  Liquid liquid_;
   std::shared_ptr<wlw::ui::Font> font_;
+  std::unique_ptr<wlw::kit::Ads> ads_;
+  wlw::kit::AdPacing pacing_;
+  std::deque<Level> kept_;  // generated levels (a deque: pointers stay valid as it grows)
+  struct ToastItem {
+    std::string text;
+    float age = 0.0f;
+  };
+  std::deque<ToastItem> toasts_;
+  float time_ = 0.0f;
+  wlw::ui::Canvas* top_canvas_ = nullptr;  // an Overlay layer above the game UI: toasts, the desktop's fake ads
 };
 
 }  // namespace threadlock
