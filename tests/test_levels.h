@@ -3,6 +3,7 @@
 // Small levels for the rules and solver tests, in the level file format (level_io.h).
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../src/level_io.h"
@@ -17,6 +18,55 @@ inline Level MakeLevel(const std::string& json) {
   for (const std::string& error : errors) INFO(error);
   REQUIRE(ok);
   return level;
+}
+
+// A run's outcome and every event with the tick it happened on.
+struct Run {
+  Outcome outcome;
+  std::vector<std::pair<int, Event>> timed;  // (tick, event)
+
+  int Count(EventType type, int node = -1) const {
+    int n = 0;
+    for (const auto& [tick, e] : timed) n += e.type == type && (node < 0 || e.node == node);
+    return n;
+  }
+  int FirstTick(EventType type, int node, Color color = Color::None) const {
+    for (const auto& [tick, e] : timed) {
+      if (e.type == type && e.node == node && (color == Color::None || e.bead.a == color)) return tick;
+    }
+    return -1;
+  }
+  std::vector<int> Ticks(EventType type, int node) const {  // every tick it happened at `node`
+    std::vector<int> ticks;
+    for (const auto& [tick, e] : timed) {
+      if (e.type == type && e.node == node) ticks.push_back(tick);
+    }
+    return ticks;
+  }
+};
+
+inline Run RunBoard(Board& board) {
+  Run run;
+  board.Start();
+  while (board.Running()) {
+    for (const Event& e : board.Tick()) run.timed.push_back({board.Ticks(), e});
+  }
+  run.outcome = board.GetOutcome();
+  return run;
+}
+
+inline int NodeOf(const Level& level, const char* id) {
+  const int n = level.NodeIndex(id);
+  REQUIRE(n >= 0);
+  return n;
+}
+
+inline int PieceOf(const Board& board, PieceType type, int nth = 0) {
+  for (int i = 0; i < board.PieceCount(); ++i) {
+    if (board.PieceInfo(i).piece.type == type && nth-- == 0) return i;
+  }
+  FAIL("no such piece in the tray");
+  return -1;
 }
 
 // DESIGN.md's level 1-4: a blend pours into a fork; the cups are swapped, so the sorted colours
@@ -117,6 +167,97 @@ inline const std::string kTwins = R"({
   "pipes": [["sp", "p"], ["p", "cp"], ["sq", "q"], ["q", "cq"]],
   "tray": ["twin"]
 })";
+
+// Two spouts into a crossing, as in Crossing() but with any cups and timing: the left lane (0) goes
+// straight on to the right cup `cr`, the right lane (1) to the left cup `cl`. Both lanes are 18 cells,
+// so the right spout starting `right_start - 1` ticks later arrives that much later.
+inline std::string CrossLevel(const std::string& left, const std::string& right, int right_start,
+                              const std::string& cr_want, int cr_count, const std::string& cl_want, int cl_count,
+                              const std::string& tray = "", int beat = 12) {
+  return R"({"id": "t-cross", "nodes": [
+    {"id": "sl", "kind": "spout", "at": [90, 40], "beads": ")" +
+         left + R"(", "beat": )" + std::to_string(beat) + R"(},
+    {"id": "sr", "kind": "spout", "at": [270, 40], "beads": ")" +
+         right + R"(", "beat": )" + std::to_string(beat) + R"(, "start": )" + std::to_string(right_start) + R"(},
+    {"id": "x", "kind": "cross", "at": [180, 220], "socket": true},
+    {"id": "cr", "kind": "cup", "at": [270, 420], "want": ")" +
+         cr_want + R"(", "count": )" + std::to_string(cr_count) + R"(},
+    {"id": "cl", "kind": "cup", "at": [90, 420], "want": ")" +
+         cl_want + R"(", "count": )" + std::to_string(cl_count) + R"(}],
+  "pipes": [["sl", "x", [[90, 120]]], ["sr", "x", [[270, 120]]], ["x", "cr", [[270, 320]]], ["x", "cl", [[90, 320]]]],
+  "tray": [)" +
+         tray + "]}";
+}
+
+// One spout into a fork with a handled flap (side 0 = the cup, side 1 = a drain).
+inline std::string FlapFork(const std::string& tray) {
+  return R"({"id": "t-flap-fork", "nodes": [
+    {"id": "s", "kind": "spout", "at": [180, 40], "beads": "B*3", "beat": 12},
+    {"id": "f", "kind": "fork", "at": [180, 200], "socket": true, "tap": true},
+    {"id": "c", "kind": "cup", "at": [90, 420], "want": "B", "count": 3},
+    {"id": "d", "kind": "drain", "at": [270, 420]}],
+  "pipes": [["s", "f"], ["f", "c", [[90, 300]]], ["f", "d", [[270, 300]]]],
+  "tray": [)" +
+         tray + "]}";
+}
+
+// One spout through a single pipe socket into a cup.
+inline std::string PipeSocket(const std::string& tray) {
+  return R"({"id": "t-pipe-socket", "nodes": [
+    {"id": "s", "kind": "spout", "at": [180, 40], "beads": "B*3", "beat": 12},
+    {"id": "p", "kind": "pass", "at": [180, 200]},
+    {"id": "c", "kind": "cup", "at": [180, 420], "want": "B", "count": 3}],
+  "pipes": [["s", "p"], ["p", "c"]],
+  "tray": [)" +
+         tray + "]}";
+}
+
+// Six blue drops, one every 4 ticks, through a pipe socket into a turning rack of three bottles that
+// turns every 8 ticks: with nothing placed they land at 25, 29, ..., 45, two in each bottle.
+inline const std::string kRack = R"({
+  "id": "t-rack",
+  "nodes": [
+    {"id": "s", "kind": "spout", "at": [180, 40], "beads": "B*6", "beat": 4},
+    {"id": "t", "kind": "pass", "at": [180, 140]},
+    {"id": "r", "kind": "rack", "at": [180, 300], "period": 8,
+     "slots": [{"want": "B", "count": 2, "name": "Mrs Hale"}, {"want": "B", "count": 2, "name": "Baker"},
+               {"want": "B", "count": 2, "name": "Dr Moss"}]}
+  ],
+  "pipes": [["s", "t"], ["t", "r"]],
+  "tray": ["tank4", "tank8"]
+})";
+
+// The amber stream turns a mill geared to a shut gate on the blue stream: the first amber drop opens
+// it, the second shuts it again.
+inline const std::string kMillGate = R"({
+  "id": "t-mill-gate",
+  "nodes": [
+    {"id": "sa", "kind": "spout", "at": [90, 40], "beads": "A*2", "beat": 12},
+    {"id": "m", "kind": "mill", "at": [90, 250], "gears": ["g"]},
+    {"id": "ca", "kind": "cup", "at": [90, 480], "want": "A", "count": 2},
+    {"id": "sb", "kind": "spout", "at": [270, 40], "beads": "B", "beat": 12},
+    {"id": "g", "kind": "gate", "at": [270, 150], "open": false},
+    {"id": "cb", "kind": "cup", "at": [270, 480], "want": "B", "count": 1}
+  ],
+  "pipes": [["sa", "m"], ["m", "ca"], ["sb", "g"], ["g", "cb"]],
+  "tray": []
+})";
+
+// DESIGN.md's Two Mills: each stream's mill flips the other stream's gate.
+inline std::string TwoMills(bool a_open) {
+  return R"({"id": "t-two-mills", "nodes": [
+    {"id": "sa", "kind": "spout", "at": [90, 40], "beads": "A*2", "beat": 12},
+    {"id": "ga", "kind": "gate", "at": [90, 140], "open": )" +
+         std::string(a_open ? "true" : "false") + R"(},
+    {"id": "ma", "kind": "mill", "at": [90, 280], "gears": ["gb"]},
+    {"id": "ca", "kind": "cup", "at": [90, 480], "want": "A", "count": 2},
+    {"id": "sb", "kind": "spout", "at": [270, 40], "beads": "B*2", "beat": 12},
+    {"id": "gb", "kind": "gate", "at": [270, 140], "open": false},
+    {"id": "mb", "kind": "mill", "at": [270, 280], "gears": ["ga"]},
+    {"id": "cb", "kind": "cup", "at": [270, 480], "want": "B", "count": 2}],
+  "pipes": [["sa", "ga"], ["ga", "ma"], ["ma", "ca"], ["sb", "gb"], ["gb", "mb"], ["mb", "cb"]],
+  "tray": []})";
+}
 
 // Two Cups as a repair level: a locked separator, a movable tank already placed, a spare separator.
 inline const std::string kRepair = R"({

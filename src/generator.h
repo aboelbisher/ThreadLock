@@ -6,7 +6,7 @@
 #include "threadlock_rules.h"
 
 // Generated levels: the daily puzzle (the same for everyone on a date, easy on Monday, hard on
-// Sunday) and the Lab (endless, at a chosen difficulty). DESIGN.md §6, §8.
+// Sunday) and the Lab (endless, at a chosen difficulty). DESIGN.md §7.
 //
 // Each comes from a template (a race of crossing lanes, a fair-shares tree of forks, a mixer, a
 // shared pipe) with random lengths, beats, counts, sockets and tray, and is kept only if the solver

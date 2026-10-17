@@ -7,7 +7,7 @@
 #include "threadlock_rules.h"
 #include "wlw/audio/audio.h"
 
-// What the player hears and feels (DESIGN.md §10): the synthesized sounds (audio_synth.h) played
+// What the player hears and feels (DESIGN.md §9): the synthesized sounds (audio_synth.h) played
 // for the board's events, and short vibrations: a light tap for each drop landing, a heavy one for
 // mud and jams. The settings switch either off.
 namespace threadlock {

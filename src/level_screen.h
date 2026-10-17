@@ -6,7 +6,7 @@
 #include "threadlock_app.h"
 #include "wlw/app/screen.h"
 
-// The level screen (DESIGN.md §9): the board in the middle, the level's name and star targets on
+// The level screen (DESIGN.md §8): the board in the middle, the level's name and star targets on
 // top, the tray and the controls at the bottom. Place, then watch: drag pieces into sockets, tap
 // one to change it, tap play, and the run plays out on its own. A failed run says what went wrong
 // and where, and "Show me" replays the moment slowly under a spotlight.

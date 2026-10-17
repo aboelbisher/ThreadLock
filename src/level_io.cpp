@@ -105,6 +105,7 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
     return false;
   }
   std::vector<std::string> twins;
+  std::vector<std::vector<std::string>> gears;
   for (const Json& item : json["nodes"]) {
     Node node;
     node.id = reader.String(item, "id");
@@ -127,6 +128,34 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
       reader.Color(item, "want", node.want);
       node.count = reader.Int(item, "count", 0);
     }
+    if (node.kind == NodeKind::Rack) {
+      node.period = reader.Int(item, "period", 4);
+      node.first = reader.Int(item, "first", 0);
+      if (!item.contains("slots") || !item["slots"].is_array()) {
+        reader.Error("rack '" + node.id + "' has no 'slots'");
+      } else {
+        for (const Json& value : item["slots"]) {
+          if (!value.is_object()) {
+            reader.Error("a rack's bottle should be {\"want\": ..., \"count\": n}");
+            continue;
+          }
+          Slot slot;
+          reader.Color(value, "want", slot.want);
+          slot.count = reader.Int(value, "count", 0);
+          slot.name = reader.String(value, "name");
+          node.slots.push_back(std::move(slot));
+        }
+      }
+    }
+    if (node.kind == NodeKind::Gate) node.open = reader.Bool(item, "open", true);
+    std::vector<std::string> geared;
+    if (item.contains("gears")) {
+      if (!item["gears"].is_array()) reader.Error("node '" + node.id + "': 'gears' should be a list of gates");
+      for (const Json& value : item["gears"]) {
+        if (value.is_string()) geared.push_back(value.get<std::string>());
+      }
+    }
+    gears.push_back(std::move(geared));
     twins.push_back(reader.String(item, "twin"));
     level.nodes.push_back(std::move(node));
   }
@@ -139,6 +168,16 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
     }
     level.nodes[i].twin = other;
     level.nodes[static_cast<size_t>(other)].twin = static_cast<int>(i);
+  }
+  for (size_t i = 0; i < gears.size(); ++i) {
+    for (const std::string& gate : gears[i]) {
+      const int at = level.NodeIndex(gate);
+      if (at < 0) {
+        reader.Error("node '" + level.nodes[i].id + "': no gate '" + gate + "'");
+        continue;
+      }
+      level.nodes[i].gears.push_back(at);
+    }
   }
 
   if (!json.contains("pipes") || !json["pipes"].is_array()) {
@@ -362,13 +401,14 @@ std::string WriteLevel(const Level& level) {
     return std::fabs(rounded - v) < 0.01f ? std::to_string(static_cast<int>(rounded)) : std::to_string(v);
   };
   auto point = [&](Vec2 p) { return "[" + number(p.x) + ", " + number(p.y) + "]"; };
-  std::string out = "{\n  \"id\": \"" + level.id + "\", \"name\": \"" + level.name + "\"";
+  auto text = [](const std::string& s) { return Json(s).dump(); };  // quoted, escaped
+  std::string out = "{\n  \"id\": " + text(level.id) + ", \"name\": " + text(level.name);
   if (level.type != LevelType::Build) out += std::string(", \"type\": \"") + LevelTypeKey(level.type) + "\"";
-  if (!level.intro.empty()) out += ", \"intro\": \"" + level.intro + "\"";
+  if (!level.intro.empty()) out += ", \"intro\": " + text(level.intro);
   out += ",\n  \"nodes\": [\n";
   for (size_t i = 0; i < level.nodes.size(); ++i) {
     const Node& n = level.nodes[i];
-    out += "    {\"id\": \"" + n.id + "\", \"kind\": \"" + NodeKindKey(n.kind) + "\", \"at\": " + point(n.at);
+    out += "    {\"id\": " + text(n.id) + ", \"kind\": \"" + NodeKindKey(n.kind) + "\", \"at\": " + point(n.at);
     if (n.kind == NodeKind::Spout) {
       out += ", \"beads\": \"" + BeadsText(n.beads) + "\", \"beat\": " + std::to_string(n.beat);
       if (n.start != 1) out += ", \"start\": " + std::to_string(n.start);
@@ -376,10 +416,29 @@ std::string WriteLevel(const Level& level) {
     if (n.kind == NodeKind::Cup) {
       out += std::string(", \"want\": \"") + ColorLetter(n.want) + "\", \"count\": " + std::to_string(n.count);
     }
+    if (n.kind == NodeKind::Rack) {
+      out += ", \"period\": " + std::to_string(n.period);
+      if (n.first != 0) out += ", \"first\": " + std::to_string(n.first);
+      out += ", \"slots\": [";
+      for (size_t s = 0; s < n.slots.size(); ++s) {
+        out += std::string(s ? ", " : "") + "{\"want\": \"" + ColorLetter(n.slots[s].want) +
+               "\", \"count\": " + std::to_string(n.slots[s].count);
+        if (!n.slots[s].name.empty()) out += ", \"name\": " + text(n.slots[s].name);
+        out += "}";
+      }
+      out += "]";
+    }
+    if (!n.gears.empty()) {
+      out += ", \"gears\": [";
+      for (size_t g = 0; g < n.gears.size(); ++g)
+        out += (g ? ", " : "") + text(level.nodes[static_cast<size_t>(n.gears[g])].id);
+      out += "]";
+    }
+    if (n.kind == NodeKind::Gate && !n.open) out += ", \"open\": false";
     if (n.kind != NodeKind::Pass && n.socket) out += ", \"socket\": true";
     if (n.kind == NodeKind::Fork && n.flap != 0) out += ", \"flap\": " + std::to_string(n.flap);
     if (n.flap_tappable) out += ", \"tap\": true";
-    if (n.twin > static_cast<int>(i)) out += ", \"twin\": \"" + level.nodes[static_cast<size_t>(n.twin)].id + "\"";
+    if (n.twin > static_cast<int>(i)) out += ", \"twin\": " + text(level.nodes[static_cast<size_t>(n.twin)].id);
     out += i + 1 < level.nodes.size() ? "},\n" : "}\n";
   }
   out += "  ],\n  \"pipes\": [";

@@ -67,7 +67,7 @@ class ThreadlockApp : public wlw::app::System {
   // A generated level (daily / Lab), kept alive as long as a screen may use it.
   const Level* Keep(Level level);
 
-  // ---- Ads (DESIGN.md §11) ----
+  // ---- Ads (DESIGN.md §10) ----
   wlw::kit::Ads& GetAds() { return *ads_; }
   // A rewarded ad the player chose to watch: `reward` runs if they watched it through.
   void OfferRewarded(std::function<void()> reward);

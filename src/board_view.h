@@ -10,7 +10,7 @@
 #include "wlw/ui/canvas.h"
 #include "wlw/ui/font.h"
 
-// How a board looks: any level drawn from its data (DESIGN.md §12 "view v2"). Pipes go on the
+// How a board looks: any level drawn from its data (DESIGN.md §8, §9). Pipes go on the
 // bloomed Picture layer, the liquid comes from the rules' state each frame, and the pieces, cups,
 // spouts and markers go on the Overlay over it.
 //
@@ -44,7 +44,7 @@ class BoardView {
  public:
   struct Options {
     float time = 0.0f;
-    int drag_type = -1;    // a piece being dragged (PieceType): the sockets it fits light up
+    int drag_type = -1;    // a piece being dragged (PieceType): every free socket lights up
     int drag_target = -1;  // the socket it would land in
     int hint_node = -1;    // a hint points here
     int spotlight = -1;    // Show me: everything else dims
@@ -71,9 +71,9 @@ class BoardView {
   void DrawSpotlight(wlw::ui::Canvas& canvas, int node, float amount) const;
 
   // Hit tests, in canvas units.
-  int SocketNear(glm::vec2 point, float radius, int piece_type = -1) const;  // -1: any socket
-  int PieceNear(const Board& board, glm::vec2 point, float radius) const;    // a placed piece's tray index
-  int FlapNear(const Board& board, glm::vec2 point, float radius) const;     // a tappable flap's fork
+  int SocketNear(glm::vec2 point, float radius) const;                     // any piece goes in any socket
+  int PieceNear(const Board& board, glm::vec2 point, float radius) const;  // a placed piece's tray index
+  int FlapNear(const Board& board, glm::vec2 point, float radius) const;   // a tappable flap's fork
   glm::vec2 NodeCanvas(int node) const { return layout_.ToCanvas(level_->nodes[static_cast<size_t>(node)].at); }
   // Where a piece on `node` is drawn (a twin gate sits between its two halves).
   glm::vec2 PieceCenter(const Board& board, int node) const;
@@ -83,18 +83,29 @@ class BoardView {
     enum Kind { Mud, NearMiss, WrongCup, Spill, Dry, Jam } kind;
     int node;
     float age;
+    int slot = -1;  // a rack's bottle
   };
   struct NodeAnim {
-    float spin = 0.0f, spin_target = 0.0f;
+    float spin = 0.0f, spin_target = 0.0f;  // turnstile arms, mixer swirl, mill wheel, rack turntable
     float arm = 0.0f;
     float flash = 0.0f;
   };
+
+  // Where bottle `slot` of a rack is drawn (board units): a turntable seen from above, the bottle under
+  // the rack's pipe at the top.
+  Vec2 BottleAt(int rack, int slot) const;
+  // Where a fork's flap handle is drawn: just off its centre, or outside a piece that sits on it (a
+  // tank or a turnstile leaves the flap in charge).
+  glm::vec2 FlapHandle(const Board& board, int fork) const;
+  // Where a marker or the spotlight for `node` (and a rack's bottle) goes, in canvas units.
+  glm::vec2 MarkerCanvas(int node, int slot) const;
 
   const Level* level_ = nullptr;
   Layout layout_;
   std::vector<Marker> markers_;
   std::vector<NodeAnim> anims_;
-  std::vector<float> cup_fill_;  // animated fill per node (drops)
+  std::vector<float> cup_fill_;                  // animated fill per node (drops)
+  std::vector<std::vector<float>> bottle_fill_;  // the same per rack bottle
 };
 
 }  // namespace threadlock

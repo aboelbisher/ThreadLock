@@ -93,6 +93,8 @@ TEST_SUITE("content") {
           CHECK((a.beads == b.beads && a.beat == b.beat && a.start == b.start));
           CHECK((a.flap == b.flap && a.flap_tappable == b.flap_tappable && a.want == b.want && a.count == b.count &&
                  a.twin == b.twin));
+          CHECK((a.slots == b.slots && a.period == b.period && a.first == b.first && a.gears == b.gears &&
+                 a.open == b.open));
         }
         REQUIRE(copy.pipes.size() == level.pipes.size());
         for (size_t p = 0; p < level.pipes.size(); ++p) {
@@ -119,11 +121,12 @@ TEST_SUITE("content") {
       size_t nodes;
       int pieces, ticks, solutions;
     };
+    // Rules v3 (open sockets, 17 October 2026) made these.
     const Print prints[] = {
-        {20261012, nullptr, "Winding Press", 6, 2, 89, 7},   {20261013, nullptr, "Sleepy Loom", 5, 2, 92, 2},
-        {20261014, nullptr, "Hollow Channel", 6, 2, 101, 2}, {20261015, nullptr, "Glass Loom", 6, 2, 95, 2},
-        {20261016, nullptr, "Sleepy Valve", 6, 2, 90, 1},    {20261017, nullptr, "Copper Spring", 8, 3, 101, 18},
-        {20261018, nullptr, "Twin Loom", 7, 3, 132, 2},      {7, "easy", "Copper Canal", 5, 1, 100, 3},
+        {20261012, nullptr, "Winding Press", 6, 1, 86, 14},  {20261013, nullptr, "Sleepy Loom", 5, 1, 86, 3},
+        {20261014, nullptr, "Hollow Channel", 8, 2, 115, 6}, {20261015, nullptr, "Glass Loom", 6, 2, 95, 2},
+        {20261016, nullptr, "Sleepy Valve", 6, 2, 90, 1},    {20261017, nullptr, "Copper Spring", 7, 3, 116, 2},
+        {20261018, nullptr, "Twin Loom", 8, 3, 131, 4},      {7, "easy", "Copper Canal", 5, 1, 100, 3},
         {7, "medium", "Velvet Canal", 6, 2, 116, 1},         {7, "hard", "Crooked Valve", 8, 3, 123, 2},
     };
     for (const Print& print : prints) {

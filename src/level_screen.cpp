@@ -26,7 +26,6 @@ constexpr float kLongPress = 0.45f;
 
 struct PieceText {
   const char* text;
-  const char* fits;
   const char* tap;
 };
 
@@ -34,32 +33,66 @@ PieceText TextFor(const Piece& piece) {
   switch (piece.type) {
     case PieceType::Separator:
       return {
-          "Splits a blend into its two colours and sends each to its own side. A pure drop goes to its colour's side.",
-          "Forks", "Swap the sides"};
+          "Sorts by colour: a blend splits into its two colours, each to its own side. A pure drop goes to its "
+          "colour's side.",
+          "Swap the sides"};
     case PieceType::Turnstile:
-      return {
-          "Lets one drop through at a time; the others wait. When two arrive together, its arrow picks who goes first.",
-          "Crossings and merges", "Turn the arrow"};
-    case PieceType::TankShort:
-      return {"Holds each drop 4 ticks longer, one drop at a time.", "Pipe sockets", "Nothing"};
-    case PieceType::TankTall: return {"Holds each drop 8 ticks longer, one drop at a time.", "Pipe sockets", "Nothing"};
+      return {"Lets one drop in at a time; the others wait. When two arrive together, its arrow picks who goes first.",
+              "Turn the arrow"};
+    case PieceType::TankShort: return {"Holds each drop 4 ticks longer.", "Nothing"};
+    case PieceType::TankTall: return {"Holds each drop 8 ticks longer.", "Nothing"};
     case PieceType::Flipper:
-      return {"Sends drops left, right, left, right, starting on the side it shows.", "Forks", "Choose the first side"};
+      return {"Sends drops left, right, left, right, starting on the side it shows.", "Choose the first side"};
     case PieceType::Overflow:
-      return {"The first drops go its way (the number on it). After that, everything goes the other way.", "Forks",
+      return {"The first drops go its way (the number on it). After that, everything goes the other way.",
               "Choose its way"};
-    case PieceType::Bridge: return {"Lifts one lane over the other: no waiting and no mud.", "Crossings", "Nothing"};
+    case PieceType::Bridge: return {"Lifts one lane over the other: no waiting and no mud.", "Nothing"};
     case PieceType::Mixer:
-      return {
-          "Waits for one drop from each pipe, then sends out two of the new colour: blue + amber = green, green + rose "
-          "= "
-          "pearl.",
-          "Merges", "Nothing"};
-    case PieceType::TwinGate:
-      return {"Holds two side-by-side pipes until both have a drop, then lets the pair go together.", "Twin sockets",
+      return {"Waits for one drop from each way in, then mixes them: blue + amber = green, green + rose = pearl.",
               "Nothing"};
+    case PieceType::TwinGate:
+      return {"Holds two ways in until both have a drop, then lets the pair go together.", "Nothing"};
   }
-  return {"", "", ""};
+  return {"", ""};
+}
+
+// "a, b and c"
+std::string ListText(const std::vector<std::string>& items) {
+  std::string text;
+  for (size_t i = 0; i < items.size(); ++i) {
+    if (i > 0) text += i + 1 == items.size() ? " and " : ", ";
+    text += items[i];
+  }
+  return text;
+}
+
+// Where a piece does its job and where it's a trap, from the rules' table (DESIGN.md §3).
+struct WhereText {
+  std::string works;
+  std::string trap;
+};
+
+WhereText WhereFor(PieceType type) {
+  struct Place {
+    NodeKind kind;
+    bool twin;
+    const char* name;
+  };
+  constexpr Place kPlaces[] = {{NodeKind::Fork, false, "forks"},
+                               {NodeKind::Pass, false, "pipes"},
+                               {NodeKind::Pass, true, "twin pipes"},
+                               {NodeKind::Cross, false, "crossings"},
+                               {NodeKind::Merge, false, "merges"}};
+  std::vector<std::string> works, traps;
+  for (const Place& place : kPlaces) {
+    const PieceRole role = Role(type, place.kind, place.twin);
+    // Twin pipes are pipes too: name them only when a piece does something else there.
+    if (place.twin && role == Role(type, NodeKind::Pass, false)) continue;
+    if (role == PieceRole::Acts) works.push_back(place.name);
+    if (role == PieceRole::Trap) traps.push_back(place.name);
+  }
+  if (works.size() == 4) return {"every socket", ""};
+  return {ListText(works), ListText(traps)};
 }
 
 // Splits `text` into lines no wider than `width` at `size`.
@@ -98,18 +131,36 @@ const char* FailureTitle(const Outcome& outcome) {
 
 std::string FailureText(const Level& level, const Board& board, const Outcome& outcome) {
   const Node* node = outcome.fail_node >= 0 ? &level.nodes[static_cast<size_t>(outcome.fail_node)] : nullptr;
+  // A rack's bottle is named after its order when it has one.
+  std::string bottle;
+  if (node && node->kind == NodeKind::Rack && outcome.fail_slot >= 0) {
+    const std::string& name = node->slots[static_cast<size_t>(outcome.fail_slot)].name;
+    bottle = name.empty() ? "A bottle" : "The bottle for " + name;
+  }
   switch (outcome.failure) {
     case Failure::Mud:
       return node && node->kind == NodeKind::Merge ? "Two colours met where the pipes merge."
                                                    : "Two colours were in the same junction at once.";
     case Failure::WrongCup:
+      if (!bottle.empty()) return bottle + " got another colour.";
       return node ? std::string("The ") + ColorName(node->want) + " cup got another colour."
                   : "A cup got the wrong colour.";
-    case Failure::Spill: return "A cup got more than it holds.";
-    case Failure::Dry: return "A cup ended short: its drops went elsewhere.";
-    case Failure::Jam:
-      return board.Jam().lonely >= 0 ? "A drop waits for a partner that never comes."
-                                     : "Nothing can move: each lock waits for another.";
+    case Failure::Spill: return bottle.empty() ? "A cup got more than it holds." : bottle + " got more than it holds.";
+    case Failure::Dry:
+      return bottle.empty() ? "A cup ended short: its drops went elsewhere." : bottle + " ended short.";
+    case Failure::Jam: {
+      const int lonely = board.Jam().lonely;
+      if (lonely < 0) return "Nothing can move: each lock waits for another.";
+      if (level.nodes[static_cast<size_t>(lonely)].kind == NodeKind::Gate)
+        return "A gate stays shut: no drop will turn its mill.";
+      const int piece = board.PieceAt(lonely);
+      if (piece >= 0 && board.RoleOf(piece) == PieceRole::Trap) {
+        std::string name = PieceName(board.PieceInfo(piece).piece.type);
+        name[0] = static_cast<char>(name[0] - 'A' + 'a');
+        return "A " + name + " with one way in waits forever for a partner.";
+      }
+      return "A drop waits for a partner that never comes.";
+    }
     case Failure::None: break;
   }
   return "";
@@ -424,7 +475,7 @@ void LevelScreen::RenderUI(UIContext& ui) {
   options.editing = phase_ == Phase::Edit;
   if (dragging_ && drag_.moved) {
     options.drag_type = static_cast<int>(board_.PieceInfo(drag_.piece).piece.type);
-    options.drag_target = view_.SocketNear(drag_.at - glm::vec2(0.0f, kLift), 48.0f, options.drag_type);
+    options.drag_target = view_.SocketNear(drag_.at - glm::vec2(0.0f, kLift), 48.0f);
   }
   options.hint_node = hint_node_;
   options.ghosts = ghosts_ && phase_ == Phase::Edit;
@@ -520,8 +571,7 @@ void LevelScreen::HandleBoardInput(UIContext& ui) {
     }
     return;
   }
-  const int type = static_cast<int>(board_.PieceInfo(drag_.piece).piece.type);
-  const int target = view_.SocketNear(drag_.at - glm::vec2(0.0f, kLift), 48.0f, type);
+  const int target = view_.SocketNear(drag_.at - glm::vec2(0.0f, kLift), 48.0f);
   if (target >= 0 && board_.Place(drag_.piece, target)) {
     app_.GetFeedback().Play(synth::Sound::Place);
     app_.GetFeedback().Vibrate(10, 0.35f);
@@ -870,7 +920,7 @@ void LevelScreen::DrawInfo(UIContext& ui) {
   const Piece& piece = board_.PieceInfo(info_piece_).piece;
   std::string title = PieceName(piece.type);
   if (piece.type == PieceType::Overflow) title += " " + std::to_string(piece.n);
-  const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, title, {310.0f, 310.0f}, true);
+  const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, title, {310.0f, 336.0f}, true);
   if (dialog.close) {
     dialog_ = Dialog::None;
     return;
@@ -888,12 +938,18 @@ void LevelScreen::DrawInfo(UIContext& ui) {
     y += 21.0f;
   }
   y += 8.0f;
-  canvas.Text(font, std::string("Fits: ") + text.fits, {r.Center().x, y}, 14.0f, Align::Center,
-              Outlined(ui_color::kMuted));
-  canvas.Text(font, std::string("Tap it: ") + text.tap, {r.Center().x, y + 20.0f}, 14.0f, Align::Center,
+  const WhereText where = WhereFor(piece.type);
+  canvas.Text(font, "Works on " + where.works, {r.Center().x, y}, 14.0f, Align::Center, Outlined(ui_color::kGood));
+  y += 20.0f;
+  if (!where.trap.empty()) {
+    canvas.Text(font, "A trap on " + where.trap + ": it waits forever", {r.Center().x, y}, 14.0f, Align::Center,
+                Outlined(ui_color::kBad));
+    y += 20.0f;
+  }
+  canvas.Text(font, std::string("Tap it: ") + text.tap, {r.Center().x, y}, 14.0f, Align::Center,
               Outlined(ui_color::kMuted));
   if (board_.Locked(info_piece_)) {
-    canvas.Text(font, "Placed by the level: it can't move.", {r.Center().x, y + 40.0f}, 14.0f, Align::Center,
+    canvas.Text(font, "Placed by the level: it can't move.", {r.Center().x, y + 20.0f}, 14.0f, Align::Center,
                 Outlined(ui_color::kBad));
   }
 }

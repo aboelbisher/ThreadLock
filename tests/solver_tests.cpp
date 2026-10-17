@@ -10,22 +10,22 @@
 using namespace threadlock;
 
 TEST_SUITE("solver") {
-  TEST_CASE("Two Cups: Lean is 2 pieces either way, Swift needs the turnstile") {
+  TEST_CASE("Two Cups: one separator on the crossing is both Lean and Swift") {
     const Level level = MakeLevel(kTwoCups);
     const SolveReport report = Solve(level, {.keep = true});
     REQUIRE(report.solutions > 0);
-    CHECK(report.pars.pieces == 2);
-    CHECK(report.pars.ticks == 122);
-    const int x = level.NodeIndex("x");
-    bool turnstile_at_x = false;
-    for (size_t i = 0; i < level.tray.size(); ++i) {
-      turnstile_at_x |= level.tray[i].piece.type == PieceType::Turnstile && report.pars.swift.at[i] == x;
-    }
-    CHECK(turnstile_at_x);
-    // Both Lean answers (turnstile or tank) are 2 pieces; the fastest of them is the turnstile.
+    CHECK(report.pars.pieces == 1);
+    CHECK(report.pars.ticks == 119);
+    const int x = level.NodeIndex("x"), f = level.NodeIndex("f");
+    CHECK(report.pars.lean.at == std::vector<int>{x, -1, -1});  // the separator sorts the blends there
     CHECK(!report.two_answers);
-    // Every solution needs the separator on the fork.
-    for (const Solution& solution : report.kept) CHECK(solution.placement.at[0] == level.NodeIndex("f"));
+    // Every solution has the separator on the fork or the crossing, and nothing idle.
+    for (const Solution& solution : report.kept) {
+      CHECK((solution.placement.at[0] == f || solution.placement.at[0] == x));
+      Board board(level);
+      board.SetPlacement(solution.placement);
+      for (int piece = 0; piece < board.PieceCount(); ++piece) CHECK(board.RoleOf(piece) == PieceRole::Acts);
+    }
   }
 
   TEST_CASE("every placement is visited once") {
@@ -41,7 +41,7 @@ TEST_SUITE("solver") {
     });
     CHECK(visits == static_cast<int>(seen.size()));
     // turnstiles: {none, x1, x2} as a multiset: none+none, none+x1 (2 settings), none+x2 (2), x1+x2 (4)
-    // = 9; the bridge: tray, x1, x2 minus what the turnstiles took.
+    // = 9; the bridge: tray, x1, x2 minus what the turnstiles took. (Both pieces act on crossings.)
     CHECK(visits == 1 * 3 + 2 * 2 + 2 * 2 + 4 * 1);
   }
 

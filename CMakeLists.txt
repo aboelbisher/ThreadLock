@@ -73,6 +73,8 @@ if(NOT ANDROID)
     add_executable(threadlock_tests
       tests/test_main.cpp
       tests/threadlock_rules_tests.cpp
+      tests/sockets_tests.cpp
+      tests/machine_parts_tests.cpp
       tests/solver_tests.cpp
       tests/content_tests.cpp
       tests/test_levels.h

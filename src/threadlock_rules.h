@@ -6,18 +6,22 @@
 #include <string_view>
 #include <vector>
 
-// Threadlock's rules (v2, DESIGN.md §2): a deterministic flow network. No engine includes, so the
+// Threadlock's rules (v3, DESIGN.md §2-4): a deterministic flow network. No engine includes, so the
 // tests, the solver and the level tool run without a window or GPU.
 //
-// The board is a graph: nodes (spouts, forks, junctions, pipe sockets, cups, drains) joined by
-// one-way pipes measured in cells. Liquid moves in beads: a pure drop, or a blend of two drops
-// stuck together. Each Tick() every bead moves one cell (or into / out of a node) if the way is
-// free; a bead that can't move waits and the ones behind it queue up. Integers only: the same
-// pieces always give the same run (like the cycle-based sims of SpaceChem / Opus Magnum). The view
-// only draws what the board reports.
+// The board is a graph: nodes (spouts, forks, junctions, pipe sockets, cups, drains, and machine
+// parts: turning racks, mills, gates) joined by one-way pipes measured in cells. Liquid moves in
+// beads: a pure drop, or a blend of two drops stuck together. Each Tick() every bead moves one cell
+// (or into / out of a node) if the way is free; a bead that can't move waits and the ones behind it
+// queue up. Integers only: the same pieces always give the same run (like the cycle-based sims of
+// SpaceChem / Opus Magnum). The view only draws what the board reports.
 //
 // One speed everywhere: a pipe's cell count comes from its drawn length (kCellLength units a
 // cell), and a node's dwell from its size, so a longer pipe on screen is a later arrival.
+//
+// Sockets are open: any piece goes in any socket (a fork, a pipe socket, a crossing or a merge).
+// Where the socket gives a piece what it needs, it does its job; elsewhere it sits idle, and in a
+// few places it's a trap that waits forever (Role, DESIGN.md §3).
 namespace threadlock {
 
 // ---- Liquids ----
@@ -56,16 +60,17 @@ std::string BeadsText(const std::vector<Bead>& beads);
 
 // ---- Pieces ----
 
+// What each piece does where it acts (the full table of where that is: Role).
 enum class PieceType : uint8_t {
-  Separator,  // fork: splits a blend into its colours, a pure drop goes to its colour's side
-  Turnstile,  // crossing / merge: one drop inside at a time; its arrow picks who goes first
-  TankShort,  // pipe socket: holds each drop 4 extra ticks, one at a time
-  TankTall,   // pipe socket: 8 extra ticks
-  Flipper,    // fork: left, right, left, right... starting on the side it shows
-  Overflow,   // fork: the first N drops go its way, the rest the other way
-  Bridge,     // crossing: the lanes don't touch (no waiting, no mud)
-  Mixer,      // merge: waits for one drop from each pipe, sends out two of the mixed colour
-  TwinGate,   // twin socket: holds each of two side-by-side pipes until both have a drop, then both go
+  Separator,  // sorts by colour: splits a blend into its colours, a pure drop goes to its colour's side
+  Turnstile,  // one drop inside at a time; its arrow picks who goes first
+  TankShort,  // holds each drop 4 extra ticks
+  TankTall,   // 8 extra ticks
+  Flipper,    // left, right, left, right... starting on the side it shows
+  Overflow,   // the first N drops go its way, the rest the other way
+  Bridge,     // the lanes of a crossing don't touch (no waiting, no mud)
+  Mixer,      // waits for one drop from each way in, mixes them
+  TwinGate,   // holds two ways in until both have a drop, then both go together
 };
 inline constexpr int kPieceTypes = 9;
 
@@ -87,25 +92,40 @@ int TankExtra(PieceType type);    // 4 / 8 / 0
 
 enum class NodeKind : uint8_t {
   Spout,  // pours its beads onto its pipe, one every `beat` ticks
-  Fork,   // one pipe in, two out; empty, it follows its flap
-  Pass,   // a socket on a pipe (tanks); `twin` links two side by side (twin gates)
+  Fork,   // one pipe in, two out; it follows its flap unless a router (separator, flipper, overflow) sits on it
+  Pass,   // a socket on a pipe; `twin` links two side by side (a twin pair)
   Cross,  // two lanes cross: lane i = ins[i] -> outs[i]
   Merge,  // two pipes become one
   Cup,    // wants `want`, exactly `count` drops
   Drain,  // takes anything, counts nothing
+  Rack,   // a turning rack: bottles (`slots`) step round under the end of its pipe every `period` ticks
+  Mill,   // a mill wheel on a pipe: each drop leaving it flips the gates in `gears`
+  Gate,   // a gate on a pipe: shut, it lets nothing in
 };
 const char* NodeKindKey(NodeKind kind);
 bool ParseNodeKind(std::string_view text, NodeKind& out);
+bool IsSocketKind(NodeKind kind);  // fork, pass, cross, merge: where sockets can be
 
-// Which pieces fit which socket (decision 3: sockets have shapes).
-bool Fits(PieceType type, const struct Node& node);
+// What a piece does in a socket (DESIGN.md §3): its job, nothing (it still counts for Lean), or a
+// trap (its first drop waits forever for a partner that can't come: THREADLOCKED).
+enum class PieceRole : uint8_t { Acts, Idle, Trap };
+PieceRole Role(PieceType type, NodeKind kind, bool twin_pair = false);
+const char* PieceRoleKey(PieceRole role);  // "acts"
 
 inline constexpr float kCellLength = 10.0f;  // board units a bead moves per tick
-inline constexpr int kJunctionDwell = 3;     // ticks to pass a crossing or a merge
+inline constexpr int kJunctionDwell = 3;     // ticks to pass a crossing, a merge or a mill
 
 struct Vec2 {
   float x = 0.0f;
   float y = 0.0f;
+};
+
+// One bottle of a turning rack: a cup of its own.
+struct Slot {
+  Color want = Color::Blue;
+  int count = 0;
+  std::string name;  // the order it fills (look only)
+  bool operator==(const Slot&) const = default;
 };
 
 struct Node {
@@ -117,21 +137,32 @@ struct Node {
   std::vector<Bead> beads;
   int beat = 12;  // ticks between pours
   int start = 1;  // the first pour's tick
-  // Fork: the side (index into outs) it sends everything when empty
+  // Fork: the side (index into outs) it sends everything when no router sits on it
   int flap = 0;
   bool flap_tappable = false;
   // Cup
   Color want = Color::Blue;
   int count = 0;
-  // Pass: the other half of a twin socket (-1 = none)
+  // Pass: the other half of a twin pair (-1 = none)
   int twin = -1;
+  // Rack: a drop arriving at tick t lands in slot (first + t / period) % slots.size()
+  std::vector<Slot> slots;
+  int period = 4;
+  int first = 0;
+  // Mill: the gates (nodes) each drop leaving it flips
+  std::vector<int> gears;
+  // Gate: open at the start
+  bool open = true;
 
   // ---- Derived by Level::Finalize ----
   std::vector<int> ins;   // pipes; Cross: lane i = ins[i] -> outs[i]
   std::vector<int> outs;  // pipes
-  int dwell = 1;          // ticks a bead spends inside (Cup / Drain / Spout: 0)
+  int dwell = 1;          // ticks a bead spends inside (Cup / Drain / Rack / Spout: 0)
   float radius = 0.0f;    // drawn size: pipes start and end at this distance from `at`
 };
+
+// The role of a piece on this node (a twin gate acts on either half of a twin pair).
+inline PieceRole Role(PieceType type, const Node& node) { return Role(type, node.kind, node.twin >= 0); }
 
 struct Pipe {
   int from = 0;           // node
@@ -193,8 +224,8 @@ struct Level {
   // level. Returns the problems found (empty = good).
   std::vector<std::string> Finalize();
   int NodeIndex(std::string_view id) const;  // -1 if none
-  int CupCount() const;
-  int Drops() const;  // drops all spouts pour
+  int CupCount() const;                      // cups and rack bottles
+  int Drops() const;                         // drops all spouts pour
 };
 
 // ---- Running ----
@@ -212,15 +243,17 @@ const char* FailureKey(Failure failure);
 enum class EventType : uint8_t {
   Pour,      // spout `node` poured `drop` (`bead`) onto `pipe`
   Enter,     // `drop` entered `node` from `pipe`
-  Leave,     // `drop` left `node` onto `pipe`
+  Leave,     // `drop` left `node` onto `pipe` (leaving a mill turns it a notch)
   Split,     // in `node`, `drop` split: `other` is its new half
   Mix,       // in `node`, `drop` and `other` mixed into `bead`
   Collide,   // different colours met in `node`: everything inside turned to mud
   NearMiss,  // different colours passed `node` with 0-1 ticks to spare
-  Wait,      // `drop` started waiting at `node` (a lock, a tank, a partner)
-  Land,      // `drop` (`bead`) landed in cup / drain `node`; `value` = the cup's count after
-  Spill,     // cup `node` overflowed
-  CupFull,   // cup `node` got exactly what it wants, pure
+  Wait,      // `drop` started waiting at `node` (a lock, a tank, a partner, a shut gate)
+  Land,      // `drop` (`bead`) landed in cup / drain / rack `node` (bottle `slot`); `value` = its count after
+  Spill,     // cup `node` (or its bottle `slot`) overflowed
+  CupFull,   // cup `node` (or its bottle `slot`) got exactly what it wants, pure
+  Flip,      // gate `node` flipped at the end of the tick (`value` = 1: now open)
+  Turn,      // rack `node` turned: bottle `slot` is under its pipe from this tick on
   Finished,  // every drop has landed (`value` = 1 if solved)
   Jammed,    // nothing can ever move again
 };
@@ -233,6 +266,7 @@ struct Event {
   int other = -1;
   Bead bead{};
   int value = 0;
+  int slot = -1;  // a rack's bottle
 };
 
 // Where a drop is: on a pipe (`index` = pipe, `cell`) or inside a node (`index` = node, `cell` =
@@ -272,6 +306,7 @@ struct Outcome {
   bool jammed = false;
   Failure failure = Failure::None;  // the first one, in time
   int fail_node = -1;               // where it happened
+  int fail_slot = -1;               // which bottle, when it happened at a rack
   int fail_tick = -1;               // when
   int ticks = 0;                    // when the run ended
   int pieces = 0;                   // movable pieces on the board (Lean)
@@ -281,7 +316,9 @@ struct Outcome {
 struct JamReport {
   std::vector<int> stuck_nodes;  // nodes with a drop stuck inside or at their entrance
   std::vector<int> cycle;        // nodes around a circle of waiting, in order (empty = none)
-  int lonely = -1;               // a node whose drop waits for a partner that never comes
+  // A node whose drop waits for something that never comes: a mixer's or twin gate's partner (a
+  // trap: one way in), or the mill turn that would open a shut gate.
+  int lonely = -1;
 };
 
 // ---- Geometry (for drawing) ----
@@ -304,15 +341,18 @@ class Board {
   int PieceNode(int piece) const { return pieces_[Index(piece)].at; }  // -1 = in the tray
   int PieceAt(int node) const { return node_piece_[Index(node)]; }     // -1 = none
   bool Locked(int piece) const { return level_->tray[Index(piece)].locked; }
+  PieceRole RoleOf(int piece) const;  // what it does where it is (Acts in the tray)
   bool CanPlace(int piece, int node) const;
   // Puts `piece` on `node` (it leaves wherever it was); a movable piece already there goes back
-  // to the tray. False if it doesn't fit there.
+  // to the tray. False if `node` isn't a free socket (or one a locked piece holds). A twin gate on
+  // either half of a twin pair takes both halves.
   bool Place(int piece, int node);
   void Unplace(int piece);  // back to the tray
   int Setting(int piece) const { return pieces_[Index(piece)].setting; }
   void SetSetting(int piece, int setting);
   int Flap(int node) const { return flaps_[Index(node)]; }
-  bool FlapTappable(int node) const;  // a fork with a handle and no piece on it
+  bool FlapTappable(int node) const;  // a fork with a handle and no router on it
+  bool FlapInCharge(int node) const;  // a fork with no router on it: its flap routes
   void SetFlap(int node, int side);
   int PlacedCount() const;  // movable pieces on the board
   Placement GetPlacement() const;
@@ -333,6 +373,10 @@ class Board {
   // ---- For the view ----
   const std::vector<Drop>& Drops() const { return drops_; }  // dead ones have alive == false
   const CupState& Cup(int node) const { return cups_[Index(node)]; }
+  const CupState& Bottle(int rack, int slot) const { return bottles_[Index(bottle_offset_[Index(rack)] + slot)]; }
+  int RackSlot(int rack) const;  // the bottle under the rack's pipe now
+  bool GateOpen(int gate) const;
+  int MillTurns(int mill) const { return started_ ? mill_turns_[Index(mill)] : 0; }
   int Poured(int spout) const { return poured_[Index(spout)]; }
   int FlipperNext(int node) const { return flipper_next_[Index(node)]; }
   int OverflowPassed(int node) const { return overflow_passed_[Index(node)]; }
@@ -351,20 +395,24 @@ class Board {
   static size_t Index(int i) { return static_cast<size_t>(i); }
   int PieceTypeAt(int node) const;  // PieceType as int, -1 = none
   bool Is(int node, PieceType type) const { return PieceTypeAt(node) == static_cast<int>(type); }
+  bool Routes(int node) const;  // a separator, flipper or overflow sits on it
+  bool Shared(int node) const;  // a crossing or merge where two colours inside at once make mud
   int NewDrop(const Bead& bead);
   int& Cell(int pipe, int cell) { return cells_[Index(cell_offset_[Index(pipe)] + cell)]; }
   int CellAt(int pipe, int cell) const { return cells_[Index(cell_offset_[Index(pipe)] + cell)]; }
+  int Head(int pipe) const { return CellAt(pipe, level_->pipes[Index(pipe)].cells - 1); }  // drop at its end
 
-  bool Admits(int node, int lane, const Drop& drop) const;
+  bool Admits(int node, int lane) const;
   void EnterNode(int d, int node, int lane);
   bool TryLeave(int d);
   void LeaveOnto(int d, int pipe);
   void Land(int d, int node);
-  int Decide(int node, const Drop& drop);  // a fork's route for a drop entering it
+  int Decide(int node, const Drop& drop, int lane);  // the route (out side) of a drop entering `node`
   void CheckCollisions();
-  void Fail(Failure failure, int node);
+  void Fail(Failure failure, int node, int slot = -1);
   void Finish(bool jammed);
   bool Frozen() const;
+  int NextArrival(int pipe) const;  // the drop that will next reach the end of `pipe` (-1 = none can)
 
   const Level* level_;
   std::vector<PieceState> pieces_;
@@ -378,6 +426,11 @@ class Board {
   std::vector<int> cell_offset_;          // per pipe: its first cell in cells_
   std::vector<std::vector<int>> inside_;  // per node: drop slots inside, in entry order
   std::vector<CupState> cups_;
+  std::vector<CupState> bottles_;   // every rack's bottles, flattened
+  std::vector<int> bottle_offset_;  // per node: its first bottle in bottles_
+  std::vector<uint8_t> gate_open_;  // per node
+  std::vector<int> pending_flips_;  // per node: flips this tick (applied at its end)
+  std::vector<int> mill_turns_;     // per node
   std::vector<int> poured_, next_pour_;
   std::vector<int> flipper_next_, overflow_passed_;
   std::vector<std::array<int, 2>> mixer_slot_;

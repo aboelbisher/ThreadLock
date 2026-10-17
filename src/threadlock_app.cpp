@@ -21,7 +21,7 @@
 namespace threadlock {
 namespace {
 
-// Ads: Google's test units in every build until Threadlock has its own AdMob app (DESIGN.md §11;
+// Ads: Google's test units in every build until Threadlock has its own AdMob app (DESIGN.md §10;
 // the app id in AndroidManifest.xml is Google's sample one too). Real units go here, release only,
 // exactly as Bluzzle does.
 wlw::kit::AdsConfig MakeAdsConfig() {
@@ -31,7 +31,7 @@ wlw::kit::AdsConfig MakeAdsConfig() {
   return config;
 }
 
-// The pacing from DESIGN.md §11: the first 10 solved levels are ad-free, then at most one
+// The pacing from DESIGN.md §10: the first 10 solved levels are ad-free, then at most one
 // interstitial every 3 solved levels, never twice within 3 minutes.
 wlw::kit::AdPacing::Rules PacingRules() {
   return {.first_after_games = 10, .games_between = 3, .min_seconds_between = 180.0};

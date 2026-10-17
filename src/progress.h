@@ -18,7 +18,7 @@
 //                  combine two devices without losing anything.
 //   device.json    this device: settings, hints (a currency, not synced), ad pacing, the Lab.
 //
-// The rules of progress live here too: stars (Solve / Lean / Swift, DESIGN.md §7), which levels and
+// The rules of progress live here too: stars (Solve / Lean / Swift, DESIGN.md §6), which levels and
 // worlds are open, achievements.
 namespace threadlock {
 
@@ -116,7 +116,7 @@ class Progress {
   int64_t lab_seed = 1;
   void LabChanged() { device_.MarkDirty(); }
 
-  // Collections (DESIGN.md §8): which liquid palettes this player has.
+  // Collections (DESIGN.md §7): which liquid palettes this player has.
   bool PaletteOwned(const Catalog& catalog, std::string_view key) const;
   static const char* PaletteUnlockText(std::string_view key);
 

@@ -8,14 +8,18 @@ namespace {
 
 size_t Index(int i) { return static_cast<size_t>(i); }
 
+bool IsRouter(PieceType type) {
+  return type == PieceType::Separator || type == PieceType::Flipper || type == PieceType::Overflow;
+}
+
 struct Search {
   const Level& level;
   const std::function<bool(const Placement&)>& visit;
   std::vector<int> movable;               // tray pieces the search places
   std::vector<int> same_as;               // per movable piece: the previous identical one (-1 = none)
-  std::vector<std::vector<int>> choices;  // per movable piece: the nodes it fits
+  std::vector<std::vector<int>> choices;  // per movable piece: the sockets where it acts
   std::vector<int> taps;                  // forks with a tappable flap
-  std::vector<int> taken;                 // per node: taken by a piece in this placement
+  std::vector<int> taken;                 // per node: the PieceType on it in this placement, -1 = free
   Placement placement;
   bool stopped = false;
 
@@ -38,18 +42,18 @@ struct Search {
       if (stopped) return;
       if (node <= floor) continue;
       const Node& n = level.nodes[Index(node)];
-      const bool twin = type == PieceType::TwinGate;
-      if (taken[Index(node)] || (twin && taken[Index(n.twin)])) continue;
-      taken[Index(node)] = 1;
-      if (twin) taken[Index(n.twin)] = 1;
+      const bool pair = type == PieceType::TwinGate && n.twin >= 0;
+      if (taken[Index(node)] >= 0 || (pair && taken[Index(n.twin)] >= 0)) continue;
+      taken[Index(node)] = static_cast<int>(type);
+      if (pair) taken[Index(n.twin)] = static_cast<int>(type);
       placement.at[Index(piece)] = node;
       const int settings = HasSetting(type) ? 2 : 1;
       for (int s = 0; s < settings && !stopped; ++s) {
         placement.setting[Index(piece)] = HasSetting(type) ? s : level.tray[Index(piece)].setting;
         Pieces(k + 1);
       }
-      taken[Index(node)] = 0;
-      if (twin) taken[Index(n.twin)] = 0;
+      taken[Index(node)] = -1;
+      if (pair) taken[Index(n.twin)] = -1;
     }
     placement.at[Index(piece)] = -1;
   }
@@ -61,7 +65,10 @@ struct Search {
       return;
     }
     const int node = taps[k];
-    if (taken[Index(node)]) {  // a piece on the fork: its flap doesn't matter
+    const int on = taken[Index(node)];
+    if (on >= 0 && (IsRouter(static_cast<PieceType>(on)) ||
+                    Role(static_cast<PieceType>(on), level.nodes[Index(node)]) == PieceRole::Trap)) {
+      // A router decides instead of the flap, and nothing gets past a trap: the flap doesn't matter.
       placement.flap[Index(node)] = level.nodes[Index(node)].flap;
       Flaps(k + 1);
       return;
@@ -86,7 +93,7 @@ Outcome Simulate(const Level& level, const Placement& placement, bool stop_at_fa
 }
 
 void ForEachPlacement(const Level& level, const std::function<bool(const Placement&)>& visit) {
-  Search search{level, visit, {}, {}, {}, {}, std::vector<int>(level.nodes.size(), 0), {}, false};
+  Search search{level, visit, {}, {}, {}, {}, std::vector<int>(level.nodes.size(), -1), {}, false};
   search.placement.at.assign(level.tray.size(), -1);
   search.placement.setting.assign(level.tray.size(), 0);
   search.placement.flap.assign(level.nodes.size(), -1);
@@ -94,9 +101,11 @@ void ForEachPlacement(const Level& level, const std::function<bool(const Placeme
     const TrayPiece& tray_piece = level.tray[i];
     search.placement.setting[i] = tray_piece.setting;
     if (tray_piece.locked) {
+      const int type = static_cast<int>(tray_piece.piece.type);
       search.placement.at[i] = tray_piece.at;
-      search.taken[Index(tray_piece.at)] = 1;
-      if (tray_piece.piece.type == PieceType::TwinGate) search.taken[Index(level.nodes[Index(tray_piece.at)].twin)] = 1;
+      search.taken[Index(tray_piece.at)] = type;
+      const int twin = level.nodes[Index(tray_piece.at)].twin;
+      if (tray_piece.piece.type == PieceType::TwinGate && twin >= 0) search.taken[Index(twin)] = type;
     }
   }
   for (size_t i = 0; i < level.tray.size(); ++i) {
@@ -106,10 +115,13 @@ void ForEachPlacement(const Level& level, const std::function<bool(const Placeme
     for (size_t k = 0; k < search.movable.size(); ++k) {
       if (level.tray[Index(search.movable[k])].piece == tray_piece.piece) same = static_cast<int>(k);
     }
+    // Only the sockets where the piece does its job: an idle piece changes nothing and a trap can only
+    // fail, so a placement with either is never better than the same one without it.
     std::vector<int> fits;
     for (size_t n = 0; n < level.nodes.size(); ++n) {
       const Node& node = level.nodes[n];
-      if (node.socket && Fits(tray_piece.piece.type, node) && !search.taken[n]) fits.push_back(static_cast<int>(n));
+      if (node.socket && Role(tray_piece.piece.type, node) == PieceRole::Acts && search.taken[n] < 0)
+        fits.push_back(static_cast<int>(n));
     }
     search.movable.push_back(static_cast<int>(i));
     search.same_as.push_back(same);
@@ -210,8 +222,9 @@ HintMove NextHint(const Level& level, const Placement& current, const Placement&
   }
   for (size_t n = 0; n < solution.flap.size() && n < current.flap.size(); ++n) {
     if (solution.flap[n] >= 0 && current.flap[n] != solution.flap[n]) {
-      bool covered = false;  // a piece on the fork makes the flap irrelevant
-      for (size_t c = 0; c < current.at.size(); ++c) covered |= current.at[c] == static_cast<int>(n);
+      bool covered = false;  // a router on the fork makes the flap irrelevant
+      for (size_t c = 0; c < current.at.size(); ++c)
+        covered |= current.at[c] == static_cast<int>(n) && IsRouter(level.tray[c].piece.type);
       if (covered) continue;
       move.flap_node = static_cast<int>(n);
       move.flap = solution.flap[n];

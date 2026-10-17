@@ -36,27 +36,35 @@ void Feedback::OnEvents(const std::vector<Event>& events, const Level& level, co
   auto pan_of = [&](int node) {
     return node >= 0 ? (level.nodes[static_cast<size_t>(node)].at.x - 180.0f) / 180.0f * 0.6f : 0.0f;
   };
+  // What a cup (or a rack's bottle) wants.
+  auto want_of = [&](const Event& e) {
+    const Node& node = level.nodes[static_cast<size_t>(e.node)];
+    return node.kind == NodeKind::Rack && e.slot >= 0 ? node.slots[static_cast<size_t>(e.slot)].want : node.want;
+  };
   bool landed = false;
   for (const Event& e : events) {
     switch (e.type) {
       case EventType::Land: {
         const Node& node = level.nodes[static_cast<size_t>(e.node)];
-        if (node.kind != NodeKind::Cup) break;
-        const bool pure = e.bead.a == node.want && (!e.bead.IsBlend() || e.bead.b == node.want);
+        if (node.kind != NodeKind::Cup && node.kind != NodeKind::Rack) break;
+        const Color want = want_of(e);
+        const bool pure = e.bead.a == want && (!e.bead.IsBlend() || e.bead.b == want);
         if (!pure) {
           Play(synth::Sound::Splash, 0.8f, 1.0f, pan_of(e.node));
         } else {
           const int step = std::max(0, e.value - e.bead.Drops());
-          Play(synth::NoteFor(node.want), 0.55f, synth::ClimbPitch(step), pan_of(e.node));
+          Play(synth::NoteFor(want), 0.55f, synth::ClimbPitch(step), pan_of(e.node));
         }
         landed = true;
         break;
       }
-      case EventType::CupFull: {
-        const Node& node = level.nodes[static_cast<size_t>(e.node)];
-        Play(synth::ChordFor(node.want), 0.6f, 1.0f, pan_of(e.node));
+      case EventType::CupFull: Play(synth::ChordFor(want_of(e)), 0.6f, 1.0f, pan_of(e.node)); break;
+      case EventType::Flip: Play(synth::Sound::Click, 0.55f, e.value ? 1.25f : 0.7f, pan_of(e.node)); break;
+      case EventType::Turn: Play(synth::Sound::Click, 0.3f, 0.6f, pan_of(e.node)); break;
+      case EventType::Leave:
+        if (level.nodes[static_cast<size_t>(e.node)].kind == NodeKind::Mill)
+          Play(synth::Sound::Click, 0.4f, 0.5f, pan_of(e.node));  // the wheel turns a notch
         break;
-      }
       case EventType::Collide:
         Play(synth::Sound::Thud, 0.9f, 1.0f, pan_of(e.node));
         Vibrate(35, 0.85f);
@@ -71,7 +79,7 @@ void Feedback::OnEvents(const std::vector<Event>& events, const Level& level, co
       case EventType::Mix: Play(synth::Sound::NoteGreen, 0.45f, 0.75f, pan_of(e.node)); break;
       case EventType::Enter: {
         const int piece = board.PieceAt(e.node);
-        if (piece < 0) break;
+        if (piece < 0 || board.RoleOf(piece) != PieceRole::Acts) break;  // an idle piece stays still and silent
         const PieceType type = board.PieceInfo(piece).piece.type;
         if (type == PieceType::Turnstile || type == PieceType::Flipper || type == PieceType::Overflow) {
           Play(synth::Sound::Click, 0.45f, type == PieceType::Flipper ? 0.85f : 1.0f, pan_of(e.node));

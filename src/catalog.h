@@ -27,7 +27,7 @@ class Catalog {
   // The level after this one on the main path, into the next world after a finale (null at the end).
   const Level* NextOnPath(const Level& level) const;
 
-  // Stars needed to open a world: about 45% of the stars before it (DESIGN.md §7).
+  // Stars needed to open a world: about 45% of the stars before it (DESIGN.md §6).
   static int Gate(int world) { return world <= 1 ? 0 : 20 * (world - 1); }
 
  private:

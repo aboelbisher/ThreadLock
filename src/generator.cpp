@@ -149,7 +149,8 @@ Level Braid(Rng& rng, int difficulty) {
   const int cr = b.Cup("cr", {275, 512}, right_cup, count);
   b.Pipe(xs.back(), cl, {{85, ys.back() + 60}});
   b.Pipe(xs.back(), cr, {{275, ys.back() + 60}});
-  // The tray: what fits the sockets there are (plus the separator for a blend).
+  // The tray: pieces with a job on this board (any piece goes in any socket; the solver only counts
+  // the ones that act), plus the separator for a blend.
   if (blend) b.Tray(PieceType::Separator);
   const int junctions = static_cast<int>(std::count_if(
       b.level.nodes.begin(), b.level.nodes.end(), [](const Node& n) { return n.kind == NodeKind::Cross && n.socket; }));

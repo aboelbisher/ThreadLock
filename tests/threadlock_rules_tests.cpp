@@ -1,5 +1,7 @@
-// Tests for Threadlock's rules v2 (threadlock_rules.h): every piece, every way to fail, the tray and
-// sockets, determinism. Levels are written as JSON, the same format as assets/levels.
+// Tests for Threadlock's rules (threadlock_rules.h): every piece where it always worked, every way to
+// fail, the tray, determinism. What pieces do in the other sockets: sockets_tests.cpp; the turning
+// rack, mills and gates: machine_parts_tests.cpp. Levels are written as JSON, the same format as
+// assets/levels.
 #include <string>
 #include <utility>
 #include <vector>
@@ -8,51 +10,6 @@
 #include "test_levels.h"
 
 using namespace threadlock;
-
-namespace {
-
-struct Run {
-  Outcome outcome;
-  std::vector<std::pair<int, Event>> timed;  // (tick, event)
-
-  int Count(EventType type) const {
-    int n = 0;
-    for (const auto& [tick, e] : timed) n += e.type == type;
-    return n;
-  }
-  int FirstTick(EventType type, int node, Color color = Color::None) const {
-    for (const auto& [tick, e] : timed) {
-      if (e.type == type && e.node == node && (color == Color::None || e.bead.a == color)) return tick;
-    }
-    return -1;
-  }
-};
-
-Run RunBoard(Board& board) {
-  Run run;
-  board.Start();
-  while (board.Running()) {
-    for (const Event& e : board.Tick()) run.timed.push_back({board.Ticks(), e});
-  }
-  run.outcome = board.GetOutcome();
-  return run;
-}
-
-int NodeOf(const Level& level, const char* id) {
-  const int n = level.NodeIndex(id);
-  REQUIRE(n >= 0);
-  return n;
-}
-
-int PieceOf(const Board& board, PieceType type, int nth = 0) {
-  for (int i = 0; i < board.PieceCount(); ++i) {
-    if (board.PieceInfo(i).piece.type == type && nth-- == 0) return i;
-  }
-  FAIL("no such piece in the tray");
-  return -1;
-}
-
-}  // namespace
 
 TEST_SUITE("rules") {
   TEST_CASE("beads parse, print and mix") {
@@ -145,16 +102,13 @@ TEST_SUITE("rules") {
     CHECK(with_turnstile.Count(EventType::NearMiss) == 0);  // a lock isn't a near miss
   }
 
-  TEST_CASE("sockets have shapes") {
+  TEST_CASE("every piece fits every socket") {
     const Level level = MakeLevel(kTwoCups);
     Board board(level);
-    const int tank = PieceOf(board, PieceType::TankShort);
-    CHECK(!board.CanPlace(tank, NodeOf(level, "x")));  // pipe sockets only
-    CHECK(!board.CanPlace(tank, NodeOf(level, "f")));
-    CHECK(!board.CanPlace(PieceOf(board, PieceType::Separator), NodeOf(level, "x")));
-    CHECK(!board.CanPlace(PieceOf(board, PieceType::Turnstile), NodeOf(level, "t")));
-    CHECK(!board.CanPlace(tank, NodeOf(level, "s")));  // not a socket
-    CHECK(board.CanPlace(tank, NodeOf(level, "t")));
+    for (int piece = 0; piece < board.PieceCount(); ++piece) {
+      for (const char* socket : {"f", "t", "x"}) CHECK(board.CanPlace(piece, NodeOf(level, socket)));
+      for (const char* other : {"s", "cb", "ca"}) CHECK(!board.CanPlace(piece, NodeOf(level, other)));  // not sockets
+    }
   }
 
   TEST_CASE("placing: one piece per socket, displaced pieces go back to the tray") {

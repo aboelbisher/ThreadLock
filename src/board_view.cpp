@@ -234,46 +234,64 @@ void BoardView::SetLevel(const Level* level) {
   level_ = level;
   anims_.assign(level ? level->nodes.size() : 0, {});
   cup_fill_.assign(level ? level->nodes.size() : 0, 0.0f);
+  bottle_fill_.assign(level ? level->nodes.size() : 0, {});
+  for (size_t n = 0; level && n < level->nodes.size(); ++n) bottle_fill_[n].assign(level->nodes[n].slots.size(), 0.0f);
   markers_.clear();
 }
 
 void BoardView::ClearMarkers() {
   markers_.clear();
   std::fill(cup_fill_.begin(), cup_fill_.end(), 0.0f);
+  for (std::vector<float>& fills : bottle_fill_) std::fill(fills.begin(), fills.end(), 0.0f);
 }
 
 void BoardView::OnEvents(const std::vector<Event>& events, const Board& board) {
-  auto add = [&](Marker::Kind kind, int node) {
+  auto add = [&](Marker::Kind kind, int node, int slot = -1) {
     for (const Marker& marker : markers_) {
-      if (marker.kind == kind && marker.node == node && kind != Marker::NearMiss) return;
+      if (marker.kind == kind && marker.node == node && marker.slot == slot && kind != Marker::NearMiss) return;
     }
-    markers_.push_back({kind, node, 0.0f});
+    markers_.push_back({kind, node, 0.0f, slot});
   };
   for (const Event& e : events) {
     switch (e.type) {
-      case EventType::Enter:
-        if (e.node >= 0 && board.PieceAt(e.node) >= 0 &&
-            board.PieceInfo(board.PieceAt(e.node)).piece.type == PieceType::Turnstile) {
+      case EventType::Enter: {
+        // A turnstile turns as each drop goes through, unless it sits idle (on a fork or a pipe).
+        const int piece = e.node >= 0 ? board.PieceAt(e.node) : -1;
+        if (piece >= 0 && board.PieceInfo(piece).piece.type == PieceType::Turnstile &&
+            board.RoleOf(piece) == PieceRole::Acts) {
           anims_[static_cast<size_t>(e.node)].spin_target += kPi * 0.5f;
         }
         break;
+      }
+      case EventType::Leave:
+        if (level_->nodes[static_cast<size_t>(e.node)].kind == NodeKind::Mill)
+          anims_[static_cast<size_t>(e.node)].spin_target += kPi / 3.0f;  // a notch
+        break;
       case EventType::Mix: anims_[static_cast<size_t>(e.node)].flash = 1.0f; break;
+      case EventType::Flip: anims_[static_cast<size_t>(e.node)].flash = 1.0f; break;
       case EventType::Collide: add(Marker::Mud, e.node); break;
       case EventType::NearMiss: add(Marker::NearMiss, e.node); break;
       case EventType::Land: {
         const Node& node = level_->nodes[static_cast<size_t>(e.node)];
-        if (node.kind == NodeKind::Cup && !(e.bead.a == node.want && (!e.bead.IsBlend() || e.bead.b == node.want)) &&
-            !e.bead.IsMud()) {
-          add(Marker::WrongCup, e.node);
+        const Color want =
+            node.kind == NodeKind::Rack && e.slot >= 0 ? node.slots[static_cast<size_t>(e.slot)].want : node.want;
+        if ((node.kind == NodeKind::Cup || node.kind == NodeKind::Rack) &&
+            !(e.bead.a == want && (!e.bead.IsBlend() || e.bead.b == want)) && !e.bead.IsMud()) {
+          add(Marker::WrongCup, e.node, e.slot);
         }
         break;
       }
-      case EventType::Spill: add(Marker::Spill, e.node); break;
+      case EventType::Spill: add(Marker::Spill, e.node, e.slot); break;
       case EventType::Finished:
         for (size_t n = 0; n < level_->nodes.size(); ++n) {
           const Node& node = level_->nodes[n];
           if (node.kind == NodeKind::Cup && board.Cup(static_cast<int>(n)).count < node.count)
             add(Marker::Dry, static_cast<int>(n));
+          if (node.kind != NodeKind::Rack) continue;
+          for (size_t s = 0; s < node.slots.size(); ++s) {
+            if (board.Bottle(static_cast<int>(n), static_cast<int>(s)).count < node.slots[s].count)
+              add(Marker::Dry, static_cast<int>(n), static_cast<int>(s));
+          }
         }
         break;
       case EventType::Jammed: add(Marker::Jam, -1); break;
@@ -286,6 +304,12 @@ void BoardView::Update(float dt, const Board& board) {
   if (!level_) return;
   for (size_t n = 0; n < anims_.size(); ++n) {
     NodeAnim& anim = anims_[n];
+    const Node& node = level_->nodes[n];
+    if (node.kind == NodeKind::Rack) {
+      // The turntable steps round with the board's clock (counted, so it never spins back at a wrap).
+      anim.spin_target = board.Started() ? static_cast<float>(board.Ticks() / std::max(1, node.period)) : 0.0f;
+      if (!board.Started()) anim.spin = 0.0f;
+    }
     anim.spin += (anim.spin_target - anim.spin) * std::min(1.0f, dt * 12.0f);
     anim.flash = std::max(0.0f, anim.flash - dt * 2.0f);
     const int piece = board.PieceAt(static_cast<int>(n));
@@ -299,10 +323,14 @@ void BoardView::Update(float dt, const Board& board) {
       anim.spin += dt * 5.0f;
       anim.spin_target = anim.spin;
     }
-    const Node& node = level_->nodes[n];
     if (node.kind == NodeKind::Cup) {
       const float target = board.Started() ? static_cast<float>(board.Cup(static_cast<int>(n)).count) : 0.0f;
       cup_fill_[n] += (target - cup_fill_[n]) * std::min(1.0f, dt * 8.0f);
+    }
+    for (size_t s = 0; s < bottle_fill_[n].size(); ++s) {
+      const float target =
+          board.Started() ? static_cast<float>(board.Bottle(static_cast<int>(n), static_cast<int>(s)).count) : 0.0f;
+      bottle_fill_[n][s] += (target - bottle_fill_[n][s]) * std::min(1.0f, dt * 8.0f);
     }
   }
   for (Marker& marker : markers_) marker.age += dt;
@@ -322,17 +350,19 @@ void BoardView::DrawPipes(Canvas& canvas) const {
     lines.push_back(std::move(points));
   }
   for (const auto& line : lines) Polyline(canvas, line, 24.0f * s, ui_color::kPipeEdge);
+  auto junction = [](NodeKind kind) {
+    return kind == NodeKind::Cross || kind == NodeKind::Merge || kind == NodeKind::Mill;
+  };
   for (const Node& node : level_->nodes) {
     const glm::vec2 c = layout_.ToCanvas(node.at);
-    if (node.kind == NodeKind::Cross || node.kind == NodeKind::Merge) canvas.Circle(c, 19.0f * s, ui_color::kPipeEdge);
+    if (junction(node.kind)) canvas.Circle(c, 19.0f * s, ui_color::kPipeEdge);
     if (node.kind == NodeKind::Spout) canvas.Circle(c, 26.0f * s, ui_color::kPipeEdge);
     if (node.kind == NodeKind::Drain) canvas.Circle(c, 17.0f * s, ui_color::kPipeEdge);
   }
   for (const auto& line : lines) Polyline(canvas, line, 17.0f * s, ui_color::kPipeInside);
   for (const Node& node : level_->nodes) {
     const glm::vec2 c = layout_.ToCanvas(node.at);
-    if (node.kind == NodeKind::Cross || node.kind == NodeKind::Merge)
-      canvas.Circle(c, 15.0f * s, ui_color::kPipeInside);
+    if (junction(node.kind)) canvas.Circle(c, 15.0f * s, ui_color::kPipeInside);
     if (node.kind == NodeKind::Spout) canvas.Circle(c, 22.0f * s, ui_color::kPipeInside);
     if (node.kind == NodeKind::Drain) canvas.Circle(c, 14.0f * s, ui_color::kPipeInside);
     if (node.kind == NodeKind::Cup) {
@@ -401,6 +431,28 @@ void BoardView::DrawLiquid(Liquid& liquid, const Board& board, float alpha, cons
                   static_cast<uint32_t>(n) * 7919u);
     }
   }
+}
+
+Vec2 BoardView::BottleAt(int rack, int slot) const {
+  const Node& node = level_->nodes[static_cast<size_t>(rack)];
+  const int k = std::max(1, static_cast<int>(node.slots.size()));
+  const float radius = k <= 2 ? 22.0f : 30.0f;
+  // The bottle under the pipe sits at the top, right at `at`; the table turns one bottle per step.
+  const float steps = anims_[static_cast<size_t>(rack)].spin;
+  const float a = -kPi * 0.5f + 2.0f * kPi * (static_cast<float>(slot - node.first) - steps) / static_cast<float>(k);
+  return {node.at.x + std::cos(a) * radius, node.at.y + radius + std::sin(a) * radius};
+}
+
+glm::vec2 BoardView::MarkerCanvas(int node, int slot) const {
+  if (slot >= 0 && level_->nodes[static_cast<size_t>(node)].kind == NodeKind::Rack)
+    return layout_.ToCanvas(BottleAt(node, slot));
+  return NodeCanvas(node);
+}
+
+glm::vec2 BoardView::FlapHandle(const Board& board, int fork) const {
+  const Node& node = level_->nodes[static_cast<size_t>(fork)];
+  const glm::vec2 d = OutDir(*level_, node, static_cast<size_t>(std::max(0, board.Flap(fork))));
+  return NodeCanvas(fork) + d * ((board.PieceAt(fork) >= 0 ? 37.0f : 13.0f) * layout_.scale);
 }
 
 glm::vec2 BoardView::PieceCenter(const Board& board, int node) const {
@@ -477,74 +529,116 @@ void BoardView::DrawParts(Canvas& canvas, const Board& board, const Palette& pal
         }
         break;
       }
+      case NodeKind::Rack: {
+        // A turntable of bottles seen from above; the one under the pipe is at the top. Each bottle is
+        // a cup of its own.
+        const int k = static_cast<int>(node.slots.size());
+        const float radius = k <= 2 ? 22.0f : 30.0f;
+        const glm::vec2 centre = layout_.ToCanvas({node.at.x, node.at.y + radius});
+        canvas.Circle(centre, (radius + 17.0f) * s, WithAlpha(ui_color::kPanel, 0.75f));
+        canvas.Ring(centre, (radius + 17.0f) * s, 2.0f * s, WithAlpha(ink, 0.3f));
+        canvas.Circle(centre, 4.0f * s, WithAlpha(ink, 0.5f));
+        for (int slot = 0; slot < k; ++slot) {
+          const Slot& want = node.slots[static_cast<size_t>(slot)];
+          const CupState& bottle = board.Started() ? board.Bottle(static_cast<int>(n), slot) : CupState{};
+          const glm::vec2 b = layout_.ToCanvas(BottleAt(static_cast<int>(n), slot));
+          const Rgba color = bottle.impure ? kMud : LiquidColor(palette, want.want);
+          const float fill = std::clamp(
+              bottle_fill_[n][static_cast<size_t>(slot)] / static_cast<float>(std::max(1, want.count)), 0.0f, 1.0f);
+          canvas.Circle(b, 12.5f * s, WithAlpha(ui_color::kPipeInside, 0.95f));
+          if (fill > 0.01f) canvas.Circle(b, 11.0f * s * std::sqrt(fill), WithAlpha(color, 0.85f));
+          canvas.Ring(b, 12.5f * s, 2.5f * s, color);
+          char text[24];
+          std::snprintf(text, sizeof(text), "%d/%d", bottle.count, want.count);
+          canvas.Text(
+              font, text, b + glm::vec2(0.0f, 4.5f * s), 12.0f * s, Align::Center,
+              TextStyle::Outlined(bottle.impure || bottle.spilled ? ui_color::kBad : ink, ui_color::kBackground));
+        }
+        break;
+      }
+      case NodeKind::Mill: {
+        // A wheel that turns a notch per drop; dashed gears run to the gates it flips.
+        const NodeAnim& anim = anims_[n];
+        for (int gate : node.gears)
+          DashedLine(canvas, c, NodeCanvas(gate), 1.5f * s, WithAlpha(ui_color::kStar, 0.3f + 0.5f * anim.flash), 12);
+        canvas.Circle(c, 16.0f * s, WithAlpha(ui_color::kPanel, 0.8f));
+        canvas.Ring(c, 16.0f * s, 2.5f * s, ink);
+        for (int spoke = 0; spoke < 6; ++spoke) {
+          const float a = anim.spin + static_cast<float>(spoke) * kPi / 3.0f;
+          canvas.Line(c, c + glm::vec2(std::cos(a), std::sin(a)) * (15.0f * s), 2.5f * s, ink);
+        }
+        canvas.Circle(c, 4.0f * s, ink);
+        break;
+      }
+      case NodeKind::Gate: {
+        // Open: two posts beside the pipe and a green lamp. Shut: a bar across it and a red lamp.
+        const bool open = board.GateOpen(static_cast<int>(n));
+        const glm::vec2 d = node.ins.empty() ? glm::vec2(0.0f, 1.0f) : InDir(*level_, node, 0);
+        const glm::vec2 p = Perp(d);
+        if (open) {
+          for (float side : {-1.0f, 1.0f}) {
+            canvas.Line(c + p * (15.0f * side * s) - d * (5.0f * s), c + p * (15.0f * side * s) + d * (5.0f * s),
+                        4.0f * s, ink);
+          }
+        } else {
+          canvas.Line(c - p * (16.0f * s), c + p * (16.0f * s), 5.5f * s, ink);
+        }
+        const glm::vec2 lamp = c + p * (23.0f * s) - d * (8.0f * s);
+        const Rgba lamp_color = open ? ui_color::kGood : ui_color::kBad;
+        canvas.Circle(lamp, (4.5f + 3.0f * anims_[n].flash) * s, lamp_color);
+        canvas.Ring(lamp, 4.5f * s, 1.5f * s, ui_color::kBackground);
+        break;
+      }
       default: break;
     }
   }
 
-  // Forks show their flap (where everything goes while the fork is empty).
-  for (size_t n = 0; n < level_->nodes.size(); ++n) {
-    const Node& node = level_->nodes[n];
-    if (node.kind != NodeKind::Fork || board.PieceAt(static_cast<int>(n)) >= 0) continue;
+  // A fork with no router on it shows its flap (where everything goes). A piece that leaves the flap in
+  // charge (a tank, a turnstile...) is drawn over it, so the flap is drawn again outside it below.
+  auto draw_flap = [&](int n, bool covered) {
+    const Node& node = level_->nodes[static_cast<size_t>(n)];
     const glm::vec2 c = layout_.ToCanvas(node.at);
-    const glm::vec2 d = OutDir(*level_, node, static_cast<size_t>(std::max(0, board.Flap(static_cast<int>(n)))));
-    canvas.Line(c, c + d * (12.0f * s), 3.0f * s, WithAlpha(ink, 0.9f));
-    canvas.Circle(c, 3.0f * s, ink);
+    const glm::vec2 d = OutDir(*level_, node, static_cast<size_t>(std::max(0, board.Flap(n))));
+    const glm::vec2 handle = FlapHandle(board, n);
+    canvas.Line(covered ? c + d * (25.0f * s) : c, handle - d * (1.0f * s), 3.0f * s, WithAlpha(ink, 0.9f));
+    if (!covered) canvas.Circle(c, 3.0f * s, ink);
     if (node.flap_tappable) {
-      canvas.Circle(c + d * (13.0f * s), 4.5f * s, ui_color::kGood);
-      canvas.Ring(c + d * (13.0f * s), 4.5f * s, 1.5f * s, ui_color::kBackground);
+      canvas.Circle(handle, 4.5f * s, ui_color::kGood);
+      canvas.Ring(handle, 4.5f * s, 1.5f * s, ui_color::kBackground);
     }
+  };
+  for (size_t n = 0; n < level_->nodes.size(); ++n) {
+    if (board.FlapInCharge(static_cast<int>(n)) && board.PieceAt(static_cast<int>(n)) < 0)
+      draw_flap(static_cast<int>(n), false);
   }
 
-  // Sockets: an empty one shows its shape (it lights up when a dragged piece fits it).
+  // Free sockets all look the same (any piece goes in any socket); while a piece is dragged they all
+  // light up. A twin pair is drawn as one, since a twin gate takes both halves.
   for (size_t n = 0; n < level_->nodes.size(); ++n) {
     const Node& node = level_->nodes[n];
     if (!node.socket || board.PieceAt(static_cast<int>(n)) >= 0) continue;
-    if (node.twin >= 0 && node.twin < static_cast<int>(n)) continue;  // drawn with its first half
+    if (node.twin >= 0 && node.twin < static_cast<int>(n) && board.PieceAt(node.twin) < 0) continue;  // with its pair
     const glm::vec2 c = layout_.ToCanvas(node.at);
-    bool fits = false;
-    if (options.drag_type >= 0) fits = Fits(static_cast<PieceType>(options.drag_type), node);
-    const bool target =
-        options.drag_target == static_cast<int>(n) || (node.twin >= 0 && options.drag_target == node.twin);
+    const bool dragging = options.drag_type >= 0;
+    const bool target = options.drag_target == static_cast<int>(n) ||
+                        (node.twin >= 0 && options.drag_target == node.twin && board.PieceAt(node.twin) < 0);
     float a = options.editing ? 0.32f + 0.12f * std::sin(options.time * 3.0f) : 0.2f;
     float width = 2.0f * s;
-    if (options.drag_type >= 0) a = fits ? 0.9f : 0.12f;
+    if (dragging) a = 0.9f;
     if (target) {
       a = 1.0f;
       width = 3.2f * s;
     }
-    const Rgba color = WithAlpha(fits ? ui_color::kGood : ink, a);
+    const Rgba color = WithAlpha(dragging ? ui_color::kGood : ink, a);
     if (target) canvas.Circle(c, 24.0f * s, WithAlpha(ui_color::kGood, 0.16f));
-    switch (node.kind) {
-      case NodeKind::Fork:
-        for (int dash = 0; dash < 12; ++dash)
-          canvas.Arc(c, 19.0f * s, width, static_cast<float>(dash) * kPi / 6.0f, 0.3f, color);
-        break;
-      case NodeKind::Cross:
-      case NodeKind::Merge: {
-        const glm::vec2 corners[] = {c + glm::vec2(0.0f, -22.0f * s), c + glm::vec2(22.0f * s, 0.0f),
-                                     c + glm::vec2(0.0f, 22.0f * s), c + glm::vec2(-22.0f * s, 0.0f)};
-        for (int k = 0; k < 4; ++k) DashedLine(canvas, corners[k], corners[(k + 1) % 4], width, color, 3);
-        break;
-      }
-      case NodeKind::Pass: {
-        if (node.twin >= 0) {
-          const glm::vec2 other = NodeCanvas(node.twin);
-          const glm::vec2 min = glm::min(c, other) - glm::vec2(16.0f * s),
-                          max = glm::max(c, other) + glm::vec2(16.0f * s);
-          DashedLine(canvas, min, {max.x, min.y}, width, color, 8);
-          DashedLine(canvas, {max.x, min.y}, max, width, color, 3);
-          DashedLine(canvas, max, {min.x, max.y}, width, color, 8);
-          DashedLine(canvas, {min.x, max.y}, min, width, color, 3);
-        } else {
-          const glm::vec2 h(14.0f * s, 19.0f * s);
-          DashedLine(canvas, c - h, {c.x + h.x, c.y - h.y}, width, color, 2);
-          DashedLine(canvas, {c.x + h.x, c.y - h.y}, c + h, width, color, 3);
-          DashedLine(canvas, c + h, {c.x - h.x, c.y + h.y}, width, color, 2);
-          DashedLine(canvas, {c.x - h.x, c.y + h.y}, c - h, width, color, 3);
-        }
-        break;
-      }
-      default: break;
+    for (int dash = 0; dash < 12; ++dash)
+      canvas.Arc(c, 19.0f * s, width, static_cast<float>(dash) * kPi / 6.0f, 0.3f, color);
+    if (node.twin >= 0 && board.PieceAt(node.twin) < 0) {
+      const glm::vec2 other = NodeCanvas(node.twin);
+      for (int dash = 0; dash < 12; ++dash)
+        canvas.Arc(other, 19.0f * s, width, static_cast<float>(dash) * kPi / 6.0f, 0.3f, color);
+      const glm::vec2 d = Normal(other - c);
+      DashedLine(canvas, c + d * (21.0f * s), other - d * (21.0f * s), width, color, 4);
     }
   }
 
@@ -566,7 +660,7 @@ void BoardView::DrawParts(Canvas& canvas, const Board& board, const Palette& pal
     }
   }
 
-  // Placed pieces.
+  // Placed pieces. During a run a piece with nothing to do there sits dim (the replay shows why).
   for (int i = 0; i < board.PieceCount(); ++i) {
     const int node = board.PieceNode(i);
     if (node < 0) continue;
@@ -577,10 +671,15 @@ void BoardView::DrawParts(Canvas& canvas, const Board& board, const Palette& pal
     look.spin = anim.spin;
     look.arm = piece.type == PieceType::Flipper ? anim.arm : -1.0f;
     look.locked = board.Locked(i);
+    if (board.Started() && board.RoleOf(i) == PieceRole::Idle) look.alpha = 0.38f;
     if (piece.type == PieceType::Overflow && board.Started())
       look.remaining = std::max(0, piece.n - board.OverflowPassed(node));
     DrawPiece(canvas, piece, PieceCenter(board, node), s, look, palette, level_,
               &level_->nodes[static_cast<size_t>(node)], &font);
+  }
+  for (size_t n = 0; n < level_->nodes.size(); ++n) {
+    if (board.FlapInCharge(static_cast<int>(n)) && board.PieceAt(static_cast<int>(n)) >= 0)
+      draw_flap(static_cast<int>(n), true);
   }
 
   if (options.hint_node >= 0) {
@@ -622,6 +721,11 @@ void BoardView::DrawMarkers(Canvas& canvas, const Board& board, const wlw::ui::F
         const char* text = marker.kind == Marker::WrongCup ? "wrong colour"
                            : marker.kind == Marker::Dry    ? "dry"
                                                            : "spill";
+        if (node.kind == NodeKind::Rack) {  // over the bottle, wherever the table has turned it
+          canvas.Text(font, text, MarkerCanvas(marker.node, marker.slot) + glm::vec2(0.0f, -17.0f * s), 14.0f * s,
+                      Align::Center, TextStyle::Outlined(ui_color::kBad, ui_color::kBackground));
+          break;
+        }
         const glm::vec2 top = layout_.ToCanvas({node.at.x, node.at.y - 10.0f});
         canvas.Text(font, text, top, 15.0f * s, Align::Center,
                     TextStyle::Outlined(ui_color::kBad, ui_color::kBackground));
@@ -656,8 +760,9 @@ void BoardView::DrawMarkers(Canvas& canvas, const Board& board, const wlw::ui::F
                           tip - d * (4.0f * s) - Perp(d) * (6.0f * s), ui_color::kBad);
         }
         if (jam.lonely >= 0) {
-          canvas.Text(font, "waits forever", NodeCanvas(jam.lonely) + glm::vec2(0.0f, 34.0f * s), 14.0f * s,
-                      Align::Center, TextStyle::Outlined(ui_color::kBad, ui_color::kBackground));
+          const bool gate = level_->nodes[static_cast<size_t>(jam.lonely)].kind == NodeKind::Gate;
+          canvas.Text(font, gate ? "never opens" : "waits forever", NodeCanvas(jam.lonely) + glm::vec2(0.0f, 34.0f * s),
+                      14.0f * s, Align::Center, TextStyle::Outlined(ui_color::kBad, ui_color::kBackground));
         }
         break;
       }
@@ -675,14 +780,13 @@ void BoardView::DrawSpotlight(Canvas& canvas, int node, float amount) const {
 
 // ---- Hit tests ----
 
-int BoardView::SocketNear(glm::vec2 point, float radius, int piece_type) const {
+int BoardView::SocketNear(glm::vec2 point, float radius) const {
   if (!level_) return -1;
   int best = -1;
   float best_distance = radius;
   for (size_t n = 0; n < level_->nodes.size(); ++n) {
     const Node& node = level_->nodes[n];
     if (!node.socket) continue;
-    if (piece_type >= 0 && !Fits(static_cast<PieceType>(piece_type), node)) continue;
     float d = glm::distance(point, NodeCanvas(static_cast<int>(n)));
     if (node.twin >= 0)
       d = std::min(d, glm::distance(point, (NodeCanvas(static_cast<int>(n)) + NodeCanvas(node.twin)) * 0.5f));
@@ -715,7 +819,9 @@ int BoardView::FlapNear(const Board& board, glm::vec2 point, float radius) const
   float best_distance = radius;
   for (size_t n = 0; n < level_->nodes.size(); ++n) {
     if (!board.FlapTappable(static_cast<int>(n))) continue;
-    const float d = glm::distance(point, NodeCanvas(static_cast<int>(n)));
+    const float d = std::min(
+        glm::distance(point, FlapHandle(board, static_cast<int>(n))),
+        board.PieceAt(static_cast<int>(n)) < 0 ? glm::distance(point, NodeCanvas(static_cast<int>(n))) : radius);
     if (d < best_distance) {
       best_distance = d;
       best = static_cast<int>(n);

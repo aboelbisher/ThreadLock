@@ -20,7 +20,14 @@
 //    "pipes": [["s", "f"], ["f", "x", [[90, 170], [90, 280]]], ...],   (from, to, bends)
 //    "tray": ["separator", "turnstile", "tank4", {"type": "overflow", "n": 2}],
 //    "placed": [{"piece": "turnstile", "at": "x", "set": 1, "locked": true}]}
-// A pipe leaving a fork is its side 0 or 1 in the order the pipes are listed.
+// Machine parts (DESIGN.md §4):
+//   {"id": "r", "kind": "rack", "at": [180, 470], "period": 4, "first": 0,
+//    "slots": [{"want": "B", "count": 4, "name": "Mrs Hale"}, {"want": "B", "count": 2}]}
+//   {"id": "m", "kind": "mill", "at": [90, 300], "gears": ["g"]}
+//   {"id": "g", "kind": "gate", "at": [270, 200], "open": false}
+// Sockets ("socket": true; pass nodes are sockets unless false) go on forks, passes, crossings and
+// merges; any piece goes in any socket. A pipe leaving a fork is its side 0 or 1 in the order the
+// pipes are listed.
 // The pars file maps a level id to its pars: {"1-4": {"pieces": 2, "ticks": 131, "solutions": 4,
 //   "lean": <placement>, "swift": <placement>}}, a placement being
 //   {"at": ["f", "x", null], "set": [0, 1, 0], "flaps": {"f": 1}}.

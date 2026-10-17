@@ -6,7 +6,7 @@
 #include "threadlock_rules.h"
 #include "wlw/core/color.h"
 
-// Threadlock's colours: the liquids (a palette the player can change, DESIGN.md §10 Collections),
+// Threadlock's colours: the liquids (a palette the player can change, DESIGN.md §7 Collections),
 // and the glass-and-dark-metal look of the board and UI.
 namespace threadlock {
 

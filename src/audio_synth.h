@@ -8,7 +8,7 @@
 // Threadlock's sounds are made in code at startup (no audio files): a few hundred milliseconds of
 // arithmetic replaces megabytes in the APK, and every sound is in tune with every other.
 //
-// The machine plays music (DESIGN.md §10): each colour has an instrument; a drop landing plays a
+// The machine plays music (DESIGN.md §9): each colour has an instrument; a drop landing plays a
 // note that climbs as its cup fills; a full cup rings a chord; a tick is a sixteenth note at
 // 120 BPM, so landings fall on the beat by themselves. Mud is a dull thud, a jam a grinding stop
 // and a low organ chord.

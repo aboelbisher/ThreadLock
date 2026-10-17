@@ -215,12 +215,28 @@ int Timing(const Level& level, const Placement& placement) {
           std::printf("  %4d mix    %-4s -> %s\n", board.Ticks(), node, BeadText(e.bead).c_str());
           break;
         case EventType::Land:
-          std::printf("  %4d land   %-4s %-4s count %d\n", board.Ticks(), node, BeadText(e.bead).c_str(), e.value);
+          if (e.slot >= 0) {
+            std::printf("  %4d land   %-4s %-4s bottle %d count %d\n", board.Ticks(), node, BeadText(e.bead).c_str(),
+                        e.slot, e.value);
+          } else {
+            std::printf("  %4d land   %-4s %-4s count %d\n", board.Ticks(), node, BeadText(e.bead).c_str(), e.value);
+          }
           break;
         case EventType::Spill: std::printf("  %4d SPILL  %-4s\n", board.Ticks(), node); break;
+        case EventType::Flip:
+          std::printf("  %4d gate   %-4s %s\n", board.Ticks(), node, e.value ? "opens" : "shuts");
+          break;
+        case EventType::Turn: std::printf("  %4d turn   %-4s bottle %d\n", board.Ticks(), node, e.slot); break;
         case EventType::Jammed: std::printf("  %4d THREADLOCKED\n", board.Ticks()); break;
         default: break;
       }
+    }
+  }
+  for (int piece = 0; piece < board.PieceCount(); ++piece) {
+    if (board.PieceNode(piece) >= 0 && board.RoleOf(piece) != PieceRole::Acts) {
+      std::printf("  %s on %s: %s\n", PieceKey(board.PieceInfo(piece).piece.type),
+                  level.nodes[static_cast<size_t>(board.PieceNode(piece))].id.c_str(),
+                  PieceRoleKey(board.RoleOf(piece)));
     }
   }
   const Outcome& outcome = board.GetOutcome();
@@ -328,6 +344,10 @@ int Render(const Level& level, const std::string& out, const Placement& placemen
   for (const Pipe& pipe : level.pipes) image.Polyline(pipe.points, 17.0f, inside);
   Board board(level);
   board.SetPlacement(placement);
+  if (tick > 0) {
+    board.Start();
+    while (board.Running() && board.Ticks() < tick) board.Tick();
+  }
   for (size_t n = 0; n < level.nodes.size(); ++n) {
     const Node& node = level.nodes[n];
     switch (node.kind) {
@@ -358,15 +378,59 @@ int Render(const Level& level, const std::string& out, const Placement& placemen
         image.Disc(node.at, 14.0f, inside);
         image.Ring(node.at, 14.0f, 2.5f, dim);
         break;
+      case NodeKind::Rack: {
+        // The bottles in a row under the tap (`at`); the one under it now is ringed.
+        const int k = static_cast<int>(node.slots.size());
+        const int under = board.Started() ? board.RackSlot(static_cast<int>(n)) : node.first;
+        for (int s = 0; s < k; ++s) {
+          const Vec2 c{node.at.x + (static_cast<float>(s - under)) * 34.0f, node.at.y + 30.0f};
+          const Slot& slot = node.slots[static_cast<size_t>(s)];
+          image.Polyline({{c.x - 13, c.y - 18}, {c.x - 13, c.y + 18}, {c.x + 13, c.y + 18}, {c.x + 13, c.y - 18}}, 2.5f,
+                         LiquidRgb(slot.want));
+          const int have = board.Started() ? board.Bottle(static_cast<int>(n), s).count : 0;
+          image.Text({c.x - 10, c.y + 6}, std::to_string(have) + "/" + std::to_string(slot.count), ink);
+          if (s == under) image.Ring(c, 24.0f, 1.5f, socket);
+        }
+        image.Text({node.at.x - 30, node.at.y + 66}, "turns /" + std::to_string(node.period), dim);
+        break;
+      }
+      case NodeKind::Mill: {
+        image.Disc(node.at, 15.0f, inside);
+        image.Ring(node.at, 15.0f, 2.5f, ink);
+        const float turn = static_cast<float>(board.MillTurns(static_cast<int>(n))) * 0.5f;
+        for (int spoke = 0; spoke < 4; ++spoke) {
+          const float a = turn + static_cast<float>(spoke) * 1.5708f;
+          image.Segment(node.at, {node.at.x + std::cos(a) * 13.0f, node.at.y + std::sin(a) * 13.0f}, 2.0f, ink);
+        }
+        for (int gate : node.gears) {  // a dashed line to each gate it flips
+          const Vec2 to = level.nodes[static_cast<size_t>(gate)].at;
+          for (int k = 0; k < 12; k += 2) {
+            const float t0 = static_cast<float>(k) / 12.0f, t1 = static_cast<float>(k + 1) / 12.0f;
+            image.Segment({node.at.x + (to.x - node.at.x) * t0, node.at.y + (to.y - node.at.y) * t0},
+                          {node.at.x + (to.x - node.at.x) * t1, node.at.y + (to.y - node.at.y) * t1}, 1.0f, dim);
+          }
+        }
+        break;
+      }
+      case NodeKind::Gate: {
+        const bool open = board.GateOpen(static_cast<int>(n));
+        static const float kOpen[3] = {0.35f, 0.85f, 0.45f}, kShut[3] = {1.0f, 0.35f, 0.29f};
+        image.Segment({node.at.x - 13, node.at.y}, {node.at.x + 13, node.at.y}, open ? 2.0f : 5.0f,
+                      open ? kOpen : kShut);
+        image.Disc({node.at.x + 16, node.at.y - 8}, 3.5f, open ? kOpen : kShut);
+        break;
+      }
     }
     const int piece = board.PieceAt(static_cast<int>(n));
     if (piece >= 0) {
       const PieceType type = board.PieceInfo(piece).piece.type;
-      image.Ring(node.at, 13.0f, 3.0f, ink);
+      const PieceRole role = board.RoleOf(piece);
+      image.Ring(node.at, 13.0f, 3.0f, role == PieceRole::Acts ? ink : dim);
       std::string label = PieceKey(type);
       label = label.substr(0, 3);
       if (HasSetting(type)) label += "/" + std::to_string(board.Setting(piece));
-      image.Text({node.at.x - 12, node.at.y + 4}, label, ink);
+      if (role != PieceRole::Acts) label += std::string(" ") + PieceRoleKey(role);
+      image.Text({node.at.x - 12, node.at.y + 4}, label, role == PieceRole::Acts ? ink : dim);
     }
     image.Text({node.at.x + 14, node.at.y - 10}, node.id, socket);
   }
@@ -376,8 +440,6 @@ int Render(const Level& level, const std::string& out, const Placement& placemen
     image.Text({mid.x + 8, mid.y + 4}, std::to_string(pipe.cells), dim);
   }
   if (tick > 0) {
-    board.Start();
-    while (board.Running() && board.Ticks() < tick) board.Tick();
     for (const Drop& drop : board.Drops()) {
       if (!drop.alive) continue;
       const Vec2 p = DropPoint(level, drop, drop.loc);

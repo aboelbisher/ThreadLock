@@ -7,7 +7,7 @@
 #include "threadlock_app.h"
 #include "wlw/app/screen.h"
 
-// The map (DESIGN.md §9): one long pipe network you scroll through, a node per level. Solving a
+// The map (DESIGN.md §8): one long pipe network you scroll through, a node per level. Solving a
 // level pours light into the pipe to the next one; worlds sit behind valves that open with stars.
 // The daily puzzle and the Lab are cards above it.
 namespace threadlock {

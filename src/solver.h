@@ -5,13 +5,16 @@
 
 #include "threadlock_rules.h"
 
-// The solver: tries every placement of the tray's pieces (every socket each fits, every setting,
-// every tappable flap) and runs each one. Runs are deterministic, so one run per placement says
-// all there is to know. It gives the pars for the stars (Lean = fewest pieces, Swift = fastest
-// run), the solutions for hints, and numbers for judging a level (how many solutions, traps).
+// The solver: tries every placement of the tray's pieces (every socket where each piece acts, every
+// setting, every tappable flap that still decides something) and runs each one. Runs are
+// deterministic, so one run per placement says all there is to know. It gives the pars for the
+// stars (Lean = fewest pieces, Swift = fastest run), the solutions for hints, and numbers for
+// judging a level (how many solutions, traps).
 //
-// Identical pieces aren't tried in both orders, and a run stops at its first failure, so a level
-// with 4 pieces and 6 sockets takes well under a second.
+// Sockets are open, but a piece sitting idle changes nothing and a trap can only fail, so neither
+// can beat the same placement without that piece: the search leaves them out (and `solutions`
+// counts only placements where every piece works). Identical pieces aren't tried in both orders,
+// and a run stops at its first failure.
 namespace threadlock {
 
 struct Solution {
@@ -36,8 +39,8 @@ struct SolveOptions {
 // Runs one placement to its end (or its first failure).
 Outcome Simulate(const Level& level, const Placement& placement, bool stop_at_failure = true);
 
-// Calls `visit` for every distinct placement (the level's locked pieces stay where they are).
-// Return false from `visit` to stop.
+// Calls `visit` for every distinct placement where each piece acts (the level's locked pieces stay
+// where they are). Return false from `visit` to stop.
 void ForEachPlacement(const Level& level, const std::function<bool(const Placement&)>& visit);
 
 SolveReport Solve(const Level& level, const SolveOptions& options = {});

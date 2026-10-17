@@ -35,9 +35,11 @@ constexpr PieceInfoRow kPieceRows[] = {
     {PieceType::TwinGate, "Twin gate", "twin", false},
 };
 
-constexpr const char* kNodeKinds[] = {"spout", "fork", "pass", "cross", "merge", "cup", "drain"};
+constexpr const char* kNodeKinds[] = {"spout", "fork",  "pass", "cross", "merge",
+                                      "cup",   "drain", "rack", "mill",  "gate"};
 constexpr const char* kLevelTypes[] = {"build", "repair", "spectacle", "challenge", "daily", "lab"};
 constexpr const char* kFailures[] = {"none", "mud", "wrong_cup", "spill", "dry", "jam"};
+constexpr const char* kRoles[] = {"acts", "idle", "trap"};
 
 float Distance(Vec2 a, Vec2 b) { return std::hypot(b.x - a.x, b.y - a.y); }
 
@@ -215,20 +217,32 @@ bool ParseNodeKind(std::string_view text, NodeKind& out) {
   return false;
 }
 
-bool Fits(PieceType type, const Node& node) {
-  switch (type) {
-    case PieceType::Separator:
-    case PieceType::Flipper:
-    case PieceType::Overflow: return node.kind == NodeKind::Fork;
-    case PieceType::Turnstile: return node.kind == NodeKind::Cross || node.kind == NodeKind::Merge;
-    case PieceType::Bridge: return node.kind == NodeKind::Cross;
-    case PieceType::Mixer: return node.kind == NodeKind::Merge;
-    case PieceType::TankShort:
-    case PieceType::TankTall: return node.kind == NodeKind::Pass && node.twin < 0;
-    case PieceType::TwinGate: return node.kind == NodeKind::Pass && node.twin >= 0;
-  }
-  return false;
+bool IsSocketKind(NodeKind kind) {
+  return kind == NodeKind::Fork || kind == NodeKind::Pass || kind == NodeKind::Cross || kind == NodeKind::Merge;
 }
+
+// DESIGN.md §3, "Every piece in every socket".
+PieceRole Role(PieceType type, NodeKind kind, bool twin_pair) {
+  using enum PieceType;
+  switch (kind) {
+    case NodeKind::Fork:  // 1 in, 2 out: routers and tanks work (the flap sends a tank's drops on)
+      if (type == Turnstile || type == Bridge) return PieceRole::Idle;
+      if (type == Mixer || type == TwinGate) return PieceRole::Trap;
+      return PieceRole::Acts;
+    case NodeKind::Pass:  // 1 in, 1 out: only time works here, and a twin gate on a twin pair
+      if (type == TankShort || type == TankTall) return PieceRole::Acts;
+      if (type == TwinGate) return twin_pair ? PieceRole::Acts : PieceRole::Trap;
+      if (type == Mixer) return PieceRole::Trap;
+      return PieceRole::Idle;
+    case NodeKind::Cross: return PieceRole::Acts;  // two lanes: every piece has a job
+    case NodeKind::Merge:                          // 2 in, 1 out: nothing to route, no lanes to lift apart
+      if (type == Separator || type == Flipper || type == Overflow || type == Bridge) return PieceRole::Idle;
+      return PieceRole::Acts;
+    default: return PieceRole::Idle;
+  }
+}
+
+const char* PieceRoleKey(PieceRole role) { return kRoles[static_cast<size_t>(role)]; }
 
 const char* LevelTypeKey(LevelType type) { return kLevelTypes[static_cast<size_t>(type)]; }
 
@@ -254,8 +268,12 @@ int Level::NodeIndex(std::string_view node_id) const {
 }
 
 int Level::CupCount() const {
-  return static_cast<int>(
-      std::count_if(nodes.begin(), nodes.end(), [](const Node& n) { return n.kind == NodeKind::Cup; }));
+  int cups = 0;
+  for (const Node& node : nodes) {
+    if (node.kind == NodeKind::Cup) ++cups;
+    if (node.kind == NodeKind::Rack) cups += static_cast<int>(node.slots.size());
+  }
+  return cups;
 }
 
 int Level::Drops() const {
@@ -278,9 +296,12 @@ std::vector<std::string> Level::Finalize() {
       case NodeKind::Fork: node.dwell = 1, node.radius = 5.0f; break;
       case NodeKind::Pass: node.dwell = 1, node.radius = 5.0f; break;
       case NodeKind::Cross:
-      case NodeKind::Merge: node.dwell = kJunctionDwell, node.radius = 15.0f; break;
-      case NodeKind::Cup: node.dwell = 0, node.radius = 0.0f; break;
+      case NodeKind::Merge:
+      case NodeKind::Mill: node.dwell = kJunctionDwell, node.radius = 15.0f; break;
+      case NodeKind::Cup:
+      case NodeKind::Rack: node.dwell = 0, node.radius = 0.0f; break;
       case NodeKind::Drain: node.dwell = 0, node.radius = 14.0f; break;
+      case NodeKind::Gate: node.dwell = 1, node.radius = 5.0f; break;
     }
   }
   for (size_t i = 0; i < nodes.size(); ++i) {
@@ -326,7 +347,33 @@ std::vector<std::string> Level::Finalize() {
         if (node.count < 1 || node.want == Color::None) problem("cup '" + node.id + "' wants nothing");
         break;
       case NodeKind::Drain: expect(1, 0); break;
+      case NodeKind::Rack:
+        expect(1, 0);
+        if (node.slots.empty()) problem("rack '" + node.id + "' has no bottles");
+        for (const Slot& slot : node.slots) {
+          if (slot.count < 1 || slot.want == Color::None) problem("a bottle of rack '" + node.id + "' wants nothing");
+        }
+        if (node.period < 1) problem("rack '" + node.id + "' needs period >= 1");
+        if (node.first < 0 || static_cast<size_t>(node.first) >= std::max<size_t>(1, node.slots.size()))
+          problem("rack '" + node.id + "' starts at a bottle it doesn't have");
+        break;
+      case NodeKind::Mill:
+        expect(1, 1);
+        if (node.gears.empty()) problem("mill '" + node.id + "' turns no gates");
+        for (int gear : node.gears) {
+          if (gear < 0 || static_cast<size_t>(gear) >= nodes.size() ||
+              nodes[static_cast<size_t>(gear)].kind != NodeKind::Gate) {
+            problem("mill '" + node.id + "' is geared to something that isn't a gate");
+          }
+        }
+        break;
+      case NodeKind::Gate: expect(1, 1); break;
     }
+    if (node.socket && !IsSocketKind(node.kind)) {
+      problem("node '" + node.id + "' (" + NodeKindKey(node.kind) + ") can't be a socket");
+    }
+    if (!node.gears.empty() && node.kind != NodeKind::Mill)
+      problem("node '" + node.id + "' has gears but isn't a mill");
     if (node.twin >= 0) {
       if (static_cast<size_t>(node.twin) >= nodes.size() || node.kind != NodeKind::Pass ||
           nodes[static_cast<size_t>(node.twin)].kind != NodeKind::Pass ||
@@ -388,9 +435,8 @@ std::vector<std::string> Level::Finalize() {
       continue;
     }
     const Node& node = nodes[static_cast<size_t>(tray_piece.at)];
-    if (!node.socket || !Fits(tray_piece.piece.type, node)) {
+    if (!node.socket)
       problem(std::string("the ") + PieceName(tray_piece.piece.type) + " can't go on '" + node.id + "'");
-    }
   }
   if (CupCount() == 0) problem("no cups");
   return problems;
@@ -443,17 +489,22 @@ int Board::PieceTypeAt(int node) const {
   return piece < 0 ? -1 : static_cast<int>(level_->tray[Index(piece)].piece.type);
 }
 
+PieceRole Board::RoleOf(int piece) const {
+  const int at = pieces_[Index(piece)].at;
+  return at < 0 ? PieceRole::Acts : Role(PieceInfo(piece).piece.type, level_->nodes[Index(at)]);
+}
+
 bool Board::CanPlace(int piece, int node) const {
   if (piece < 0 || piece >= PieceCount() || node < 0 || Index(node) >= level_->nodes.size()) return false;
   if (Locked(piece)) return false;
   const Node& n = level_->nodes[Index(node)];
-  if (!n.socket || !Fits(PieceInfo(piece).piece.type, n)) return false;
+  if (!n.socket) return false;
   auto locked_other = [&](int at) {
     const int other = node_piece_[Index(at)];
     return other >= 0 && other != piece && Locked(other);
   };
   if (locked_other(node)) return false;
-  if (PieceInfo(piece).piece.type == PieceType::TwinGate && locked_other(n.twin)) return false;
+  if (PieceInfo(piece).piece.type == PieceType::TwinGate && n.twin >= 0 && locked_other(n.twin)) return false;
   return true;
 }
 
@@ -461,11 +512,11 @@ bool Board::Place(int piece, int node) {
   if (started_ || !CanPlace(piece, node)) return false;
   Unplace(piece);
   const Node& n = level_->nodes[Index(node)];
-  const bool twin = PieceInfo(piece).piece.type == PieceType::TwinGate;
+  const bool pair = PieceInfo(piece).piece.type == PieceType::TwinGate && n.twin >= 0;
   if (node_piece_[Index(node)] >= 0) Unplace(node_piece_[Index(node)]);
-  if (twin && node_piece_[Index(n.twin)] >= 0) Unplace(node_piece_[Index(n.twin)]);
+  if (pair && node_piece_[Index(n.twin)] >= 0) Unplace(node_piece_[Index(n.twin)]);
   node_piece_[Index(node)] = piece;
-  if (twin) node_piece_[Index(n.twin)] = piece;
+  if (pair) node_piece_[Index(n.twin)] = piece;
   pieces_[Index(piece)].at = node;
   return true;
 }
@@ -475,7 +526,8 @@ void Board::Unplace(int piece) {
   PieceState& state = pieces_[Index(piece)];
   if (state.at < 0) return;
   node_piece_[Index(state.at)] = -1;
-  if (PieceInfo(piece).piece.type == PieceType::TwinGate) node_piece_[Index(level_->nodes[Index(state.at)].twin)] = -1;
+  const int twin = level_->nodes[Index(state.at)].twin;
+  if (PieceInfo(piece).piece.type == PieceType::TwinGate && twin >= 0) node_piece_[Index(twin)] = -1;
   state.at = -1;
 }
 
@@ -484,10 +536,24 @@ void Board::SetSetting(int piece, int setting) {
   pieces_[Index(piece)].setting = setting & 1;
 }
 
-bool Board::FlapTappable(int node) const {
-  const Node& n = level_->nodes[Index(node)];
-  return n.kind == NodeKind::Fork && n.flap_tappable && node_piece_[Index(node)] < 0;
+bool Board::Routes(int node) const {
+  const int type = PieceTypeAt(node);
+  return type == static_cast<int>(PieceType::Separator) || type == static_cast<int>(PieceType::Flipper) ||
+         type == static_cast<int>(PieceType::Overflow);
 }
+
+bool Board::Shared(int node) const {
+  const NodeKind kind = level_->nodes[Index(node)].kind;
+  if (kind != NodeKind::Cross && kind != NodeKind::Merge) return false;
+  // A turnstile lets one drop in at a time, a mixer mixes what it holds, a bridge keeps a crossing's
+  // lanes apart. Any other piece leaves the junction shared.
+  if (Is(node, PieceType::Turnstile) || Is(node, PieceType::Mixer)) return false;
+  return !(kind == NodeKind::Cross && Is(node, PieceType::Bridge));
+}
+
+bool Board::FlapInCharge(int node) const { return level_->nodes[Index(node)].kind == NodeKind::Fork && !Routes(node); }
+
+bool Board::FlapTappable(int node) const { return FlapInCharge(node) && level_->nodes[Index(node)].flap_tappable; }
 
 void Board::SetFlap(int node, int side) {
   const Node& n = level_->nodes[Index(node)];
@@ -584,6 +650,18 @@ void Board::Start() {
   cells_.assign(Index(total), -1);
   inside_.assign(node_count, {});
   cups_.assign(node_count, {});
+  bottle_offset_.assign(node_count, -1);
+  int bottles = 0;
+  for (size_t n = 0; n < node_count; ++n) {
+    if (level_->nodes[n].kind != NodeKind::Rack) continue;
+    bottle_offset_[n] = bottles;
+    bottles += static_cast<int>(level_->nodes[n].slots.size());
+  }
+  bottles_.assign(Index(bottles), {});
+  gate_open_.assign(node_count, 0);
+  for (size_t n = 0; n < node_count; ++n) gate_open_[n] = level_->nodes[n].open ? 1 : 0;
+  pending_flips_.assign(node_count, 0);
+  mill_turns_.assign(node_count, 0);
   poured_.assign(node_count, 0);
   next_pour_.assign(node_count, 0);
   flipper_next_.assign(node_count, 0);
@@ -614,16 +692,18 @@ void Board::Stop() {
   tick_ = 0;
 }
 
-bool Board::Admits(int node, int lane, const Drop& drop) const {
-  (void)drop;
+bool Board::Admits(int node, int lane) const {
   const Node& n = level_->nodes[Index(node)];
   const std::vector<int>& inside = inside_[Index(node)];
   switch (n.kind) {
     case NodeKind::Cup:
-    case NodeKind::Drain: return true;
+    case NodeKind::Drain:
+    case NodeKind::Rack: return true;
     case NodeKind::Fork:
-    case NodeKind::Pass: return inside.empty();  // one at a time (a tank holds each drop on its own)
-    case NodeKind::Cross: return Is(node, PieceType::Turnstile) ? inside.empty() : true;
+    case NodeKind::Pass:
+    case NodeKind::Mill: return inside.empty();  // one at a time (a tank holds each drop on its own)
+    case NodeKind::Gate: return gate_open_[Index(node)] && inside.empty();
+    case NodeKind::Cross:
     case NodeKind::Merge:
       if (Is(node, PieceType::Turnstile)) return inside.empty();
       if (Is(node, PieceType::Mixer)) {
@@ -632,16 +712,19 @@ bool Board::Admits(int node, int lane, const Drop& drop) const {
         }
         return mixer_slot_[Index(node)][Index(lane)] < 0;
       }
-      return true;
+      return !Is(node, PieceType::TwinGate);  // a twin gate lets in pairs only (Tick)
     case NodeKind::Spout: return false;
   }
   return false;
 }
 
-int Board::Decide(int node, const Drop& drop) {
+int Board::Decide(int node, const Drop& drop, int lane) {
+  const Node& n = level_->nodes[Index(node)];
+  // Without a router: a fork follows its flap, a crossing's lanes go straight on, anything else has
+  // one way out.
+  const int fallback = n.kind == NodeKind::Fork ? flaps_[Index(node)] : n.kind == NodeKind::Cross ? lane : 0;
+  if ((n.kind != NodeKind::Fork && n.kind != NodeKind::Cross) || !Routes(node)) return fallback;
   const int piece = node_piece_[Index(node)];
-  const int flap = flaps_[Index(node)];
-  if (piece < 0) return flap;
   const Piece& spec = PieceInfo(piece).piece;
   const int setting = pieces_[Index(piece)].setting;
   switch (spec.type) {
@@ -650,11 +733,11 @@ int Board::Decide(int node, const Drop& drop) {
       const Bead& bead = drop.bead;
       if (bead.IsBlend()) {
         if (spec.a != spec.b && bead.Has(spec.a) && bead.Has(spec.b) && bead.a != bead.b) return -2;  // splits
-        return flap;
+        return fallback;
       }
       if (bead.a == spec.a) return side_a;
       if (bead.a == spec.b) return 1 - side_a;
-      return flap;
+      return fallback;
     }
     case PieceType::Flipper: {
       const int side = flipper_next_[Index(node)];
@@ -667,7 +750,7 @@ int Board::Decide(int node, const Drop& drop) {
         return setting;
       }
       return 1 - setting;
-    default: return flap;
+    default: return fallback;
   }
 }
 
@@ -675,23 +758,38 @@ void Board::Land(int d, int node) {
   Drop& drop = drops_[Index(d)];
   const Node& n = level_->nodes[Index(node)];
   Event land{.type = EventType::Land, .node = node, .drop = drop.id, .bead = drop.bead};
+  // A cup, or the rack's bottle under the pipe right now.
+  CupState* cup = nullptr;
+  Color want = Color::None;
+  int count = 0, slot = -1;
   if (n.kind == NodeKind::Cup) {
-    CupState& cup = cups_[Index(node)];
-    cup.count += drop.bead.Drops();
-    cup.landed_tick = tick_;
-    land.value = cup.count;
+    cup = &cups_[Index(node)];
+    want = n.want;
+    count = n.count;
+  } else if (n.kind == NodeKind::Rack) {
+    slot = RackSlot(node);
+    cup = &bottles_[Index(bottle_offset_[Index(node)] + slot)];
+    want = n.slots[Index(slot)].want;
+    count = n.slots[Index(slot)].count;
+  }
+  if (cup) {
+    cup->count += drop.bead.Drops();
+    cup->landed_tick = tick_;
+    land.value = cup->count;
+    land.slot = slot;
     events_.push_back(land);
-    const bool pure = drop.bead.a == n.want && (!drop.bead.IsBlend() || drop.bead.b == n.want);
-    if (!pure && !cup.impure) {
-      cup.impure = true;
-      Fail(drop.bead.IsMud() ? Failure::Mud : Failure::WrongCup, node);
+    const bool pure = drop.bead.a == want && (!drop.bead.IsBlend() || drop.bead.b == want);
+    if (!pure && !cup->impure) {
+      cup->impure = true;
+      Fail(drop.bead.IsMud() ? Failure::Mud : Failure::WrongCup, node, slot);
     }
-    if (cup.count > n.count && !cup.spilled) {
-      cup.spilled = true;
-      events_.push_back({.type = EventType::Spill, .node = node});
-      Fail(Failure::Spill, node);
+    if (cup->count > count && !cup->spilled) {
+      cup->spilled = true;
+      events_.push_back({.type = EventType::Spill, .node = node, .slot = slot});
+      Fail(Failure::Spill, node, slot);
     }
-    if (cup.count == n.count && !cup.impure) events_.push_back({.type = EventType::CupFull, .node = node});
+    if (cup->count == count && !cup->impure)
+      events_.push_back({.type = EventType::CupFull, .node = node, .slot = slot});
   } else {
     events_.push_back(land);
   }
@@ -708,7 +806,7 @@ void Board::EnterNode(int d, int node, int lane) {
   drop.moved = true;
   moved_any_ = true;
   events_.push_back({.type = EventType::Enter, .node = node, .pipe = pipe, .drop = drop.id, .bead = drop.bead});
-  if (n.kind == NodeKind::Cup || n.kind == NodeKind::Drain) {
+  if (n.kind == NodeKind::Cup || n.kind == NodeKind::Drain || n.kind == NodeKind::Rack) {
     Land(d, node);
     return;
   }
@@ -718,14 +816,9 @@ void Board::EnterNode(int d, int node, int lane) {
   const int piece = PieceTypeAt(node);
   drop.dwell = n.dwell + (piece >= 0 ? TankExtra(static_cast<PieceType>(piece)) : 0);
   drop.dwell_total = drop.dwell;
-  switch (n.kind) {
-    case NodeKind::Fork: drop.lane_out = Decide(node, drop); break;
-    case NodeKind::Cross: drop.lane_out = lane; break;
-    default: drop.lane_out = 0; break;
-  }
+  drop.lane_out = Decide(node, drop, lane);
   // Different colours through a junction with 0-1 ticks between them: a near miss.
-  const bool shared = (n.kind == NodeKind::Cross || n.kind == NodeKind::Merge) && piece < 0;
-  if (shared && last_exit_tick_[Index(node)] >= tick_ - 1 && !(last_exit_bead_[Index(node)] == drop.bead) &&
+  if (Shared(node) && last_exit_tick_[Index(node)] >= tick_ - 1 && !(last_exit_bead_[Index(node)] == drop.bead) &&
       !drop.bead.IsMud() && !last_exit_bead_[Index(node)].IsMud()) {
     bool alone = true;
     for (int other : inside_[Index(node)]) alone &= drops_[Index(other)].bead == drop.bead;
@@ -733,6 +826,7 @@ void Board::EnterNode(int d, int node, int lane) {
   }
   inside_[Index(node)].push_back(d);
   if (piece == static_cast<int>(PieceType::Mixer)) {
+    // On a fork or a pipe socket the partner's slot never fills: a trap.
     auto& slot = mixer_slot_[Index(node)];
     slot[Index(lane)] = d;
     drop.lane_out = -1;  // waits for its partner
@@ -743,7 +837,7 @@ void Board::EnterNode(int d, int node, int lane) {
       for (Drop* m : {&x, &y}) {
         m->bead = Bead::Pure(color);
         m->dwell = m->dwell_total = n.dwell;
-        m->lane_out = 0;
+        m->lane_out = n.kind == NodeKind::Cross ? m->lane_in : 0;  // a crossing's pair goes on along its lanes
       }
       slot = {-1, -1};  // the pair is on its way out; the slots hold only drops waiting for a partner
       events_.push_back({.type = EventType::Mix, .node = node, .drop = x.id, .other = y.id, .bead = x.bead});
@@ -762,6 +856,12 @@ void Board::LeaveOnto(int d, int pipe) {
   drop.moved = true;
   moved_any_ = true;
   events_.push_back({.type = EventType::Leave, .node = node, .pipe = pipe, .drop = drop.id, .bead = drop.bead});
+  const Node& n = level_->nodes[Index(node)];
+  if (n.kind == NodeKind::Mill) {
+    // The wheel turns a notch; its gears flip their gates at the end of the tick.
+    ++mill_turns_[Index(node)];
+    for (int gate : n.gears) ++pending_flips_[Index(gate)];
+  }
 }
 
 bool Board::TryLeave(int d) {
@@ -770,7 +870,7 @@ bool Board::TryLeave(int d) {
   const int node = drop.loc.index;
   const Node& n = level_->nodes[Index(node)];
   if (drop.lane_out == -1) return false;  // a mixer waiting for its partner
-  if (n.kind == NodeKind::Fork && drop.lane_out == -2) {
+  if ((n.kind == NodeKind::Fork || n.kind == NodeKind::Cross) && drop.lane_out == -2) {
     const int piece = node_piece_[Index(node)];
     const Piece& spec = PieceInfo(piece).piece;
     const int side_a = pieces_[Index(piece)].setting == 0 ? 0 : 1;
@@ -789,8 +889,10 @@ bool Board::TryLeave(int d) {
     LeaveOnto(half, pipe_b);
     return true;
   }
-  if (n.kind == NodeKind::Pass && n.twin >= 0 && Is(node, PieceType::TwinGate)) {
-    // A twin gate lets a pair go together: both halves need a drop ready and room ahead.
+  if ((n.kind == NodeKind::Pass || n.kind == NodeKind::Fork) && Is(node, PieceType::TwinGate)) {
+    // On one pipe a twin gate waits forever for a partner (a trap).
+    if (n.twin < 0) return false;
+    // On a twin pair it lets a pair go together: both halves need a drop ready and room ahead.
     int partner = -1;
     for (int other : inside_[Index(n.twin)]) {
       if (drops_[Index(other)].dwell == 0 && !drops_[Index(other)].moved) partner = other;
@@ -809,9 +911,7 @@ bool Board::TryLeave(int d) {
 
 void Board::CheckCollisions() {
   for (size_t n = 0; n < level_->nodes.size(); ++n) {
-    const Node& node = level_->nodes[n];
-    if (node.kind != NodeKind::Cross && node.kind != NodeKind::Merge) continue;
-    if (node_piece_[n] >= 0) continue;  // a turnstile lets one in, a bridge keeps them apart, a mixer mixes
+    if (!Shared(static_cast<int>(n))) continue;
     const std::vector<int>& inside = inside_[n];
     if (inside.size() < 2) continue;
     bool differ = false;
@@ -830,10 +930,11 @@ void Board::CheckCollisions() {
   }
 }
 
-void Board::Fail(Failure failure, int node) {
+void Board::Fail(Failure failure, int node, int slot) {
   if (outcome_.failure != Failure::None) return;
   outcome_.failure = failure;
   outcome_.fail_node = node;
+  outcome_.fail_slot = slot;
   outcome_.fail_tick = tick_;
 }
 
@@ -842,6 +943,11 @@ void Board::Finish(bool jammed) {
     for (size_t n = 0; n < level_->nodes.size(); ++n) {
       const Node& node = level_->nodes[n];
       if (node.kind == NodeKind::Cup && cups_[n].count < node.count) Fail(Failure::Dry, static_cast<int>(n));
+      if (node.kind != NodeKind::Rack) continue;
+      for (size_t s = 0; s < node.slots.size(); ++s) {
+        if (Bottle(static_cast<int>(n), static_cast<int>(s)).count < node.slots[s].count)
+          Fail(Failure::Dry, static_cast<int>(n), static_cast<int>(s));
+      }
     }
   } else {
     const JamReport jam = Jam();
@@ -880,6 +986,12 @@ const std::vector<Event>& Board::Tick() {
   if (!Running()) return events_;
   ++tick_;
   moved_any_ = false;
+  for (size_t n = 0; n < level_->nodes.size(); ++n) {
+    const Node& node = level_->nodes[n];
+    if (node.kind == NodeKind::Rack && tick_ % node.period == 0) {
+      events_.push_back({.type = EventType::Turn, .node = static_cast<int>(n), .slot = RackSlot(static_cast<int>(n))});
+    }
+  }
   std::vector<bool> was_waiting(drops_.size());
   bool timers = false;
   for (size_t i = 0; i < drops_.size(); ++i) {
@@ -918,14 +1030,22 @@ const std::vector<Event>& Board::Tick() {
     for (size_t n = 0; n < node_count; ++n) {
       const Node& node = level_->nodes[n];
       const int lanes = static_cast<int>(node.ins.size());
+      if (lanes == 2 && Is(static_cast<int>(n), PieceType::TwinGate)) {
+        // A twin gate on a crossing or merge: the front drops of both lanes go in together, or neither.
+        const int d0 = Head(node.ins[0]), d1 = Head(node.ins[1]);
+        if (d0 < 0 || d1 < 0 || drops_[Index(d0)].moved || drops_[Index(d1)].moved) continue;
+        EnterNode(d0, static_cast<int>(n), 0);
+        EnterNode(d1, static_cast<int>(n), 1);
+        progress = true;
+        continue;
+      }
       int first = 0;
       if (lanes == 2 && Is(static_cast<int>(n), PieceType::Turnstile)) first = pieces_[Index(node_piece_[n])].setting;
       for (int k = 0; k < lanes; ++k) {
         const int lane = (first + k) % lanes;
-        const int pipe = node.ins[Index(lane)];
-        const int d = CellAt(pipe, level_->pipes[Index(pipe)].cells - 1);
+        const int d = Head(node.ins[Index(lane)]);
         if (d < 0 || drops_[Index(d)].moved) continue;
-        if (!Admits(static_cast<int>(n), lane, drops_[Index(d)])) continue;
+        if (!Admits(static_cast<int>(n), lane)) continue;
         EnterNode(d, static_cast<int>(n), lane);
         progress = true;
       }
@@ -962,6 +1082,16 @@ const std::vector<Event>& Board::Tick() {
                          .drop = drop.id,
                          .bead = drop.bead});
     }
+  }
+
+  // The mills' gears flip their gates now, after every move, so the order of moves inside a tick
+  // doesn't matter (two flips of one gate in a tick cancel out).
+  for (size_t n = 0; n < node_count; ++n) {
+    if (pending_flips_[n] % 2 == 1) {
+      gate_open_[n] ^= 1;
+      events_.push_back({.type = EventType::Flip, .node = static_cast<int>(n), .value = gate_open_[n]});
+    }
+    pending_flips_[n] = 0;
   }
 
   // Who's stuck: a bead on a pipe that didn't move, a bead in a node that's done but can't leave.
@@ -1004,16 +1134,53 @@ const std::vector<Event>& Board::Tick() {
   return events_;
 }
 
+int Board::RackSlot(int rack) const {
+  const Node& n = level_->nodes[Index(rack)];
+  if (n.slots.empty()) return 0;
+  return (n.first + tick_ / std::max(1, n.period)) % static_cast<int>(n.slots.size());
+}
+
+bool Board::GateOpen(int gate) const {
+  return started_ ? gate_open_[Index(gate)] != 0 : level_->nodes[Index(gate)].open;
+}
+
+int Board::NextArrival(int pipe) const {
+  // Breadth first up the pipes: the drop nearest the end of `pipe`, else the nearest one inside or
+  // before the node it comes from, and so on.
+  std::vector<uint8_t> seen(level_->pipes.size(), 0);
+  std::vector<int> frontier{pipe}, next;
+  while (!frontier.empty()) {
+    next.clear();
+    for (int p : frontier) {
+      if (seen[Index(p)]) continue;
+      seen[Index(p)] = 1;
+      for (int c = level_->pipes[Index(p)].cells - 1; c >= 0; --c) {
+        if (CellAt(p, c) >= 0) return CellAt(p, c);
+      }
+      const int from = level_->pipes[Index(p)].from;
+      if (!inside_[Index(from)].empty()) return inside_[Index(from)].front();
+      for (int in : level_->nodes[Index(from)].ins) next.push_back(in);
+    }
+    std::swap(frontier, next);
+  }
+  return -1;
+}
+
 JamReport Board::Jam() const {
   JamReport report;
   if (!started_) return report;
-  // Each stuck drop waits for one other drop (or for a partner that never comes): a functional
+  // Each stuck drop waits for one other drop (or for something that never comes): a functional
   // graph, so a circle of waiting is a cycle in it.
   std::vector<int> waits_for(drops_.size(), -1);
   auto add_stuck = [&](int node) {
     if (std::find(report.stuck_nodes.begin(), report.stuck_nodes.end(), node) == report.stuck_nodes.end()) {
       report.stuck_nodes.push_back(node);
     }
+  };
+  // A partner (or a signal) that may still come: the next drop that would bring it; none = lonely.
+  auto partner = [&](size_t i, int node, int pipe) {
+    waits_for[i] = pipe >= 0 ? NextArrival(pipe) : -1;
+    if (waits_for[i] < 0) report.lonely = node;
   };
   for (size_t i = 0; i < drops_.size(); ++i) {
     const Drop& drop = drops_[i];
@@ -1024,15 +1191,47 @@ JamReport Board::Jam() const {
         waits_for[i] = CellAt(drop.loc.index, drop.loc.cell + 1);
         continue;
       }
-      add_stuck(pipe.to);
-      const std::vector<int>& inside = inside_[Index(pipe.to)];
-      if (!inside.empty()) waits_for[i] = inside.front();
+      const int to = pipe.to;
+      const Node& n = level_->nodes[Index(to)];
+      add_stuck(to);
+      const std::vector<int>& inside = inside_[Index(to)];
+      if (!inside.empty()) {
+        waits_for[i] = inside.front();
+      } else if (n.ins.size() == 2 && Is(to, PieceType::TwinGate)) {
+        // Waiting at a twin gate on a crossing or merge for a drop in the other lane.
+        partner(i, to, n.ins[n.ins[0] == drop.loc.index ? 1 : 0]);
+      } else if (n.kind == NodeKind::Gate && !gate_open_[Index(to)]) {
+        // Waiting at a shut gate for a drop to turn one of the mills geared to it.
+        for (size_t m = 0; m < level_->nodes.size() && waits_for[i] < 0; ++m) {
+          const Node& mill = level_->nodes[m];
+          if (mill.kind != NodeKind::Mill || std::find(mill.gears.begin(), mill.gears.end(), to) == mill.gears.end())
+            continue;
+          waits_for[i] = !inside_[m].empty() ? inside_[m].front() : NextArrival(mill.ins[0]);
+        }
+        if (waits_for[i] < 0) report.lonely = to;
+      }
     } else if (drop.loc.kind == Loc::InNode) {
       const int node = drop.loc.index;
       const Node& n = level_->nodes[Index(node)];
       add_stuck(node);
-      if (drop.lane_out == -1 || (n.kind == NodeKind::Pass && n.twin >= 0 && Is(node, PieceType::TwinGate))) {
-        report.lonely = node;
+      if (drop.lane_out == -1) {
+        // A mixer holding a drop: its partner comes by the other lane, if there is one (a trap otherwise).
+        partner(i, node, n.ins.size() == 2 ? n.ins[Index(1 - drop.lane_in)] : -1);
+        continue;
+      }
+      if ((n.kind == NodeKind::Pass || n.kind == NodeKind::Fork) && Is(node, PieceType::TwinGate)) {
+        // A twin gate on one pipe is a trap; on a twin pair it waits for the other half's drop, or for
+        // room ahead of both.
+        if (n.twin < 0) {
+          report.lonely = node;
+          continue;
+        }
+        if (inside_[Index(n.twin)].empty()) {
+          partner(i, node, level_->nodes[Index(n.twin)].ins[0]);
+          continue;
+        }
+        const int ahead = CellAt(n.outs[0], 0);
+        waits_for[i] = ahead >= 0 ? ahead : CellAt(level_->nodes[Index(n.twin)].outs[0], 0);
         continue;
       }
       if (drop.lane_out == -2) {
