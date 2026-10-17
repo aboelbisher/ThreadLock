@@ -206,6 +206,30 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
         }
       }
     }
+    if (item.size() >= 4) {
+      // Shapes: {"coil": [segment, turns], "drip": segment}
+      const Json& shape = item[3];
+      if (!shape.is_object()) {
+        reader.Error("a pipe's shapes should be an object");
+      } else {
+        if (shape.contains("coil")) {
+          const Json& coil = shape["coil"];
+          if (coil.is_array() && coil.size() == 2 && coil[0].is_number_integer() && coil[1].is_number_integer()) {
+            pipe.coil_segment = coil[0].get<int>();
+            pipe.coil_turns = coil[1].get<int>();
+          } else {
+            reader.Error("a coil is [segment, turns]");
+          }
+        }
+        if (shape.contains("drip")) {
+          if (shape["drip"].is_number_integer()) {
+            pipe.drip_segment = shape["drip"].get<int>();
+          } else {
+            reader.Error("a drip is the number of a segment");
+          }
+        }
+      }
+    }
     level.pipes.push_back(std::move(pipe));
   }
 
@@ -446,10 +470,19 @@ std::string WriteLevel(const Level& level) {
     const Pipe& p = level.pipes[i];
     out += "[\"" + level.nodes[static_cast<size_t>(p.from)].id + "\", \"" + level.nodes[static_cast<size_t>(p.to)].id +
            "\"";
-    if (!p.via.empty()) {
+    const bool shaped = p.coil_segment >= 0 || p.drip_segment >= 0;
+    if (!p.via.empty() || shaped) {
       out += ", [";
       for (size_t k = 0; k < p.via.size(); ++k) out += (k ? ", " : "") + point(p.via[k]);
       out += "]";
+    }
+    if (shaped) {
+      out += ", {";
+      if (p.coil_segment >= 0)
+        out += "\"coil\": [" + std::to_string(p.coil_segment) + ", " + std::to_string(p.coil_turns) + "]";
+      if (p.drip_segment >= 0)
+        out += std::string(p.coil_segment >= 0 ? ", " : "") + "\"drip\": " + std::to_string(p.drip_segment);
+      out += "}";
     }
     out += i + 1 < level.pipes.size() ? "], " : "]";
   }

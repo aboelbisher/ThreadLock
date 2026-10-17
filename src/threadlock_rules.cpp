@@ -1,6 +1,7 @@
 #include "threadlock_rules.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <utility>
@@ -396,6 +397,55 @@ std::vector<std::string> Level::Finalize() {
     line.push_back(from.at);
     line.insert(line.end(), pipe.via.begin(), pipe.via.end());
     line.push_back(to.at);
+    const int segments = static_cast<int>(line.size()) - 1;
+    // A coil winds its segment round the segment's middle: the drops' way gets longer.
+    int coil_points = 0;
+    pipe.coil_a = pipe.coil_b = {};
+    if (pipe.coil_segment >= 0) {
+      const int k = pipe.coil_segment;
+      if (k >= segments || pipe.coil_turns < 1 || pipe.coil_turns > 8) {
+        problem("the coil on " + from.id + " -> " + to.id + " needs a segment of the pipe and 1-8 turns");
+      } else {
+        const Vec2 a = line[static_cast<size_t>(k)], b = line[static_cast<size_t>(k) + 1];
+        const double length = ExactLength({a, b});
+        const double span = static_cast<double>(kCoilPitch) * pipe.coil_turns;
+        if (length < span + 16.0) {
+          problem("the coil on " + from.id + " -> " + to.id + " doesn't fit its segment");
+        } else {
+          const std::array<double, 2> u = ExactDirection(a, b);
+          const double lead = (length - span) * 0.5;
+          pipe.coil_a = {static_cast<float>(static_cast<double>(a.x) + u[0] * lead),
+                         static_cast<float>(static_cast<double>(a.y) + u[1] * lead)};
+          pipe.coil_b = {static_cast<float>(static_cast<double>(a.x) + u[0] * (lead + span)),
+                         static_cast<float>(static_cast<double>(a.y) + u[1] * (lead + span))};
+          const std::vector<Vec2> coil = CoilPoints(pipe.coil_a, pipe.coil_b, pipe.coil_turns);
+          line.insert(line.begin() + k + 1, coil.begin(), coil.end());
+          coil_points = static_cast<int>(coil.size());
+        }
+      }
+    }
+    // Where line point i is, measured along the pipe as drawn (from the edge of its first node).
+    auto along_line = [&](int i) {
+      float at = 0.0f;
+      for (int j = 1; j <= i; ++j) at += Distance(line[static_cast<size_t>(j) - 1], line[static_cast<size_t>(j)]);
+      return std::max(0.0f, at - from.radius);
+    };
+    pipe.coil_start = pipe.coil_end = 0.0f;
+    if (coil_points > 0) {
+      pipe.coil_start = along_line(pipe.coil_segment + 1);
+      pipe.coil_end = along_line(pipe.coil_segment + coil_points);
+    }
+    // A drip fall: where its segment starts and ends along the line (look only).
+    pipe.drip_start = pipe.drip_end = 0.0f;
+    if (pipe.drip_segment >= 0) {
+      if (pipe.drip_segment >= segments || pipe.drip_segment == pipe.coil_segment) {
+        problem("the drip on " + from.id + " -> " + to.id + " needs a straight segment of the pipe");
+      } else {
+        auto expanded = [&](int i) { return pipe.coil_segment >= 0 && i > pipe.coil_segment ? i + coil_points : i; };
+        pipe.drip_start = along_line(expanded(pipe.drip_segment));
+        pipe.drip_end = along_line(expanded(pipe.drip_segment + 1));
+      }
+    }
     const double exact = ExactLength(line) - static_cast<double>(from.radius) - static_cast<double>(to.radius);
     line = TrimEnd(TrimStart(std::move(line), from.radius), to.radius);
     if (line.size() < 2 || exact <= 0.0) {
@@ -443,6 +493,30 @@ std::vector<std::string> Level::Finalize() {
 }
 
 // ---- Geometry ----
+
+std::vector<Vec2> CoilPoints(Vec2 a, Vec2 b, int turns) {
+  // sin(k pi / 8) as exact constants, so every device builds the same points (and the same cells).
+  static constexpr double kSin[16] = {0.0,  0.38268343236508978,  0.70710678118654757,  0.92387953251128674,
+                                      1.0,  0.92387953251128674,  0.70710678118654757,  0.38268343236508978,
+                                      0.0,  -0.38268343236508978, -0.70710678118654757, -0.92387953251128674,
+                                      -1.0, -0.92387953251128674, -0.70710678118654757, -0.38268343236508978};
+  const std::array<double, 2> u = ExactDirection(a, b);
+  const std::array<double, 2> v{-u[1], u[0]};
+  std::vector<Vec2> points;
+  const int samples = std::max(1, turns) * kCoilSamples;
+  for (int k = 0; k <= samples; ++k) {
+    // theta = -pi/2 + k pi/8: on the axis at both ends; the far side (sin < 0) first.
+    const double cos_theta = kSin[k % 16];         // cos(-pi/2 + x) = sin(x)
+    const double sin_theta = -kSin[(k + 4) % 16];  // sin(-pi/2 + x) = -cos(x) = -sin(x + pi/2)
+    const double along = static_cast<double>(kCoilPitch) * static_cast<double>(k) / kCoilSamples +
+                         static_cast<double>(kCoilDepth) * (sin_theta + 1.0);
+    const double across = -static_cast<double>(kCoilRadius) * cos_theta;
+    points.push_back({static_cast<float>(static_cast<double>(a.x) + u[0] * along + v[0] * across),
+                      static_cast<float>(static_cast<double>(a.y) + u[1] * along + v[1] * across)});
+  }
+  points.back() = b;
+  return points;
+}
 
 Vec2 PointAlong(const std::vector<Vec2>& points, float distance) {
   if (points.empty()) return {};

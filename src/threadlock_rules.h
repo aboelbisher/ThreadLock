@@ -168,12 +168,36 @@ struct Pipe {
   int from = 0;           // node
   int to = 0;             // node
   std::vector<Vec2> via;  // bends between the two nodes
+  // Shapes (a level file's object after the bends). Segment k runs from point k to k+1 of
+  // (from, via..., to).
+  int coil_segment = -1;  // wound into a coil of coil_turns turns round its middle: a longer way, so slower
+  int coil_turns = 0;
+  int drip_segment = -1;  // drops fall through the air here (look only: the timing is the same)
 
   // ---- Derived by Level::Finalize ----
   std::vector<Vec2> points;  // the drawn centre line: from its node's edge to the next one's
   float length = 0.0f;       // of `points`
   int cells = 1;             // round(length / kCellLength), at least 1
+  Vec2 coil_a, coil_b;       // a coil's axis: it starts at coil_a and ends at coil_b
+  float coil_start = 0.0f;   // the coil, as distances along `points` (end <= start: none)
+  float coil_end = 0.0f;
+  float drip_start = 0.0f;  // the drip fall, as distances along `points` (end <= start: none)
+  float drip_end = 0.0f;
 };
+
+// A coil: `turns` turns of a helix round the axis a -> b, seen from the side (the drops' path, which the
+// rules measure: a turn is about 70 long, about 5 cells more than the straight pipe). Starts at a and ends at b,
+// kCoilSamples points a turn.
+inline constexpr int kCoilSamples = 16;
+inline constexpr float kCoilPitch = 18.0f;   // along the axis, per turn
+inline constexpr float kCoilRadius = 15.0f;  // across
+inline constexpr float kCoilDepth = 6.0f;    // the near side dips this far along the axis
+std::vector<Vec2> CoilPoints(Vec2 a, Vec2 b, int turns);
+// Whether the coil's stretch from sample k to k + 1 is on its near side (drawn in front).
+inline bool CoilFront(int k) {
+  const int m = k % kCoilSamples;
+  return m >= 4 && m < 12;
+}
 
 // A piece in the level's tray, or placed by the level (`at` >= 0). Locked pieces can't be moved
 // or changed (repair levels place movable ones).

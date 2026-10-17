@@ -328,6 +328,51 @@ TEST_SUITE("rules") {
     CHECK(board.Place(0, NodeOf(level, "f")));
   }
 
+  TEST_CASE("a coil makes its pipe longer, so slower; a drip changes nothing but the look") {
+    auto pipe_level = [](const std::string& shape) {
+      return MakeLevel(R"({"id": "c", "nodes": [{"id": "s", "kind": "spout", "at": [180, 60], "beads": "B"},
+                         {"id": "c", "kind": "cup", "at": [180, 400], "want": "B", "count": 1}],
+                         "pipes": [["s", "c", [[180, 120], [180, 300]])" +
+                       shape + "]]}");
+    };
+    const Level plain = pipe_level("");
+    const Level coiled = pipe_level(R"(, {"coil": [1, 2]})");
+    const Level dripping = pipe_level(R"(, {"drip": 2})");
+    CHECK(plain.pipes[0].cells == 32);  // 340 apart, minus the spout's 22
+    // Each turn is about 70 long where the straight pipe was 18: two turns add 10 cells.
+    CHECK(coiled.pipes[0].cells - plain.pipes[0].cells == 10);
+    CHECK(coiled.pipes[0].coil_a.y == doctest::Approx(192.0f));  // centred: (180 - 36) / 2 after y 120
+    CHECK(coiled.pipes[0].coil_b.y == doctest::Approx(228.0f));
+    CHECK(dripping.pipes[0].cells == plain.pipes[0].cells);
+    CHECK(dripping.pipes[0].drip_start == doctest::Approx(218.0f));  // y 300 - 60 - 22
+    CHECK(dripping.pipes[0].drip_end == doctest::Approx(318.0f));
+    // The same points every time (cells are baked on a PC and replayed on phones).
+    const std::vector<Vec2> a = CoilPoints({180.0f, 192.0f}, {180.0f, 228.0f}, 2);
+    CHECK(a.size() == 33u);
+    CHECK(a.front().x == 180.0f);
+    CHECK(a[4].x == doctest::Approx(195.0f));   // a quarter turn: kCoilRadius out to one side...
+    CHECK(a[8].y == doctest::Approx(213.0f));   // ...half a turn: back on the axis, dipping in front...
+    CHECK(a[12].x == doctest::Approx(165.0f));  // ...then out to the other side
+    CHECK(a[16].y == doctest::Approx(210.0f));  // one turn = one pitch along the axis
+    CHECK(!CoilFront(3));
+    CHECK(CoilFront(4));
+    CHECK(CoilFront(11));
+    CHECK(!CoilFront(12));
+    // Written back as they were read.
+    Level again;
+    std::vector<std::string> errors;
+    REQUIRE(ParseLevel(WriteLevel(coiled), again, errors));
+    CHECK(again.pipes[0].coil_segment == 1);
+    CHECK(again.pipes[0].coil_turns == 2);
+    CHECK(again.pipes[0].cells == coiled.pipes[0].cells);
+    // A coil that doesn't fit is a problem.
+    Level bad;
+    CHECK(!ParseLevel(R"({"id": "c", "nodes": [{"id": "s", "kind": "spout", "at": [180, 60], "beads": "B"},
+                         {"id": "c", "kind": "cup", "at": [180, 400], "want": "B", "count": 1}],
+                         "pipes": [["s", "c", [[180, 120], [180, 150]], {"coil": [1, 3]}]]})",
+                      bad, errors));
+  }
+
   TEST_CASE("bad levels are reported") {
     std::vector<std::string> errors;
     Level level;
