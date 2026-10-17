@@ -42,7 +42,9 @@ std::string ReadText(const std::string& path) {
   return text.str();
 }
 
-bool LoadWorlds(const std::string& assets, std::vector<World>& worlds, bool with_pars) {
+// False if a world file has problems (printed): its broken levels can't be run, so the callers stop. A
+// pars file with problems is reported, and `pars_ok` says so.
+bool LoadWorlds(const std::string& assets, std::vector<World>& worlds, bool with_pars, bool* pars_ok = nullptr) {
   bool ok = true;
   for (int n = 1; n <= 8; ++n) {
     const std::string path = assets + "/levels/world" + std::to_string(n) + ".json";
@@ -54,13 +56,18 @@ bool LoadWorlds(const std::string& assets, std::vector<World>& worlds, bool with
     for (const std::string& error : errors) std::printf("  %s: %s\n", path.c_str(), error.c_str());
     worlds.push_back(std::move(world));
   }
+  if (!ok) {
+    std::printf("fix the level files first\n");
+    return false;
+  }
   if (with_pars) {
     const std::string pars = ReadText(assets + "/levels/pars.json");
     std::vector<std::string> errors;
-    if (!pars.empty() && !ApplyPars(pars, worlds, errors)) ok = false;
+    const bool applied = pars.empty() || ApplyPars(pars, worlds, errors);
+    if (pars_ok) *pars_ok = applied;
     for (const std::string& error : errors) std::printf("  pars.json: %s\n", error.c_str());
   }
-  return ok;
+  return true;
 }
 
 const Level* Find(const std::vector<World>& worlds, const std::string& id) {
@@ -98,7 +105,8 @@ std::string Seconds(int ticks) {
 
 int Check(const std::string& assets, bool bake) {
   std::vector<World> worlds;
-  bool ok = LoadWorlds(assets, worlds, !bake);
+  bool ok = true;
+  if (!LoadWorlds(assets, worlds, !bake, &ok)) return 1;
   int levels = 0, problems = 0;
   std::vector<const Level*> all;
   const auto start = std::chrono::steady_clock::now();
@@ -531,7 +539,7 @@ int main(int argc, char** argv) {
   const std::string id = argv[2];
   std::string assets = "assets";
   std::vector<World> worlds;
-  LoadWorlds(assets, worlds, true);
+  if (!LoadWorlds(assets, worlds, true)) return 1;
   const Level* level = Find(worlds, id);
   if (!level) {
     std::printf("no level %s\n", id.c_str());
