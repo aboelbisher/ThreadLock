@@ -4,38 +4,32 @@
 
 #include <glm/glm.hpp>
 
+#include "board_art.h"
 #include "liquid.h"
 #include "palette.h"
 #include "threadlock_rules.h"
 #include "wlw/ui/canvas.h"
 #include "wlw/ui/font.h"
 
-// How a board looks: any level drawn from its data (DESIGN.md §8, §9). Pipes go on the
-// bloomed Picture layer, the liquid comes from the rules' state each frame, and the pieces, cups,
-// spouts and markers go on the Overlay over it.
+// How a board looks and answers touches (DESIGN.md §8, §9): any level drawn from its data. The world's
+// BoardArt draws the place, the pipes and the parts (the back on the bloomed Picture layer, the liquid
+// over it, the parts' fronts on the Overlay); this view adds what is the same in every world: the
+// pieces (one brass toolkit), sockets, flaps, hints and the markers of what went wrong.
 //
 // Board units (a 360 x 600 board, y down) map to canvas units through a Layout the screen sets.
 namespace threadlock {
-
-struct Layout {
-  glm::vec2 origin{0.0f};
-  float scale = 1.0f;
-  glm::vec2 ToCanvas(Vec2 p) const { return origin + glm::vec2(p.x, p.y) * scale; }
-  Vec2 ToBoard(glm::vec2 p) const { return {(p.x - origin.x) / scale, (p.y - origin.y) / scale}; }
-};
-
-inline constexpr glm::vec2 kBoardSize{360.0f, 600.0f};
 
 // How to draw a piece. `node` (when it sits on the board) turns it to fit its pipes.
 struct PieceLook {
   int setting = 0;
   float alpha = 1.0f;
-  float spin = 0.0f;    // turnstile arms / mixer swirl
-  float arm = -1.0f;    // flipper: the side it points to now (0..1, animated); -1 = from the setting
-  int remaining = -1;   // overflow: how many still go its way (-1 = n)
-  bool locked = false;  // a padlock in its corner
-  float fill = 0.0f;    // tank: how full it is (0..1)
+  float spin = 0.0f;            // turnstile arms / mixer swirl
+  float arm = -1.0f;            // flipper: the side it points to now (0..1, animated); -1 = from the setting
+  int remaining = -1;           // overflow: how many still go its way (-1 = n)
+  bool locked = false;          // a padlock in its corner
+  Rgba accent = Hex(0xF6DA9A);  // arrows: which lane goes first, an overflow's way
 };
+// A piece of the brass toolkit (the same in every world).
 void DrawPiece(wlw::ui::Canvas& canvas, const Piece& piece, glm::vec2 center, float scale, const PieceLook& look,
                const Palette& palette, const Level* level = nullptr, const Node* node = nullptr,
                const wlw::ui::Font* font = nullptr);
@@ -43,18 +37,18 @@ void DrawPiece(wlw::ui::Canvas& canvas, const Piece& piece, glm::vec2 center, fl
 class BoardView {
  public:
   struct Options {
-    float time = 0.0f;
     int drag_type = -1;    // a piece being dragged (PieceType): every free socket lights up
     int drag_target = -1;  // the socket it would land in
     int hint_node = -1;    // a hint points here
-    int spotlight = -1;    // Show me: everything else dims
-    bool editing = true;
-    bool ghosts = false;  // the solution's pieces drawn faintly (Show the solution)
+    bool ghosts = false;   // the solution's pieces drawn faintly (Show the solution)
     const Placement* ghost_placement = nullptr;
   };
 
   void SetLevel(const Level* level);
   const Level* GetLevel() const { return level_; }
+  // The world's way of drawing (it outlives the view).
+  void SetArt(BoardArt* art);
+  BoardArt& Art() const { return *art_; }
   void SetLayout(const Layout& layout) { layout_ = layout; }
   const Layout& GetLayout() const { return layout_; }
 
@@ -63,11 +57,13 @@ class BoardView {
   void Update(float dt, const Board& board);
   void ClearMarkers();
 
-  void DrawPipes(wlw::ui::Canvas& picture) const;
-  void DrawLiquid(Liquid& liquid, const Board& board, float alpha, const Palette& palette, float time) const;
-  void DrawParts(wlw::ui::Canvas& canvas, const Board& board, const Palette& palette, const wlw::ui::Font& font,
-                 const Options& options) const;
-  void DrawMarkers(wlw::ui::Canvas& canvas, const Board& board, const wlw::ui::Font& font, float time) const;
+  // ---- One frame: BeginFrame, then the layers in order ----
+  void BeginFrame(const Board& board, const Palette& palette, const wlw::ui::Font& font, float time, float dt,
+                  bool calm, bool editing);
+  void DrawBack(wlw::ui::Canvas& picture);
+  void DrawLiquid(Liquid& liquid, float alpha);  // alpha: how far between the last tick and the next
+  void DrawParts(wlw::ui::Canvas& canvas, const Options& options);
+  void DrawMarkers(wlw::ui::Canvas& canvas);
   void DrawSpotlight(wlw::ui::Canvas& canvas, int node, float amount) const;
 
   // Hit tests, in canvas units.
@@ -85,15 +81,7 @@ class BoardView {
     float age;
     int slot = -1;  // a rack's bottle
   };
-  struct NodeAnim {
-    float spin = 0.0f, spin_target = 0.0f;  // turnstile arms, mixer swirl, mill wheel, rack turntable
-    float arm = 0.0f;
-    float flash = 0.0f;
-  };
 
-  // Where bottle `slot` of a rack is drawn (board units): a turntable seen from above, the bottle under
-  // the rack's pipe at the top.
-  Vec2 BottleAt(int rack, int slot) const;
   // Where a fork's flap handle is drawn: just off its centre, or outside a piece that sits on it (a
   // tank or a turnstile leaves the flap in charge).
   glm::vec2 FlapHandle(const Board& board, int fork) const;
@@ -101,7 +89,9 @@ class BoardView {
   glm::vec2 MarkerCanvas(int node, int slot) const;
 
   const Level* level_ = nullptr;
+  BoardArt* art_ = nullptr;
   Layout layout_;
+  ArtFrame frame_;
   std::vector<Marker> markers_;
   std::vector<NodeAnim> anims_;
   std::vector<float> cup_fill_;                  // animated fill per node (drops)

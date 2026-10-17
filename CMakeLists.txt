@@ -29,12 +29,18 @@ wlw_add_game(threadlock
     src/threadlock_app.h
     src/audio_synth.cpp
     src/audio_synth.h
+    src/art_shapes.cpp
+    src/art_shapes.h
+    src/board_art.cpp
+    src/board_art.h
     src/board_view.cpp
     src/board_view.h
     src/catalog.cpp
     src/catalog.h
     src/feedback.cpp
     src/feedback.h
+    src/lantern_art.cpp
+    src/lantern_art.h
     src/level_screen.cpp
     src/level_screen.h
     src/liquid.cpp
@@ -47,6 +53,9 @@ wlw_add_game(threadlock
     src/progress.cpp
     src/progress.h
     src/ui_parts.h
+    src/workshop_art.cpp
+    src/workshop_art.h
+    src/world_look.h
     ${THREADLOCK_RULES}
   ASSETS
     "${CMAKE_CURRENT_SOURCE_DIR}/assets")

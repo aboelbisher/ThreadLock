@@ -2,17 +2,19 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
-#include <numbers>
 #include <string>
+
+#include "art_shapes.h"
+#include "workshop_art.h"
 
 namespace threadlock {
 namespace {
 
+using art::kPi;
 using wlw::ui::Align;
 using wlw::ui::Canvas;
 using wlw::ui::TextStyle;
-constexpr float kPi = std::numbers::pi_v<float>;
+namespace brass = art::brass;
 
 glm::vec2 V(Vec2 p) { return {p.x, p.y}; }
 
@@ -36,59 +38,6 @@ glm::vec2 OutDir(const Level& level, const Node& node, size_t side) {
   return Normal(V(pipe.points.front()) - V(node.at));
 }
 
-void Polyline(Canvas& canvas, const std::vector<glm::vec2>& points, float thickness, const Rgba& color) {
-  for (size_t i = 1; i < points.size(); ++i) canvas.Line(points[i - 1], points[i], thickness, color);
-  for (size_t i = 1; i + 1 < points.size(); ++i) canvas.Circle(points[i], thickness * 0.5f, color);  // round joints
-}
-
-void DashedLine(Canvas& canvas, glm::vec2 a, glm::vec2 b, float thickness, const Rgba& color, int dashes) {
-  for (int i = 0; i < dashes; ++i) {
-    const float t0 = (static_cast<float>(i) + 0.15f) / static_cast<float>(dashes);
-    const float t1 = (static_cast<float>(i) + 0.7f) / static_cast<float>(dashes);
-    canvas.Line(a + (b - a) * t0, a + (b - a) * t1, thickness, color);
-  }
-}
-
-void OutlineRect(Canvas& canvas, glm::vec2 min, glm::vec2 max, float thickness, const Rgba& color) {
-  canvas.Line({min.x, min.y}, {max.x, min.y}, thickness, color);
-  canvas.Line({max.x, min.y}, {max.x, max.y}, thickness, color);
-  canvas.Line({max.x, max.y}, {min.x, max.y}, thickness, color);
-  canvas.Line({min.x, max.y}, {min.x, min.y}, thickness, color);
-}
-
-// A shape for each colour (backing the colour up for colour-blind players).
-void Glyph(Canvas& canvas, Color color, glm::vec2 c, float r, const Rgba& fill) {
-  switch (color) {
-    case Color::Blue: canvas.Circle(c, r, fill); break;
-    case Color::Amber:
-      canvas.Triangle(c + glm::vec2(0.0f, -r * 1.1f), c + glm::vec2(r, r * 0.8f), c + glm::vec2(-r, r * 0.8f), fill);
-      break;
-    case Color::Green:
-      canvas.Triangle(c + glm::vec2(0.0f, -r * 1.15f), c + glm::vec2(r * 1.15f, 0.0f), c + glm::vec2(0.0f, r * 1.15f),
-                      fill);
-      canvas.Triangle(c + glm::vec2(0.0f, -r * 1.15f), c + glm::vec2(0.0f, r * 1.15f), c + glm::vec2(-r * 1.15f, 0.0f),
-                      fill);
-      break;
-    case Color::Rose: canvas.FillRect({c - glm::vec2(r * 0.85f), c + glm::vec2(r * 0.85f)}, fill, r * 0.15f); break;
-    case Color::Pearl:
-      canvas.Triangle(c + glm::vec2(0.0f, -r * 1.3f), c + glm::vec2(r * 0.35f, 0.0f), c + glm::vec2(-r * 0.35f, 0.0f),
-                      fill);
-      canvas.Triangle(c + glm::vec2(0.0f, r * 1.3f), c + glm::vec2(-r * 0.35f, 0.0f), c + glm::vec2(r * 0.35f, 0.0f),
-                      fill);
-      canvas.Triangle(c + glm::vec2(-r * 1.3f, 0.0f), c + glm::vec2(0.0f, -r * 0.35f), c + glm::vec2(0.0f, r * 0.35f),
-                      fill);
-      canvas.Triangle(c + glm::vec2(r * 1.3f, 0.0f), c + glm::vec2(0.0f, r * 0.35f), c + glm::vec2(0.0f, -r * 0.35f),
-                      fill);
-      break;
-    default: break;
-  }
-}
-
-void DrawBead(Canvas& canvas, const threadlock::Bead& bead, glm::vec2 c, float r, const Palette& palette, float alpha) {
-  canvas.Circle(c, r, WithAlpha(LiquidColor(palette, bead.a), alpha));
-  if (bead.IsBlend()) canvas.Arc(c, r * 0.5f, r, 0.0f, kPi, WithAlpha(LiquidColor(palette, bead.b), alpha));
-}
-
 void Padlock(Canvas& canvas, glm::vec2 c, float s, const Rgba& color) {
   canvas.Arc(c + glm::vec2(0.0f, -3.0f * s), 4.5f * s, 2.2f * s, -kPi * 0.5f, kPi, color);
   canvas.FillRect({c + glm::vec2(-6.5f, -2.5f) * s, c + glm::vec2(6.5f, 7.0f) * s}, color, 2.0f * s);
@@ -101,21 +50,21 @@ void Sparkle(Canvas& canvas, glm::vec2 c, float r, const Rgba& color) {
   canvas.Triangle(c + glm::vec2(r, 0.0f), c + glm::vec2(0.0f, r * 0.22f), c + glm::vec2(0.0f, -r * 0.22f), color);
 }
 
-constexpr float kCupHalf = 24.0f, kCupHeight = 62.0f;
+// An arrow head at `tip` pointing along `d`.
+void Arrow(Canvas& canvas, glm::vec2 tip, glm::vec2 d, float s, const Rgba& color) {
+  canvas.Triangle(tip, tip - d * (8.0f * s) + Perp(d) * (6.0f * s), tip - d * (8.0f * s) - Perp(d) * (6.0f * s), color);
+}
 
 }  // namespace
 
-// ---- Pieces ----
+// ---- Pieces: the brass toolkit ----
 
 void DrawPiece(Canvas& canvas, const Piece& piece, glm::vec2 c, float s, const PieceLook& look, const Palette& palette,
                const Level* level, const Node* node, const wlw::ui::Font* font) {
-  const Rgba ink = WithAlpha(ui_color::kInk, look.alpha);
-  const Rgba panel = WithAlpha(ui_color::kPanel, 0.82f * look.alpha);
+  const float alpha = look.alpha;
+  const Rgba mark = WithAlpha(brass::kIndicator, alpha);
+  const Rgba accent = WithAlpha(look.accent, alpha);
   const bool on_board = level && node;
-  auto puck = [&](float r) {
-    canvas.Circle(c, r * s, panel);
-    canvas.Ring(c, r * s, 2.5f * s, ink);
-  };
   auto out_dir = [&](int side) {
     return on_board ? OutDir(*level, *node, static_cast<size_t>(side))
                     : (side == 0 ? glm::vec2(-0.7f, 0.7f) : glm::vec2(0.7f, 0.7f));
@@ -124,108 +73,109 @@ void DrawPiece(Canvas& canvas, const Piece& piece, glm::vec2 c, float s, const P
     if (on_board) return InDir(*level, *node, static_cast<size_t>(lane));
     return lane == 0 ? glm::vec2(0.0f, 1.0f) : glm::vec2(-1.0f, 0.0f);
   };
+  auto liquid = [&](Color color) { return WithAlpha(LiquidColor(palette, color), alpha); };
   switch (piece.type) {
     case PieceType::Separator: {
-      puck(22.0f);
+      art::Medallion(canvas, c, 22.0f * s, alpha);
       const int side_a = look.setting == 0 ? 0 : 1;
       const glm::vec2 in = on_board ? InDir(*level, *node, 0) : glm::vec2(0.0f, 1.0f);
-      canvas.Line(c - in * (11.0f * s), c, 4.0f * s, ink);
-      canvas.Line(c, c + out_dir(side_a) * (12.0f * s), 4.5f * s, WithAlpha(LiquidColor(palette, piece.a), look.alpha));
-      canvas.Line(c, c + out_dir(1 - side_a) * (12.0f * s), 4.5f * s,
-                  WithAlpha(LiquidColor(palette, piece.b), look.alpha));
-      canvas.Circle(c, 3.0f * s, ink);
+      canvas.Line(c - in * (11.0f * s), c, 3.4f * s, mark);
+      canvas.Line(c, c + out_dir(side_a) * (11.5f * s), 4.4f * s, liquid(piece.a));
+      canvas.Line(c, c + out_dir(1 - side_a) * (11.5f * s), 4.4f * s, liquid(piece.b));
+      canvas.Circle(c, 3.0f * s, mark);
       break;
     }
     case PieceType::Turnstile: {
-      canvas.Circle(c, 24.0f * s, WithAlpha(ui_color::kPanel, 0.55f * look.alpha));
-      canvas.Ring(c, 24.0f * s, 2.5f * s, ink);
+      art::Medallion(canvas, c, 22.0f * s, alpha);
       for (int arm = 0; arm < 4; ++arm) {
         const float a = look.spin + kPi * (0.25f + 0.5f * static_cast<float>(arm));
-        canvas.Line(c, c + glm::vec2(std::cos(a), std::sin(a)) * (21.0f * s), 4.0f * s, ink);
+        canvas.Line(c, c + glm::vec2(std::cos(a), std::sin(a)) * (11.5f * s), 3.4f * s, mark);
       }
-      canvas.Circle(c, 5.5f * s, ink);
+      canvas.Circle(c, 4.2f * s, mark);
       // The arrow: which lane goes first when both arrive together (it points the way that lane flows).
       const glm::vec2 d = in_dir(look.setting);
-      const glm::vec2 p = Perp(d);
-      const glm::vec2 tip = c - d * (27.0f * s);
-      canvas.Triangle(tip, tip - d * (8.0f * s) + p * (6.0f * s), tip - d * (8.0f * s) - p * (6.0f * s),
-                      WithAlpha(ui_color::kGood, look.alpha));
+      Arrow(canvas, c - d * (26.0f * s), d, s, accent);
       break;
     }
     case PieceType::TankShort:
     case PieceType::TankTall: {
-      const float h = (piece.type == PieceType::TankShort ? 46.0f : 60.0f) * s, w = 40.0f * s;
+      // A glass cylinder between brass caps: you see the drop wait inside.
+      const float h = (piece.type == PieceType::TankShort ? 32.0f : 46.0f) * s, w = 26.0f * s;
       const glm::vec2 min = c - glm::vec2(w, h) * 0.5f, max = c + glm::vec2(w, h) * 0.5f;
-      canvas.FillRect({min, max}, WithAlpha(ui_color::kPanel, 0.45f * look.alpha), 8.0f * s);
-      OutlineRect(canvas, min + glm::vec2(1.0f), max - glm::vec2(1.0f), 2.5f * s, ink);
+      canvas.FillRect({min + glm::vec2(1.0f * s, 4.0f * s), max + glm::vec2(1.0f * s, 6.0f * s)},
+                      Rgba{0.0f, 0.0f, 0.0f, 0.3f * alpha}, 6.0f * s);
+      canvas.FillRect({min, max}, WithAlpha(Hex(0x0A1626), 0.5f * alpha), 6.0f * s);
+      canvas.FillRect({min + glm::vec2(2.0f * s, 0.0f), {min.x + 5.0f * s, max.y}},
+                      WithAlpha(Hex(0xCFE6FF), 0.12f * alpha), 1.5f * s);
+      for (float x : {min.x + 1.0f * s, max.x - 1.0f * s})
+        canvas.Line({x, min.y + 2.0f * s}, {x, max.y - 2.0f * s}, 1.6f * s, WithAlpha(Hex(0xB9C8DC), alpha));
       for (int i = 1; i < 4; ++i) {
         const float y = min.y + h * static_cast<float>(i) / 4.0f;
-        canvas.Line({max.x - 9.0f * s, y}, {max.x - 4.0f * s, y}, 1.5f * s,
-                    WithAlpha(ui_color::kInk, 0.4f * look.alpha));
+        canvas.Line({max.x - 8.0f * s, y}, {max.x - 3.5f * s, y}, 1.2f * s, WithAlpha(brass::kLight, 0.5f * alpha));
       }
+      art::Plate(canvas, {min + glm::vec2(-3.0f * s, -5.0f * s), {max.x + 3.0f * s, min.y + 3.0f * s}}, 2.5f * s, 0.0f,
+                 alpha);
+      art::Plate(canvas, {{min.x - 3.0f * s, max.y - 3.0f * s}, max + glm::vec2(3.0f * s, 5.0f * s)}, 2.5f * s, 0.0f,
+                 alpha);
       if (font) {
-        canvas.Text(*font, piece.type == PieceType::TankShort ? "+4" : "+8",
-                    c + glm::vec2(-3.0f * s, -h * 0.5f - 9.0f * s), 13.0f * s, Align::Center,
-                    TextStyle::Outlined(ink, ui_color::kBackground, look.alpha));
+        canvas.Text(*font, piece.type == PieceType::TankShort ? "+4" : "+8", c + glm::vec2(0.0f, -h * 0.5f - 13.0f * s),
+                    13.0f * s, Align::Center, TextStyle::Outlined(mark, ui_color::kBackground, alpha));
       }
       break;
     }
     case PieceType::Flipper: {
-      puck(22.0f);
+      art::Medallion(canvas, c, 22.0f * s, alpha);
       float t = look.arm >= 0.0f ? look.arm : static_cast<float>(look.setting);
       t = std::clamp(t, 0.0f, 1.0f);
       const glm::vec2 dir = Normal(out_dir(0) * (1.0f - t) + out_dir(1) * t);
-      canvas.Line(c - dir * (5.0f * s), c + dir * (14.0f * s), 4.5f * s, ink);
-      canvas.Circle(c, 3.5f * s, ink);
+      canvas.Line(c - dir * (4.0f * s), c + dir * (12.0f * s), 4.4f * s, mark);
+      canvas.Circle(c, 3.4f * s, mark);
       const glm::vec2 other = Normal(out_dir(0) * t + out_dir(1) * (1.0f - t));
-      canvas.Ring(c + other * (12.0f * s), 3.0f * s, 1.5f * s, WithAlpha(ui_color::kInk, 0.5f * look.alpha));
+      canvas.Ring(c + other * (10.5f * s), 2.6f * s, 1.4f * s, WithAlpha(brass::kIndicator, 0.5f * alpha));
       break;
     }
     case PieceType::Overflow: {
       const glm::vec2 h(21.0f * s);
-      canvas.FillRect({c - h, c + h}, panel, 10.0f * s);
-      OutlineRect(canvas, c - h + glm::vec2(1.0f), c + h - glm::vec2(1.0f), 2.5f * s, ink);
-      canvas.Line(c + glm::vec2(-12.0f, -10.0f) * s, c + glm::vec2(-12.0f, 8.0f) * s, 2.5f * s, ink);
-      canvas.Line(c + glm::vec2(-12.0f, 8.0f) * s, c + glm::vec2(12.0f, 8.0f) * s, 2.5f * s, ink);
-      canvas.Line(c + glm::vec2(12.0f, 8.0f) * s, c + glm::vec2(12.0f, -10.0f) * s, 2.5f * s, ink);
+      art::Plate(canvas, {c - h, c + h}, 9.0f * s, 4.5f * s, alpha);
+      canvas.Line(c + glm::vec2(-10.0f, -9.0f) * s, c + glm::vec2(-10.0f, 7.0f) * s, 2.2f * s,
+                  WithAlpha(brass::kIndicator, 0.5f * alpha));
+      canvas.Line(c + glm::vec2(-10.0f, 7.0f) * s, c + glm::vec2(10.0f, 7.0f) * s, 2.2f * s,
+                  WithAlpha(brass::kIndicator, 0.5f * alpha));
+      canvas.Line(c + glm::vec2(10.0f, 7.0f) * s, c + glm::vec2(10.0f, -9.0f) * s, 2.2f * s,
+                  WithAlpha(brass::kIndicator, 0.5f * alpha));
       if (font) {
         const int n = look.remaining >= 0 ? look.remaining : piece.n;
-        canvas.Text(*font, std::to_string(n), c + glm::vec2(0.0f, -1.0f * s), 16.0f * s, Align::Center,
-                    TextStyle::Outlined(ink, ui_color::kBackground, look.alpha));
+        canvas.Text(*font, std::to_string(n), c + glm::vec2(0.0f, -1.5f * s), 17.0f * s, Align::Center,
+                    TextStyle{.color = mark});
       }
       // Its way: an arrow out of the side the first N go.
       const glm::vec2 d = out_dir(look.setting);
-      const glm::vec2 tip = c + d * (34.0f * s);
-      canvas.Triangle(tip, tip - d * (8.0f * s) + Perp(d) * (5.5f * s), tip - d * (8.0f * s) - Perp(d) * (5.5f * s),
-                      WithAlpha(ui_color::kGood, look.alpha));
+      Arrow(canvas, c + d * (34.0f * s), d, s, accent);
       break;
     }
     case PieceType::Bridge: {
-      puck(22.0f);
-      canvas.Arc(c + glm::vec2(0.0f, 12.0f * s), 19.0f * s, 4.0f * s, -1.0f, 2.0f, ink);
-      canvas.Line(c + glm::vec2(-17.0f, 8.0f) * s, c + glm::vec2(17.0f, 8.0f) * s, 2.5f * s, ink);
-      canvas.Line(c + glm::vec2(-9.0f, 8.0f) * s, c + glm::vec2(-9.0f, 0.0f) * s, 2.0f * s, ink);
-      canvas.Line(c + glm::vec2(9.0f, 8.0f) * s, c + glm::vec2(9.0f, 0.0f) * s, 2.0f * s, ink);
+      art::Medallion(canvas, c, 22.0f * s, alpha);
+      canvas.Arc(c + glm::vec2(0.0f, 9.0f * s), 12.0f * s, 3.4f * s, -1.15f, 2.3f, mark);
+      canvas.Line(c + glm::vec2(-12.0f, 6.0f) * s, c + glm::vec2(12.0f, 6.0f) * s, 2.2f * s, mark);
       break;
     }
     case PieceType::Mixer: {
-      puck(22.0f);
-      canvas.Arc(c, 11.0f * s, 4.0f * s, look.spin, 2.0f, WithAlpha(palette.blue, look.alpha));
-      canvas.Arc(c, 11.0f * s, 4.0f * s, look.spin + kPi, 2.0f, WithAlpha(palette.amber, look.alpha));
-      canvas.Circle(c, 4.5f * s, WithAlpha(palette.green, look.alpha));
+      art::Medallion(canvas, c, 22.0f * s, alpha);
+      canvas.Arc(c, 9.5f * s, 3.6f * s, look.spin, 2.0f, liquid(Color::Blue));
+      canvas.Arc(c, 9.5f * s, 3.6f * s, look.spin + kPi, 2.0f, liquid(Color::Amber));
+      canvas.Circle(c, 4.2f * s, liquid(Color::Green));
       break;
     }
     case PieceType::TwinGate: {
       const glm::vec2 h(24.0f * s, 16.0f * s);
-      canvas.FillRect({c - h, c + h}, panel, 8.0f * s);
-      OutlineRect(canvas, c - h + glm::vec2(1.0f), c + h - glm::vec2(1.0f), 2.5f * s, ink);
-      canvas.Line(c + glm::vec2(-10.0f, -10.0f) * s, c + glm::vec2(-10.0f, 10.0f) * s, 4.0f * s, ink);
-      canvas.Line(c + glm::vec2(10.0f, -10.0f) * s, c + glm::vec2(10.0f, 10.0f) * s, 4.0f * s, ink);
-      DashedLine(canvas, c + glm::vec2(-10.0f, 0.0f) * s, c + glm::vec2(10.0f, 0.0f) * s, 2.0f * s, ink, 3);
+      art::Plate(canvas, {c - h, c + h}, 8.0f * s, 4.0f * s, alpha);
+      canvas.Line(c + glm::vec2(-9.0f, -8.0f) * s, c + glm::vec2(-9.0f, 8.0f) * s, 3.6f * s, mark);
+      canvas.Line(c + glm::vec2(9.0f, -8.0f) * s, c + glm::vec2(9.0f, 8.0f) * s, 3.6f * s, mark);
+      art::DashedLine(canvas, c + glm::vec2(-9.0f, 0.0f) * s, c + glm::vec2(9.0f, 0.0f) * s, 1.8f * s, mark, 3);
       break;
     }
   }
-  if (look.locked) Padlock(canvas, c + glm::vec2(19.0f, -19.0f) * s, 0.8f * s, WithAlpha(ui_color::kMuted, look.alpha));
+  if (look.locked) Padlock(canvas, c + glm::vec2(19.0f, -19.0f) * s, 0.8f * s, WithAlpha(ui_color::kMuted, alpha));
 }
 
 // ---- BoardView ----
@@ -237,6 +187,12 @@ void BoardView::SetLevel(const Level* level) {
   bottle_fill_.assign(level ? level->nodes.size() : 0, {});
   for (size_t n = 0; level && n < level->nodes.size(); ++n) bottle_fill_[n].assign(level->nodes[n].slots.size(), 0.0f);
   markers_.clear();
+  if (art_) art_->Invalidate();
+}
+
+void BoardView::SetArt(BoardArt* art) {
+  art_ = art;
+  if (art_) art_->Invalidate();
 }
 
 void BoardView::ClearMarkers() {
@@ -337,115 +293,33 @@ void BoardView::Update(float dt, const Board& board) {
   std::erase_if(markers_, [](const Marker& marker) { return marker.kind == Marker::NearMiss && marker.age > 1.4f; });
 }
 
-void BoardView::DrawPipes(Canvas& canvas) const {
-  if (!level_) return;
-  const float s = layout_.scale;
-  std::vector<std::vector<glm::vec2>> lines;
-  for (const Pipe& pipe : level_->pipes) {
-    std::vector<glm::vec2> points;
-    // From node centre to node centre, so pipes reach into junctions and sockets.
-    points.push_back(layout_.ToCanvas(level_->nodes[static_cast<size_t>(pipe.from)].at));
-    for (Vec2 p : pipe.via) points.push_back(layout_.ToCanvas(p));
-    points.push_back(layout_.ToCanvas(level_->nodes[static_cast<size_t>(pipe.to)].at));
-    lines.push_back(std::move(points));
-  }
-  for (const auto& line : lines) Polyline(canvas, line, 24.0f * s, ui_color::kPipeEdge);
-  auto junction = [](NodeKind kind) {
-    return kind == NodeKind::Cross || kind == NodeKind::Merge || kind == NodeKind::Mill;
-  };
-  for (const Node& node : level_->nodes) {
-    const glm::vec2 c = layout_.ToCanvas(node.at);
-    if (junction(node.kind)) canvas.Circle(c, 19.0f * s, ui_color::kPipeEdge);
-    if (node.kind == NodeKind::Spout) canvas.Circle(c, 26.0f * s, ui_color::kPipeEdge);
-    if (node.kind == NodeKind::Drain) canvas.Circle(c, 17.0f * s, ui_color::kPipeEdge);
-  }
-  for (const auto& line : lines) Polyline(canvas, line, 17.0f * s, ui_color::kPipeInside);
-  for (const Node& node : level_->nodes) {
-    const glm::vec2 c = layout_.ToCanvas(node.at);
-    if (junction(node.kind)) canvas.Circle(c, 15.0f * s, ui_color::kPipeInside);
-    if (node.kind == NodeKind::Spout) canvas.Circle(c, 22.0f * s, ui_color::kPipeInside);
-    if (node.kind == NodeKind::Drain) canvas.Circle(c, 14.0f * s, ui_color::kPipeInside);
-    if (node.kind == NodeKind::Cup) {
-      const glm::vec2 min = layout_.ToCanvas({node.at.x - kCupHalf, node.at.y});
-      const glm::vec2 max = layout_.ToCanvas({node.at.x + kCupHalf, node.at.y + kCupHeight});
-      canvas.FillRect({min, max}, WithAlpha(ui_color::kPipeInside, 0.9f), 6.0f * s);
-    }
-  }
-  // Faint tick marks, one per cell: what you see is the timing.
-  const Rgba tick = WithAlpha(ui_color::kInk, 0.07f);
-  for (const Pipe& pipe : level_->pipes) {
-    for (int k = 1; k < pipe.cells; ++k) {
-      const float d = pipe.length * static_cast<float>(k) / static_cast<float>(pipe.cells);
-      const glm::vec2 p = layout_.ToCanvas(PointAlong(pipe.points, d));
-      const glm::vec2 q = layout_.ToCanvas(PointAlong(pipe.points, d + 0.5f));
-      const glm::vec2 n = Perp(Normal(q - p));
-      canvas.Line(p + n * (6.0f * s), p + n * (8.0f * s), 1.2f * s, tick);
-    }
-  }
+void BoardView::BeginFrame(const Board& board, const Palette& palette, const wlw::ui::Font& font, float time, float dt,
+                           bool calm, bool editing) {
+  frame_.level = level_;
+  frame_.board = &board;
+  frame_.layout = layout_;
+  frame_.palette = &palette;
+  frame_.font = &font;
+  frame_.time = calm ? 0.0f : time;
+  frame_.dt = dt;
+  frame_.calm = calm;
+  frame_.editing = editing;
+  frame_.anims = anims_;
+  frame_.cup_fill = cup_fill_;
+  frame_.bottle_fill = bottle_fill_;
 }
 
-void BoardView::DrawLiquid(Liquid& liquid, const Board& board, float alpha, const Palette& palette, float time) const {
-  if (!level_) return;
-  const float s = layout_.scale;
-  if (board.Started()) {
-    for (const Drop& drop : board.Drops()) {
-      if (!drop.alive) continue;
-      const glm::vec2 now = V(DropPoint(*level_, drop, drop.loc));
-      const glm::vec2 before = drop.prev.kind == Loc::None ? now : V(DropPoint(*level_, drop, drop.prev));
-      glm::vec2 along = now - before;
-      if (glm::length(along) < 1e-3f && drop.loc.kind == Loc::OnPipe) {
-        const Pipe& pipe = level_->pipes[static_cast<size_t>(drop.loc.index)];
-        const float d = (static_cast<float>(drop.loc.cell) + 0.5f) * pipe.length / static_cast<float>(pipe.cells);
-        along = V(PointAlong(pipe.points, d + 1.0f)) - V(PointAlong(pipe.points, d));
-      }
-      const glm::vec2 at = before + (now - before) * std::clamp(alpha, 0.0f, 1.0f);
-      const Rgba front = LiquidColor(palette, drop.bead.a);
-      const Rgba back = drop.bead.IsBlend() ? LiquidColor(palette, drop.bead.b) : front;
-      liquid.Blob(layout_.ToCanvas({at.x, at.y}), Normal(along), 12.0f * s, front, back,
-                  static_cast<uint32_t>(drop.id) + 1u);
-    }
-  }
-  for (size_t n = 0; n < level_->nodes.size(); ++n) {
-    const Node& node = level_->nodes[n];
-    if (node.kind == NodeKind::Spout) {
-      // A slow swirl of what's still to pour.
-      const int left = static_cast<int>(node.beads.size()) - (board.Started() ? board.Poured(static_cast<int>(n)) : 0);
-      if (left <= 0) continue;
-      const threadlock::Bead& next = node.beads[node.beads.size() - static_cast<size_t>(left)];
-      const glm::vec2 c = layout_.ToCanvas(node.at);
-      for (int k = 0; k < 10; ++k) {
-        const bool inner = k % 2 != 0;
-        const float a = static_cast<float>(k / 2) / 5.0f * 2.0f * kPi + time * (inner ? -1.6f : 1.1f);
-        const float r = (inner ? 7.0f : 12.0f) * s;
-        const Rgba color = LiquidColor(palette, (inner && next.IsBlend()) ? next.b : next.a);
-        liquid.Blob(c + glm::vec2(std::cos(a), std::sin(a)) * r, {-std::sin(a), std::cos(a)}, 7.0f * s, color, color,
-                    static_cast<uint32_t>(9000 + n * 16 + static_cast<size_t>(k)));
-      }
-    }
-    if (node.kind == NodeKind::Cup && cup_fill_[n] > 0.01f) {
-      const CupState& cup = board.Started() ? board.Cup(static_cast<int>(n)) : CupState{};
-      const Rgba color = cup.impure ? kMud : LiquidColor(palette, node.want);
-      const glm::vec2 min = layout_.ToCanvas({node.at.x - kCupHalf + 3.0f, node.at.y + 6.0f});
-      const glm::vec2 max = layout_.ToCanvas({node.at.x + kCupHalf - 3.0f, node.at.y + kCupHeight - 3.0f});
-      liquid.Pool(min, max, cup_fill_[n] / static_cast<float>(std::max(1, node.count)), color,
-                  static_cast<uint32_t>(n) * 7919u);
-    }
-  }
+void BoardView::DrawBack(Canvas& picture) {
+  if (level_ && art_) art_->DrawBack(picture, frame_);
 }
 
-Vec2 BoardView::BottleAt(int rack, int slot) const {
-  const Node& node = level_->nodes[static_cast<size_t>(rack)];
-  const int k = std::max(1, static_cast<int>(node.slots.size()));
-  const float radius = k <= 2 ? 22.0f : 30.0f;
-  // The bottle under the pipe sits at the top, right at `at`; the table turns one bottle per step.
-  const float steps = anims_[static_cast<size_t>(rack)].spin;
-  const float a = -kPi * 0.5f + 2.0f * kPi * (static_cast<float>(slot - node.first) - steps) / static_cast<float>(k);
-  return {node.at.x + std::cos(a) * radius, node.at.y + radius + std::sin(a) * radius};
+void BoardView::DrawLiquid(Liquid& liquid, float alpha) {
+  if (level_ && art_) art_->DrawLiquid(liquid, frame_, alpha);
 }
 
 glm::vec2 BoardView::MarkerCanvas(int node, int slot) const {
   if (slot >= 0 && level_->nodes[static_cast<size_t>(node)].kind == NodeKind::Rack)
-    return layout_.ToCanvas(BottleAt(node, slot));
+    return layout_.ToCanvas(BottleAt(frame_, node, slot));
   return NodeCanvas(node);
 }
 
@@ -464,134 +338,15 @@ glm::vec2 BoardView::PieceCenter(const Board& board, int node) const {
   return NodeCanvas(node);
 }
 
-void BoardView::DrawParts(Canvas& canvas, const Board& board, const Palette& palette, const wlw::ui::Font& font,
-                          const Options& options) const {
-  if (!level_) return;
+void BoardView::DrawParts(Canvas& canvas, const Options& options) {
+  if (!level_ || !art_) return;
+  const Board& board = *frame_.board;
+  const Palette& palette = *frame_.palette;
+  const wlw::ui::Font& font = *frame_.font;
   const float s = layout_.scale;
-  const Rgba ink = ui_color::kInk;
-  for (size_t n = 0; n < level_->nodes.size(); ++n) {
-    const Node& node = level_->nodes[n];
-    const glm::vec2 c = layout_.ToCanvas(node.at);
-    switch (node.kind) {
-      case NodeKind::Spout: {
-        canvas.Ring(c, 22.0f * s, 2.5f * s, WithAlpha(ink, 0.55f));
-        if (!node.beads.empty()) Glyph(canvas, node.beads[0].a, c, 4.0f * s, WithAlpha(ink, 0.8f));
-        // Its beads still to pour, in order: above it when there's room, else beside it (towards the
-        // board's middle), in rows of six.
-        const int poured = board.Started() ? board.Poured(static_cast<int>(n)) : 0;
-        const int left = static_cast<int>(node.beads.size()) - poured;
-        const bool above = node.at.y >= 64.0f;
-        const int per_row = above ? 8 : 6;
-        const float step = above ? 10.0f : 7.5f;
-        const float side = node.at.x > 220.0f ? -1.0f : 1.0f;
-        for (int k = 0; k < left; ++k) {
-          const int row = k / per_row, col = k % per_row;
-          Vec2 at;
-          if (above) {
-            const int in_row = std::min(per_row, left - row * per_row);
-            at = {node.at.x + (static_cast<float>(col) - static_cast<float>(in_row - 1) * 0.5f) * step,
-                  node.at.y - 32.0f - static_cast<float>(row) * step};
-          } else {
-            at = {node.at.x + side * (30.0f + static_cast<float>(col) * step),
-                  node.at.y - 4.0f + static_cast<float>(row) * step};
-          }
-          DrawBead(canvas, node.beads[static_cast<size_t>(poured + k)], layout_.ToCanvas(at), (above ? 4.0f : 3.2f) * s,
-                   palette, 1.0f);
-        }
-        break;
-      }
-      case NodeKind::Cup: {
-        const CupState& cup = board.Started() ? board.Cup(static_cast<int>(n)) : CupState{};
-        const Rgba color = cup.impure ? kMud : LiquidColor(palette, node.want);
-        const glm::vec2 tl = layout_.ToCanvas({node.at.x - kCupHalf, node.at.y});
-        const glm::vec2 br = layout_.ToCanvas({node.at.x + kCupHalf, node.at.y + kCupHeight});
-        canvas.Line(tl, {tl.x, br.y}, 3.0f * s, color);
-        canvas.Line({tl.x, br.y}, br, 3.0f * s, color);
-        canvas.Line(br, {br.x, tl.y}, 3.0f * s, color);
-        for (int k = 1; k < node.count; ++k) {
-          const float y = node.at.y + kCupHeight - 3.0f -
-                          (kCupHeight - 9.0f) * static_cast<float>(k) / static_cast<float>(node.count);
-          canvas.Line(layout_.ToCanvas({node.at.x + kCupHalf - 8.0f, y}),
-                      layout_.ToCanvas({node.at.x + kCupHalf - 3.0f, y}), 1.4f * s, WithAlpha(ink, 0.3f));
-        }
-        char text[24];
-        std::snprintf(text, sizeof(text), "%d/%d", cup.count, node.count);
-        const glm::vec2 label = layout_.ToCanvas({node.at.x + 4.0f, node.at.y + kCupHeight + 11.0f});
-        canvas.Text(font, text, label, 15.0f * s, Align::Center,
-                    TextStyle::Outlined(cup.impure || cup.spilled ? ui_color::kBad : ink, ui_color::kBackground));
-        Glyph(canvas, node.want, label + glm::vec2(-20.0f * s, 0.0f), 4.0f * s, LiquidColor(palette, node.want));
-        break;
-      }
-      case NodeKind::Drain: {
-        canvas.Ring(c, 14.0f * s, 2.5f * s, ui_color::kFaint);
-        for (float dy : {-6.0f, 0.0f, 6.0f}) {
-          canvas.Line(c + glm::vec2(-8.0f, dy) * s, c + glm::vec2(8.0f, dy) * s, 2.0f * s, ui_color::kFaint);
-        }
-        break;
-      }
-      case NodeKind::Rack: {
-        // A turntable of bottles seen from above; the one under the pipe is at the top. Each bottle is
-        // a cup of its own.
-        const int k = static_cast<int>(node.slots.size());
-        const float radius = k <= 2 ? 22.0f : 30.0f;
-        const glm::vec2 centre = layout_.ToCanvas({node.at.x, node.at.y + radius});
-        canvas.Circle(centre, (radius + 17.0f) * s, WithAlpha(ui_color::kPanel, 0.75f));
-        canvas.Ring(centre, (radius + 17.0f) * s, 2.0f * s, WithAlpha(ink, 0.3f));
-        canvas.Circle(centre, 4.0f * s, WithAlpha(ink, 0.5f));
-        for (int slot = 0; slot < k; ++slot) {
-          const Slot& want = node.slots[static_cast<size_t>(slot)];
-          const CupState& bottle = board.Started() ? board.Bottle(static_cast<int>(n), slot) : CupState{};
-          const glm::vec2 b = layout_.ToCanvas(BottleAt(static_cast<int>(n), slot));
-          const Rgba color = bottle.impure ? kMud : LiquidColor(palette, want.want);
-          const float fill = std::clamp(
-              bottle_fill_[n][static_cast<size_t>(slot)] / static_cast<float>(std::max(1, want.count)), 0.0f, 1.0f);
-          canvas.Circle(b, 12.5f * s, WithAlpha(ui_color::kPipeInside, 0.95f));
-          if (fill > 0.01f) canvas.Circle(b, 11.0f * s * std::sqrt(fill), WithAlpha(color, 0.85f));
-          canvas.Ring(b, 12.5f * s, 2.5f * s, color);
-          char text[24];
-          std::snprintf(text, sizeof(text), "%d/%d", bottle.count, want.count);
-          canvas.Text(
-              font, text, b + glm::vec2(0.0f, 4.5f * s), 12.0f * s, Align::Center,
-              TextStyle::Outlined(bottle.impure || bottle.spilled ? ui_color::kBad : ink, ui_color::kBackground));
-        }
-        break;
-      }
-      case NodeKind::Mill: {
-        // A wheel that turns a notch per drop; dashed gears run to the gates it flips.
-        const NodeAnim& anim = anims_[n];
-        for (int gate : node.gears)
-          DashedLine(canvas, c, NodeCanvas(gate), 1.5f * s, WithAlpha(ui_color::kStar, 0.3f + 0.5f * anim.flash), 12);
-        canvas.Circle(c, 16.0f * s, WithAlpha(ui_color::kPanel, 0.8f));
-        canvas.Ring(c, 16.0f * s, 2.5f * s, ink);
-        for (int spoke = 0; spoke < 6; ++spoke) {
-          const float a = anim.spin + static_cast<float>(spoke) * kPi / 3.0f;
-          canvas.Line(c, c + glm::vec2(std::cos(a), std::sin(a)) * (15.0f * s), 2.5f * s, ink);
-        }
-        canvas.Circle(c, 4.0f * s, ink);
-        break;
-      }
-      case NodeKind::Gate: {
-        // Open: two posts beside the pipe and a green lamp. Shut: a bar across it and a red lamp.
-        const bool open = board.GateOpen(static_cast<int>(n));
-        const glm::vec2 d = node.ins.empty() ? glm::vec2(0.0f, 1.0f) : InDir(*level_, node, 0);
-        const glm::vec2 p = Perp(d);
-        if (open) {
-          for (float side : {-1.0f, 1.0f}) {
-            canvas.Line(c + p * (15.0f * side * s) - d * (5.0f * s), c + p * (15.0f * side * s) + d * (5.0f * s),
-                        4.0f * s, ink);
-          }
-        } else {
-          canvas.Line(c - p * (16.0f * s), c + p * (16.0f * s), 5.5f * s, ink);
-        }
-        const glm::vec2 lamp = c + p * (23.0f * s) - d * (8.0f * s);
-        const Rgba lamp_color = open ? ui_color::kGood : ui_color::kBad;
-        canvas.Circle(lamp, (4.5f + 3.0f * anims_[n].flash) * s, lamp_color);
-        canvas.Ring(lamp, 4.5f * s, 1.5f * s, ui_color::kBackground);
-        break;
-      }
-      default: break;
-    }
-  }
+  const float time = frame_.time;
+  const Rgba accent = art_->Accent();
+  art_->DrawFront(canvas, frame_);
 
   // A fork with no router on it shows its flap (where everything goes). A piece that leaves the flap in
   // charge (a tank, a turnstile...) is drawn over it, so the flap is drawn again outside it below.
@@ -600,11 +355,11 @@ void BoardView::DrawParts(Canvas& canvas, const Board& board, const Palette& pal
     const glm::vec2 c = layout_.ToCanvas(node.at);
     const glm::vec2 d = OutDir(*level_, node, static_cast<size_t>(std::max(0, board.Flap(n))));
     const glm::vec2 handle = FlapHandle(board, n);
-    canvas.Line(covered ? c + d * (25.0f * s) : c, handle - d * (1.0f * s), 3.0f * s, WithAlpha(ink, 0.9f));
-    if (!covered) canvas.Circle(c, 3.0f * s, ink);
+    canvas.Line(covered ? c + d * (25.0f * s) : c, handle - d * (1.0f * s), 3.4f * s, brass::kIndicator);
+    if (!covered) canvas.Circle(c, 3.4f * s, brass::kIndicator);
     if (node.flap_tappable) {
-      canvas.Circle(handle, 4.5f * s, ui_color::kGood);
-      canvas.Ring(handle, 4.5f * s, 1.5f * s, ui_color::kBackground);
+      canvas.Circle(handle, 5.0f * s, accent);
+      canvas.Ring(handle, 5.0f * s, 1.5f * s, ui_color::kBackground);
     }
   };
   for (size_t n = 0; n < level_->nodes.size(); ++n) {
@@ -622,23 +377,23 @@ void BoardView::DrawParts(Canvas& canvas, const Board& board, const Palette& pal
     const bool dragging = options.drag_type >= 0;
     const bool target = options.drag_target == static_cast<int>(n) ||
                         (node.twin >= 0 && options.drag_target == node.twin && board.PieceAt(node.twin) < 0);
-    float a = options.editing ? 0.32f + 0.12f * std::sin(options.time * 3.0f) : 0.2f;
+    float a = frame_.editing ? 0.4f + 0.14f * std::sin(time * 3.0f) : 0.18f;
     float width = 2.0f * s;
     if (dragging) a = 0.9f;
     if (target) {
       a = 1.0f;
       width = 3.2f * s;
     }
-    const Rgba color = WithAlpha(dragging ? ui_color::kGood : ink, a);
-    if (target) canvas.Circle(c, 24.0f * s, WithAlpha(ui_color::kGood, 0.16f));
-    for (int dash = 0; dash < 12; ++dash)
-      canvas.Arc(c, 19.0f * s, width, static_cast<float>(dash) * kPi / 6.0f, 0.3f, color);
+    const float r = art_->SocketRadius(node) * s;
+    const Rgba color = WithAlpha(dragging ? Mixed(accent, Hex(0xFFFFFF), 0.3f) : accent, a);
+    if (target) canvas.Circle(c, r + 4.0f * s, WithAlpha(accent, 0.16f));
+    for (int dash = 0; dash < 12; ++dash) canvas.Arc(c, r, width, static_cast<float>(dash) * kPi / 6.0f, 0.3f, color);
     if (node.twin >= 0 && board.PieceAt(node.twin) < 0) {
       const glm::vec2 other = NodeCanvas(node.twin);
       for (int dash = 0; dash < 12; ++dash)
-        canvas.Arc(other, 19.0f * s, width, static_cast<float>(dash) * kPi / 6.0f, 0.3f, color);
+        canvas.Arc(other, r, width, static_cast<float>(dash) * kPi / 6.0f, 0.3f, color);
       const glm::vec2 d = Normal(other - c);
-      DashedLine(canvas, c + d * (21.0f * s), other - d * (21.0f * s), width, color, 4);
+      art::DashedLine(canvas, c + d * (r + 2.0f * s), other - d * (r + 2.0f * s), width, color, 4);
     }
   }
 
@@ -654,7 +409,8 @@ void BoardView::DrawParts(Canvas& canvas, const Board& board, const Palette& pal
       }
       PieceLook look;
       look.setting = ghost.setting[i];
-      look.alpha = 0.32f + 0.1f * std::sin(options.time * 4.0f);
+      look.alpha = 0.32f + 0.1f * std::sin(time * 4.0f);
+      look.accent = accent;
       DrawPiece(canvas, level_->tray[i].piece, NodeCanvas(node), s, look, palette, level_,
                 &level_->nodes[static_cast<size_t>(node)], &font);
     }
@@ -671,6 +427,7 @@ void BoardView::DrawParts(Canvas& canvas, const Board& board, const Palette& pal
     look.spin = anim.spin;
     look.arm = piece.type == PieceType::Flipper ? anim.arm : -1.0f;
     look.locked = board.Locked(i);
+    look.accent = accent;
     if (board.Started() && board.RoleOf(i) == PieceRole::Idle) look.alpha = 0.38f;
     if (piece.type == PieceType::Overflow && board.Started())
       look.remaining = std::max(0, piece.n - board.OverflowPassed(node));
@@ -683,26 +440,24 @@ void BoardView::DrawParts(Canvas& canvas, const Board& board, const Palette& pal
   }
 
   if (options.hint_node >= 0) {
-    const float pulse = 0.5f + 0.5f * std::sin(options.time * 6.0f);
-    canvas.Ring(NodeCanvas(options.hint_node), (28.0f + 4.0f * pulse) * s, 3.0f * s, WithAlpha(ui_color::kStar, 0.9f));
+    const float pulse = 0.5f + 0.5f * std::sin(time * 6.0f);
+    canvas.Ring(NodeCanvas(options.hint_node), (30.0f + 4.0f * pulse) * s, 3.0f * s, WithAlpha(ui_color::kStar, 0.9f));
   }
 }
 
-void BoardView::DrawMarkers(Canvas& canvas, const Board& board, const wlw::ui::Font& font, float time) const {
-  if (!level_) return;
+void BoardView::DrawMarkers(Canvas& canvas) {
+  if (!level_ || !art_) return;
+  const Board& board = *frame_.board;
+  const wlw::ui::Font& font = *frame_.font;
   const float s = layout_.scale;
+  const float time = frame_.time;
   for (const Marker& marker : markers_) {
     const float pop = std::min(1.0f, marker.age * 6.0f);
     switch (marker.kind) {
       case Marker::Mud: {
         const glm::vec2 c = NodeCanvas(marker.node);
-        canvas.Circle(c, 13.0f * s * pop, kMud);
-        for (int i = 0; i < 6; ++i) {
-          const float a = kPi / 3.0f * static_cast<float>(i) + 0.35f;
-          const float d = (21.0f + static_cast<float>(i % 2) * 5.0f) * s * pop;
-          canvas.Circle(c + glm::vec2(std::cos(a), std::sin(a)) * d, (2.5f + static_cast<float>(i % 3)) * s, kMud);
-        }
-        canvas.Text(font, "mud", c + glm::vec2(0.0f, 36.0f * s), 17.0f * s, Align::Center,
+        art_->DrawMud(canvas, c, marker.age, s, time);
+        canvas.Text(font, "mud", c + glm::vec2(0.0f, 38.0f * s), 17.0f * s, Align::Center,
                     TextStyle::Outlined(ui_color::kBad, ui_color::kBackground));
         break;
       }
@@ -726,13 +481,14 @@ void BoardView::DrawMarkers(Canvas& canvas, const Board& board, const wlw::ui::F
                       Align::Center, TextStyle::Outlined(ui_color::kBad, ui_color::kBackground));
           break;
         }
-        const glm::vec2 top = layout_.ToCanvas({node.at.x, node.at.y - 10.0f});
+        const glm::vec2 top = art_->CupTop(frame_, marker.node);
         canvas.Text(font, text, top, 15.0f * s, Align::Center,
                     TextStyle::Outlined(ui_color::kBad, ui_color::kBackground));
         if (marker.kind == Marker::Spill) {
+          const wlw::ui::Rect pool = art_->CupPool(frame_, marker.node);
           for (int k = 0; k < 3; ++k) {
-            const float y = std::fmod(time * 40.0f + static_cast<float>(k) * 20.0f, 60.0f);
-            canvas.Circle(layout_.ToCanvas({node.at.x + kCupHalf + 5.0f, node.at.y + 4.0f + y}), 3.0f * s, kMud);
+            const float y = std::fmod(time * 40.0f + static_cast<float>(k) * 20.0f, 60.0f) * s;
+            canvas.Circle({pool.max.x + 5.0f * s, pool.min.y + y}, 3.0f * s, kMud);
           }
         }
         break;

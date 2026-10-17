@@ -9,9 +9,11 @@
 #include "map_screen.h"
 #include "menus.h"
 #include "ui_parts.h"
+#include "wlw/core/cvar.h"
 #include "wlw/core/log.h"
 #include "wlw/kit/daily.h"
 #include "wlw/platform/platform.h"
+#include "wlw/rendering/shader.h"
 #include "wlw/ui/widgets.h"
 
 #if WLW_DEBUG_UI
@@ -20,6 +22,9 @@
 
 namespace threadlock {
 namespace {
+
+// Development shortcuts (adb: am start ... --es wlw "tl.open=1-6;tl.solve=1;tl.autoplay=2").
+wlw::CVar<std::string> cv_open{"tl.open", "", "Open this level at startup (dev)"};
 
 // Ads: Google's test units in every build until Threadlock has its own AdMob app (DESIGN.md §10;
 // the app id in AndroidManifest.xml is Google's sample one too). Real units go here, release only,
@@ -55,6 +60,9 @@ void ThreadlockApp::OnStart() {
   feedback_.Load(App().Audio());
   ApplySettings();
   liquid_.Create(App());
+  lantern_art_.Create(App());
+  action_material_ =
+      wlw::rendering::ShaderMaterial::Create(wlw::rendering::Shader::FromFile("shaders/ui_gradient.shader"));
   // Toasts and the desktop's stand-in ads draw over every screen, on a layer above the game UI.
   top_canvas_ = &App().Window().GetScreen().AddCanvasLayer({.mode = wlw::scene::CanvasMode::Overlay, .order = 10});
   App().Quality().Configure({.levels = 3});
@@ -68,6 +76,10 @@ void ThreadlockApp::OnStart() {
 
   // First launch: no menu, level 1-1 straight away. The map appears after 1-3.
   const Level* current = progress_->Current(catalog_);
+  if (const Level* wanted = catalog_.Find(cv_open.Get())) {
+    OpenLevel(wanted);
+    return;
+  }
   if (!progress_->MapOpen() && current) {
     OpenLevel(current);
   } else {
@@ -78,6 +90,14 @@ void ThreadlockApp::OnStart() {
 void ThreadlockApp::ApplySettings() {
   feedback_.sound_on = progress_->settings.sound;
   feedback_.haptics_on = progress_->settings.haptics;
+}
+
+BoardArt& ThreadlockApp::ArtFor(int world) {
+  switch (LookForWorld(world).art) {
+    case ArtKind::Lantern: return lantern_art_;
+    case ArtKind::Workshop: break;
+  }
+  return workshop_art_;
 }
 
 int ThreadlockApp::Today() const { return wlw::kit::Today().ToNumber(); }

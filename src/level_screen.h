@@ -1,10 +1,14 @@
 #pragma once
 
+#include <string_view>
+
 #include <glm/glm.hpp>
 
 #include "board_view.h"
 #include "threadlock_app.h"
+#include "world_look.h"
 #include "wlw/app/screen.h"
+#include "wlw/ui/icons.h"
 
 // The level screen (DESIGN.md §8): the board in the middle, the level's name and star targets on
 // top, the tray and the controls at the bottom. Place, then watch: drag pieces into sockets, tap
@@ -57,11 +61,16 @@ class LevelScreen : public wlw::app::Screen {
   void DrawInfo(wlw::ui::UIContext& ui);
   glm::vec2 TraySlot(int slot) const;
   int TraySlotOf(int piece) const;  // its place in the tray row (-1 if on the board)
+  // The HUD's buttons in the world's colours: a round (or pill) one of dark glass, and the big action.
+  bool HudButton(wlw::ui::UIContext& ui, const wlw::ui::Rect& rect, wlw::ui::Icon icon, std::string_view label = {});
+  bool ActionButton(wlw::ui::UIContext& ui, const wlw::ui::Rect& rect, std::string_view label, wlw::ui::Icon icon,
+                    bool quiet);
 
   ThreadlockApp& app_;
   const Level* level_;
   LevelSource source_;
   Board board_;
+  const WorldLook& look_;  // the HUD's and the cards' colours
   BoardView view_;
   Phase phase_ = Phase::Edit;
   Dialog dialog_ = Dialog::None;
@@ -80,7 +89,9 @@ class LevelScreen : public wlw::app::Screen {
   Outcome result_;
   Drag drag_;
   bool dragging_ = false;
-  bool pressing_ = false;  // the pointer went down on something of ours
+  bool pressing_ = false;     // the pointer went down on something of ours
+  bool dev_started_ = false;  // the dev shortcuts ran (tl.solve)
+  float dev_clock_ = 0.0f;    // tl.autoplay
 
   // Layout (canvas units), set each frame.
   wlw::ui::Rect safe_;

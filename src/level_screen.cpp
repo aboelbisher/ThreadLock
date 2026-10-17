@@ -6,8 +6,11 @@
 #include <tuple>
 #include <vector>
 
+#include "art_shapes.h"
 #include "solver.h"
 #include "ui_parts.h"
+#include "world_look.h"
+#include "wlw/core/cvar.h"
 #include "wlw/core/log.h"
 #include "wlw/ui/icons.h"
 #include "wlw/ui/widgets.h"
@@ -20,6 +23,10 @@ using wlw::ui::Icon;
 using wlw::ui::Rect;
 using wlw::ui::UIContext;
 using wlw::ui::Variant;
+
+// Development shortcuts for screenshots (see threadlock_app.cpp).
+wlw::CVar<bool> cv_solve{"tl.solve", false, "Place the level's Lean solution when it opens (dev)"};
+wlw::CVar<float> cv_autoplay{"tl.autoplay", 0.0f, "Seconds after opening a level to tap play; 0 = never (dev)"};
 
 constexpr float kLift = 56.0f;  // a dragged piece floats this far above the finger
 constexpr float kLongPress = 0.45f;
@@ -169,16 +176,21 @@ std::string FailureText(const Level& level, const Board& board, const Outcome& o
 }  // namespace
 
 LevelScreen::LevelScreen(ThreadlockApp& app, const Level* level, LevelSource source)
-    : app_(app), level_(level), source_(source), board_(*level) {
+    : app_(app), level_(level), source_(source), board_(*level), look_(LookForWorld(level->world)) {
+  view_.SetArt(&app_.ArtFor(level_->world));
   view_.SetLevel(level_);
 }
 
 void LevelScreen::OnEnter() {
   app_.GetLiquid().SetActive(true);
+  view_.Art().Invalidate();
   WLW_LOG_INFO("Level %s %s (%s)", level_->id.c_str(), level_->name.c_str(), LevelTypeKey(level_->type));
 }
 
-void LevelScreen::OnExit() { app_.GetProgress().Save(); }
+void LevelScreen::OnExit() {
+  app_.Services().Window().GetScreen().SetClearColor(ui_color::kBackground);
+  app_.GetProgress().Save();
+}
 
 void LevelScreen::OnAppPaused() { app_.GetProgress().Save(); }
 
@@ -252,7 +264,7 @@ void LevelScreen::RunEnded() {
   Progress& progress = app_.GetProgress();
   earned_ = {};
   if (result_.solved) {
-    done_delay_ = 1.3f;
+    done_delay_ = look_.art == ArtKind::Lantern ? 2.0f : 1.3f;  // time to watch the window light up
     app_.GetFeedback().Play(synth::Sound::Fanfare, 0.7f);
     const Placement placement = board_.GetPlacement();
     const bool shown = progress.SolutionShown(level_->id) &&
@@ -321,6 +333,14 @@ void LevelScreen::StartShowMe() {
 }
 
 void LevelScreen::Update(float dt) {
+  if (!dev_started_) {
+    dev_started_ = true;
+    if (cv_solve.Get() && level_->pars.Known()) board_.SetPlacement(level_->pars.lean);
+  }
+  if (cv_autoplay.Get() > 0.0f && !ran_once_ && phase_ == Phase::Edit) {
+    dev_clock_ += dt;
+    if (dev_clock_ >= cv_autoplay.Get()) StartRun();
+  }
   view_.Update(dt, board_);
   hint_time_ = std::max(0.0f, hint_time_ - dt);
   if (hint_time_ <= 0.0f) hint_node_ = -1;
@@ -439,7 +459,7 @@ glm::vec2 LevelScreen::TraySlot(int slot) const {
   for (const TrayPiece& piece : level_->tray) count += piece.locked ? 0 : 1;
   const float x =
       (safe_.min.x + safe_.max.x) * 0.5f + (static_cast<float>(slot) - static_cast<float>(count - 1) * 0.5f) * 64.0f;
-  return {x, bottom_ - 112.0f};
+  return {x, bottom_ - 114.0f};
 }
 
 int LevelScreen::TraySlotOf(int piece) const {
@@ -459,20 +479,33 @@ void LevelScreen::RenderUI(UIContext& ui) {
   wlw::ui::Canvas& canvas = ui.canvas;
   const float time = app_.Time();
 
-  // The liquid (drawn into its own picture), then the pipes and that picture on the bloomed layer.
+  // The world's colours for the HUD and the cards (the same layout in every world).
+  app_.Services().Window().GetScreen().SetClearColor(look_.background);
+  ui.theme.primary = look_.action_bottom;
+  ui.theme.on_primary = look_.on_action;
+  ui.theme.secondary = Mixed(look_.background, look_.ink, 0.16f);
+  ui.theme.on_secondary = look_.ink;
+  const Rgba panel{look_.panel.r, look_.panel.g, look_.panel.b, 1.0f};
+  ui.theme.surface = WithAlpha(Mixed(panel, look_.ink, 0.04f), 0.98f);
+  ui.theme.surface_raised = Mixed(panel, look_.ink, 0.1f);
+  ui.theme.track = look_.background;
+  ui.theme.text = look_.ink;
+  ui.theme.text_muted = look_.muted;
+  ui.theme.on = look_.accent;
+
+  // The place and the machine on the bloomed layer, the liquid over them, then the parts' fronts.
+  view_.BeginFrame(board_, palette, font, time, ui.dt, app_.Calm(), phase_ == Phase::Edit);
   Liquid& liquid = app_.GetLiquid();
+  view_.DrawBack(liquid.Picture());
   liquid.Begin(canvas.Size(), time);
   const float alpha = phase_ == Phase::Run || (phase_ == Phase::ShowMe && !show_done_) ? clock_ / kTickSeconds : 1.0f;
-  view_.DrawLiquid(liquid, board_, alpha, palette, time);
+  view_.DrawLiquid(liquid, alpha);
   liquid.End();
-  view_.DrawPipes(liquid.Picture());
   liquid.Draw(liquid.Picture());
 
   if (dialog_ == Dialog::None) HandleBoardInput(ui);
 
   BoardView::Options options;
-  options.time = app_.Calm() ? 0.0f : time;
-  options.editing = phase_ == Phase::Edit;
   if (dragging_ && drag_.moved) {
     options.drag_type = static_cast<int>(board_.PieceInfo(drag_.piece).piece.type);
     options.drag_target = view_.SocketNear(drag_.at - glm::vec2(0.0f, kLift), 48.0f);
@@ -480,8 +513,8 @@ void LevelScreen::RenderUI(UIContext& ui) {
   options.hint_node = hint_node_;
   options.ghosts = ghosts_ && phase_ == Phase::Edit;
   options.ghost_placement = &level_->pars.lean;
-  view_.DrawParts(canvas, board_, palette, font, options);
-  view_.DrawMarkers(canvas, board_, font, time);
+  view_.DrawParts(canvas, options);
+  view_.DrawMarkers(canvas);
   if (phase_ == Phase::ShowMe) view_.DrawSpotlight(canvas, result_.fail_node, 1.0f);
 
   DrawTopBar(ui);
@@ -491,6 +524,7 @@ void LevelScreen::RenderUI(UIContext& ui) {
   if (dragging_ && drag_.moved) {
     PieceLook look;
     look.setting = board_.Setting(drag_.piece);
+    look.accent = look_.accent;
     DrawPiece(canvas, board_.PieceInfo(drag_.piece).piece, drag_.at - glm::vec2(0.0f, kLift), view_.GetLayout().scale,
               look, palette, nullptr, nullptr, &font);
   }
@@ -581,6 +615,58 @@ void LevelScreen::HandleBoardInput(UIContext& ui) {
   }
 }
 
+bool LevelScreen::HudButton(UIContext& ui, const Rect& rect, Icon icon, std::string_view label) {
+  wlw::ui::Canvas& canvas = ui.canvas;
+  const std::string_view key = label.empty() ? std::string_view(icon == Icon::Hint ? "hud-hint" : "hud-icon") : label;
+  const wlw::ui::Press press = wlw::ui::Pressable(ui, wlw::ui::WidgetId(key, rect), rect);
+  const float r = std::min(rect.Size().x, rect.Size().y) * 0.5f;
+  const glm::vec2 sink{0.0f, 1.5f * press.amount};
+  const Rect face{rect.min + sink, rect.max + sink};
+  const Rgba panel{look_.panel.r, look_.panel.g, look_.panel.b, 1.0f};
+  canvas.FillRect({face.min + glm::vec2(0.0f, 3.0f), face.max + glm::vec2(0.0f, 3.0f)}, Rgba{0.0f, 0.0f, 0.0f, 0.35f},
+                  r);
+  canvas.FillRect(face, Mixed(panel, look_.panel_edge, look_.panel_edge.a * 1.3f), r);
+  canvas.FillRect({face.min + glm::vec2(1.2f), face.max - glm::vec2(1.2f)},
+                  press.held ? Mixed(panel, look_.ink, 0.08f) : panel, r - 1.2f);
+  if (!label.empty()) {
+    canvas.Text(app_.GetFont(), label, face.Center() + glm::vec2(0.0f, 1.0f), 19.0f, Align::Center,
+                {.color = look_.ink});
+  } else {
+    wlw::ui::DrawIcon(canvas, icon, {face.Center() - glm::vec2(11.0f), face.Center() + glm::vec2(11.0f)}, look_.ink);
+  }
+  return press.clicked;
+}
+
+bool LevelScreen::ActionButton(UIContext& ui, const Rect& rect, std::string_view label, Icon icon, bool quiet) {
+  if (quiet) return HudButton(ui, rect, Icon::None, label);
+  wlw::ui::Canvas& canvas = ui.canvas;
+  const wlw::ui::Press press = wlw::ui::Pressable(ui, wlw::ui::WidgetId(label, rect), rect);
+  const float r = rect.Size().y * 0.5f;
+  const float depth = 4.0f;
+  const glm::vec2 sink{0.0f, depth * 0.75f * press.amount};
+  const Rect face{rect.min + sink, rect.max + sink - glm::vec2(0.0f, depth)};
+  canvas.FillRect({rect.min + glm::vec2(0.0f, 5.0f), rect.max + glm::vec2(0.0f, 3.0f)}, Rgba{0.0f, 0.0f, 0.0f, 0.35f},
+                  r);
+  canvas.FillRect({{rect.min.x, rect.min.y + depth}, rect.max}, look_.action_lip, r);
+  if (const auto& material = app_.ActionMaterial()) {
+    material->SetParam("uTop", glm::vec4(look_.action_top.r, look_.action_top.g, look_.action_top.b, 1.0f));
+    material->SetParam("uBottom", glm::vec4(look_.action_bottom.r, look_.action_bottom.g, look_.action_bottom.b, 1.0f));
+    material->SetParam("uRadius", (face.Size().y * 0.5f) * canvas.PixelsPerUnit());
+    canvas.ShaderRect(face, material);
+  }
+  const wlw::ui::Font& font = app_.GetFont();
+  const float size = 21.0f;
+  const float text_width = font.Measure(label, size);
+  const float icon_size = 20.0f, gap = 8.0f;
+  const float x = face.Center().x - (text_width + icon_size + gap) * 0.5f;
+  const glm::vec2 centre{x + icon_size * 0.5f, face.Center().y};
+  wlw::ui::DrawIcon(canvas, icon, {centre - glm::vec2(icon_size * 0.5f), centre + glm::vec2(icon_size * 0.5f)},
+                    look_.on_action);
+  canvas.Text(font, label, {x + icon_size + gap, face.Center().y + 1.0f}, size, Align::Left,
+              {.color = look_.on_action});
+  return press.clicked;
+}
+
 void LevelScreen::DrawTopBar(UIContext& ui) {
   wlw::ui::Canvas& canvas = ui.canvas;
   const wlw::ui::Font& font = app_.GetFont();
@@ -588,23 +674,33 @@ void LevelScreen::DrawTopBar(UIContext& ui) {
   const bool can_leave = source_.kind != LevelSource::Main || app_.GetProgress().MapOpen();
   float x = safe_.min.x + 14.0f;
   if (can_leave) {
-    if (wlw::ui::IconButton(ui, Icon::Back, {{x, y - 20.0f}, {x + 40.0f, y + 20.0f}}) && dialog_ == Dialog::None) {
+    if (HudButton(ui, {{x, y - 21.0f}, {x + 42.0f, y + 21.0f}}, Icon::Back) && dialog_ == Dialog::None) {
       app_.GetFeedback().Play(synth::Sound::Tap);
       if (phase_ == Phase::Run) StopRun();
       LeaveToMap();
     }
-    x += 52.0f;
+    x += 54.0f;
   }
+  const float title_width = safe_.max.x - 160.0f - x;
+  canvas.Text(font, level_->name, {x, y - 8.0f}, wlw::ui::FitTextSize(font, level_->name, 25.0f, title_width),
+              Align::Left, Outlined(look_.ink));
+  // "1-6 · First Light" (the font has no middle dot: it's drawn).
   std::string code = level_->id;
+  std::string place;
   if (source_.kind == LevelSource::Daily) code = source_.archive ? "Daily (archive)" : "Daily";
   if (source_.kind == LevelSource::Lab) code = "Lab";
-  const float title_width = safe_.max.x - 150.0f - x;
-  canvas.Text(font, level_->name, {x, y - 7.0f}, wlw::ui::FitTextSize(font, level_->name, 24.0f, title_width),
-              Align::Left, Outlined(ui_color::kInk));
-  std::string subtitle = code;
-  if (level_->type == LevelType::Repair) subtitle += " - repair";
-  if (level_->type == LevelType::Challenge) subtitle += " - challenge";
-  canvas.Text(font, subtitle, {x, y + 15.0f}, 13.0f, Align::Left, Outlined(ui_color::kMuted));
+  if (source_.kind == LevelSource::Main) {
+    if (const World* world = app_.GetCatalog().GetWorld(level_->world)) place = world->name;
+    if (level_->type == LevelType::Repair) place += ", repair";
+    if (level_->type == LevelType::Challenge) place = "challenge";
+  }
+  const float sub = 13.0f;
+  canvas.Text(font, code, {x, y + 15.0f}, sub, Align::Left, Outlined(look_.accent));
+  if (!place.empty()) {
+    const float after = x + font.Measure(code, sub);
+    canvas.Circle({after + 7.0f, y + 14.0f}, 1.6f, look_.accent);
+    canvas.Text(font, place, {after + 14.0f, y + 15.0f}, sub, Align::Left, Outlined(look_.accent));
+  }
 
   // The three star targets: Solve, Lean (pieces), Swift (time).
   const int bits = source_.kind == LevelSource::Main ? app_.GetProgress().Bits(level_->id) : 0;
@@ -615,20 +711,25 @@ void LevelScreen::DrawTopBar(UIContext& ui) {
   labels[2] = swift.c_str();
   const int masks[3] = {kSolveStar, kLeanStar, kSwiftStar};
   for (int i = 0; i < 3; ++i) {
-    const glm::vec2 c{safe_.max.x - 118.0f + 46.0f * static_cast<float>(i), y - 6.0f};
+    const glm::vec2 c{safe_.max.x - 126.0f + 50.0f * static_cast<float>(i), y - 7.0f};
     const bool have = bits & masks[i];
-    StarShape(canvas, c, 10.0f, have ? ui_color::kStar : WithAlpha(ui_color::kFaint, 0.6f));
-    canvas.Text(font, labels[i], c + glm::vec2(0.0f, 19.0f), 11.0f, Align::Center,
-                Outlined(have ? ui_color::kStar : ui_color::kMuted));
+    if (have) {
+      StarShape(canvas, c, 11.5f, ui_color::kStar);
+    } else {
+      StarShape(canvas, c, 11.5f, Mixed(look_.background, look_.muted, 0.45f));
+      StarShape(canvas, c, 9.0f, Mixed(look_.background, look_.ink, 0.14f));
+    }
+    canvas.Text(font, labels[i], c + glm::vec2(0.0f, 20.0f), 11.0f, Align::Center,
+                Outlined(have ? ui_color::kStar : look_.muted));
   }
 }
 
 void LevelScreen::DrawStatus(UIContext& ui) {
   wlw::ui::Canvas& canvas = ui.canvas;
   const wlw::ui::Font& font = app_.GetFont();
-  const glm::vec2 at{(safe_.min.x + safe_.max.x) * 0.5f, bottom_ - 160.0f};
+  const glm::vec2 at{(safe_.min.x + safe_.max.x) * 0.5f, bottom_ - 164.0f};
   std::string text;
-  Rgba color = ui_color::kInk;
+  Rgba color = look_.ink;
   const Outcome& outcome = board_.GetOutcome();
   switch (phase_) {
     case Phase::Edit:
@@ -636,7 +737,7 @@ void LevelScreen::DrawStatus(UIContext& ui) {
         text = level_->intro;
       } else if (board_.PlacedCount() == 0 && !level_->tray.empty()) {
         text = "Drag pieces into the sockets";
-        color = ui_color::kMuted;
+        color = look_.muted;
       } else {
         text = "Ready? Tap play";
       }
@@ -647,19 +748,20 @@ void LevelScreen::DrawStatus(UIContext& ui) {
         color = ui_color::kBad;
       } else {
         text = "Pouring...  " + TimeText(board_.Ticks());
-        color = ui_color::kMuted;
+        color = look_.muted;
       }
       break;
     case Phase::Done:
-      text = outcome.solved ? "Every cup full and pure" : FailureTitle(outcome);
-      color = outcome.solved ? ui_color::kGood : ui_color::kBad;
+      text = outcome.solved ? "Every lantern lit" : FailureTitle(outcome);
+      if (outcome.solved && look_.art != ArtKind::Lantern) text = "Every cup full and pure";
+      color = outcome.solved ? look_.accent : ui_color::kBad;
       break;
     case Phase::ShowMe:
       text = show_done_ ? FailureTitle(result_) : "Watch closely...";
-      color = show_done_ ? ui_color::kBad : ui_color::kMuted;
+      color = show_done_ ? ui_color::kBad : look_.muted;
       break;
   }
-  const float size = wlw::ui::FitTextSize(font, text, 18.0f, safe_.Size().x - 24.0f);
+  const float size = wlw::ui::FitTextSize(font, text, 16.0f, safe_.Size().x - 24.0f);
   canvas.Text(font, text, at, size, Align::Center, Outlined(color));
 }
 
@@ -671,54 +773,59 @@ void LevelScreen::DrawBottom(UIContext& ui) {
   const bool editing = phase_ == Phase::Edit && dialog_ == Dialog::None;
 
   // The tray: every movable piece has its slot; one on the board leaves an empty ring.
-  canvas.FillRect({{left + 8.0f, bottom_ - 144.0f}, {right - 8.0f, bottom_ - 80.0f}},
-                  WithAlpha(ui_color::kPanel, 0.92f), 18.0f);
+  const Rect tray{{left + 10.0f, bottom_ - 146.0f}, {right - 10.0f, bottom_ - 82.0f}};
+  const Rgba edge = Mixed(Rgba{look_.panel.r, look_.panel.g, look_.panel.b, 1.0f}, look_.panel_edge, 0.8f);
+  canvas.FillRect({tray.min - glm::vec2(1.2f), tray.max + glm::vec2(1.2f)}, WithAlpha(edge, look_.panel.a), 21.0f);
+  canvas.FillRect(tray, look_.panel, 20.0f);
+  canvas.Line({tray.min.x + 22.0f, tray.min.y + 2.0f}, {tray.max.x - 22.0f, tray.min.y + 2.0f}, 1.2f,
+              WithAlpha(Hex(0xFFFFFF), 0.1f));
   bool any = false;
   for (int i = 0; i < board_.PieceCount(); ++i) {
     if (board_.Locked(i)) continue;
     any = true;
     const glm::vec2 slot = TraySlot(TraySlotOf(i));
     if (board_.PieceNode(i) >= 0 || (dragging_ && drag_.piece == i && drag_.moved)) {
-      canvas.Ring(slot, 20.0f, 1.5f, WithAlpha(ui_color::kInk, 0.15f));
+      canvas.Ring(slot, 19.0f, 1.5f, WithAlpha(look_.ink, 0.15f));
       continue;
     }
     PieceLook look;
     look.setting = board_.Setting(i);
-    look.alpha = editing ? 1.0f : 0.35f;
+    look.alpha = editing ? 1.0f : 0.4f;
+    look.accent = look_.accent;
     DrawPiece(canvas, board_.PieceInfo(i).piece, slot, 0.78f, look, palette, nullptr, nullptr, &font);
   }
   if (!any) {
-    canvas.Text(font, "No pieces: just watch", {(left + right) * 0.5f, bottom_ - 112.0f}, 16.0f, Align::Center,
-                Outlined(ui_color::kMuted));
+    canvas.Text(font, "No pieces: just watch", tray.Center() + glm::vec2(0.0f, 1.0f), 16.0f, Align::Center,
+                Outlined(look_.muted));
   }
 
   // Controls: hint, restart, speed, and the big play button.
-  const float y = bottom_ - 42.0f;
+  const float y = bottom_ - 40.0f;
   const bool can_click = dialog_ == Dialog::None;
   const Rect hint{{left + 12.0f, y - 24.0f}, {left + 60.0f, y + 24.0f}};
-  if (wlw::ui::IconButton(ui, Icon::Hint, hint) && can_click) {
+  if (HudButton(ui, hint, Icon::Hint) && can_click) {
     app_.GetFeedback().Play(synth::Sound::Tap);
     dialog_ = Dialog::Hints;
   }
   const int hints = app_.GetProgress().Hints();
   if (source_.kind != LevelSource::Lab) {
-    canvas.Circle(hint.max - glm::vec2(4.0f, 40.0f), 10.0f, ui_color::kStar);
-    canvas.Text(font, std::to_string(hints), hint.max - glm::vec2(4.0f, 40.0f), 13.0f, Align::Center,
-                {.color = Hex(0x08140C)});
+    const glm::vec2 badge{hint.max.x - 3.0f, hint.min.y + 3.0f};
+    canvas.Circle(badge, 10.0f, ui_color::kStar);
+    canvas.Text(font, std::to_string(hints), badge + glm::vec2(0.0f, 0.5f), 13.0f, Align::Center,
+                {.color = Hex(0x2A1A00)});
   }
-  if (wlw::ui::IconButton(ui, Icon::Restart, {{left + 70.0f, y - 24.0f}, {left + 118.0f, y + 24.0f}}) && can_click) {
+  if (HudButton(ui, {{left + 70.0f, y - 24.0f}, {left + 118.0f, y + 24.0f}}, Icon::Restart) && can_click) {
     app_.GetFeedback().Play(synth::Sound::Tap);
     if (phase_ != Phase::Edit) StopRun();
     board_.ClearPieces();
   }
   const std::string speed = std::to_string(speed_) + "x";
-  if (wlw::ui::Button(ui, speed, {{left + 128.0f, y - 24.0f}, {left + 184.0f, y + 24.0f}}, Variant::Secondary) &&
-      can_click) {
+  if (HudButton(ui, {{left + 128.0f, y - 24.0f}, {left + 184.0f, y + 24.0f}}, Icon::None, speed) && can_click) {
     speed_ = speed_ == 4 ? 1 : speed_ * 2;
     app_.GetFeedback().Play(synth::Sound::Tap);
   }
 
-  const Rect play{{right - 150.0f, y - 26.0f}, {right - 12.0f, y + 26.0f}};
+  const Rect play{{left + 194.0f, y - 26.0f}, {right - 12.0f, y + 28.0f}};
   const char* label = "PLAY";
   Icon icon = Icon::Play;
   if (phase_ == Phase::Run) label = "STOP", icon = Icon::Pause;
@@ -727,9 +834,8 @@ void LevelScreen::DrawBottom(UIContext& ui) {
       phase_ == Phase::Edit && !ran_once_ && !app_.Calm() && (level_->tray.empty() || board_.PlacedCount() > 0);
   if (pulse)
     canvas.FillRect({play.min - glm::vec2(4.0f), play.max + glm::vec2(4.0f)},
-                    WithAlpha(ui_color::kGood, 0.25f + 0.2f * std::sin(app_.Time() * 5.0f)), 22.0f);
-  if (wlw::ui::Button(ui, label, play, phase_ == Phase::Run ? Variant::Secondary : Variant::Primary, icon) &&
-      can_click) {
+                    WithAlpha(look_.action_top, 0.22f + 0.18f * std::sin(app_.Time() * 5.0f)), 31.0f);
+  if (ActionButton(ui, play, label, icon, phase_ == Phase::Run) && can_click) {
     app_.GetFeedback().Play(synth::Sound::Tap);
     if (phase_ == Phase::Edit) {
       StartRun();
@@ -740,8 +846,8 @@ void LevelScreen::DrawBottom(UIContext& ui) {
 
   // Show me: replay controls once the moment has passed.
   if (phase_ == Phase::ShowMe && show_done_) {
-    const glm::vec2 c{(left + right) * 0.5f, bottom_ - 112.0f};
-    canvas.FillRect({{left + 8.0f, bottom_ - 144.0f}, {right - 8.0f, bottom_ - 80.0f}}, ui_color::kPanel, 18.0f);
+    const glm::vec2 c = tray.Center();
+    canvas.FillRect(tray, Rgba{look_.panel.r, look_.panel.g, look_.panel.b, 1.0f}, 20.0f);
     if (wlw::ui::Button(ui, "Show again", {{c.x - 150.0f, c.y - 22.0f}, {c.x - 6.0f, c.y + 22.0f}},
                         Variant::Secondary)) {
       StartShowMe();

@@ -5,15 +5,20 @@
 #include <memory>
 #include <string>
 
+#include "board_art.h"
 #include "catalog.h"
 #include "feedback.h"
+#include "lantern_art.h"
 #include "liquid.h"
 #include "palette.h"
 #include "progress.h"
+#include "workshop_art.h"
+#include "world_look.h"
 #include "wlw/app/application.h"
 #include "wlw/app/system.h"
 #include "wlw/kit/ad_pacing.h"
 #include "wlw/kit/ads.h"
+#include "wlw/rendering/shader_material.h"
 #include "wlw/ui/font.h"
 #include "wlw/ui/ui_context.h"
 
@@ -47,6 +52,10 @@ class ThreadlockApp : public wlw::app::System {
   Progress& GetProgress() { return *progress_; }
   Feedback& GetFeedback() { return feedback_; }
   Liquid& GetLiquid() { return liquid_; }
+  // The big EDIT / PLAY button's gradient (assets/shaders/ui_gradient.shader).
+  const std::shared_ptr<wlw::rendering::ShaderMaterial>& ActionMaterial() const { return action_material_; }
+  // How a world's boards are drawn (world 0 = the daily and the Lab).
+  BoardArt& ArtFor(int world);
   const wlw::ui::Font& GetFont() const { return *font_; }
   const Palette& GetPalette() const { return PaletteByKey(progress_->settings.palette); }
   wlw::app::Application& Services() { return App(); }
@@ -89,6 +98,9 @@ class ThreadlockApp : public wlw::app::System {
   std::unique_ptr<Progress> progress_;
   Feedback feedback_;
   Liquid liquid_;
+  WorkshopArt workshop_art_;
+  LanternArt lantern_art_;
+  std::shared_ptr<wlw::rendering::ShaderMaterial> action_material_;
   std::shared_ptr<wlw::ui::Font> font_;
   std::unique_ptr<wlw::kit::Ads> ads_;
   wlw::kit::AdPacing pacing_;
