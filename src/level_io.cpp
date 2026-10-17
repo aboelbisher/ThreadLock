@@ -96,6 +96,14 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
   reader.where = "level " + level.id;
   level.name = reader.String(json, "name", level.id);
   level.intro = reader.String(json, "intro");
+  if (json.contains("height")) {
+    if (json["height"].is_number())
+      level.look.height = json["height"].get<float>();
+    else
+      reader.Error("'height' should be a number");
+    if (level.look.height < 600.0f) reader.Error("'height' should be at least 600");
+  }
+  if (json.contains("window")) reader.Point(json["window"], level.look.window);
   const std::string type = reader.String(json, "type", "build");
   if (!ParseLevelType(type, level.type)) reader.Error("unknown type '" + type + "'");
   if (level.id.empty()) reader.Error("no id");
@@ -429,6 +437,9 @@ std::string WriteLevel(const Level& level) {
   std::string out = "{\n  \"id\": " + text(level.id) + ", \"name\": " + text(level.name);
   if (level.type != LevelType::Build) out += std::string(", \"type\": \"") + LevelTypeKey(level.type) + "\"";
   if (!level.intro.empty()) out += ", \"intro\": " + text(level.intro);
+  const Level::LevelLook look_default;
+  if (level.look.height != look_default.height) out += ", \"height\": " + number(level.look.height);
+  if (!(level.look.window == look_default.window)) out += ", \"window\": " + point(level.look.window);
   out += ",\n  \"nodes\": [\n";
   for (size_t i = 0; i < level.nodes.size(); ++i) {
     const Node& n = level.nodes[i];

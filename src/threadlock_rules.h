@@ -118,6 +118,7 @@ inline constexpr int kJunctionDwell = 3;     // ticks to pass a crossing, a merg
 struct Vec2 {
   float x = 0.0f;
   float y = 0.0f;
+  bool operator==(const Vec2&) const = default;
 };
 
 // One bottle of a turning rack: a cup of its own.
@@ -243,6 +244,12 @@ struct Level {
   std::vector<Pipe> pipes;
   std::vector<TrayPiece> tray;
   Pars pars;
+  // Look only (the rules ignore it): a grand machine is taller than one screen and scrolls.
+  struct LevelLook {
+    float height = 600.0f;        // board units; one screen shows 600
+    Vec2 window{180.0f, 292.0f};  // World 1's rose window centre
+    bool operator==(const LevelLook&) const = default;
+  } look;
 
   // Computes the derived fields (ins/outs, crossing lanes, dwells, pipe cells) and checks the
   // level. Returns the problems found (empty = good).

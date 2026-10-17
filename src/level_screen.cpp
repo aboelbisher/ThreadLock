@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -27,9 +28,20 @@ using wlw::ui::Variant;
 // Development shortcuts for screenshots (see threadlock_app.cpp).
 wlw::CVar<bool> cv_solve{"tl.solve", false, "Place the level's Lean solution when it opens (dev)"};
 wlw::CVar<float> cv_autoplay{"tl.autoplay", 0.0f, "Seconds after opening a level to tap play; 0 = never (dev)"};
+wlw::CVar<float> cv_scroll{"tl.scroll", -1.0f, "A tall level opens scrolled this far (board units); -1 = intro (dev)"};
+wlw::CVar<std::string> cv_place{"tl.place", "",
+                                "Pieces placed when a level opens: \"separator@gp/0,turnstile@ga/1,tank8@pk\" (dev)"};
 
 constexpr float kLift = 56.0f;  // a dragged piece floats this far above the finger
 constexpr float kLongPress = 0.45f;
+// A tall board (BoardCamera).
+constexpr float kPanSlop = 10.0f;      // canvas units before a press on the board becomes a pan
+constexpr float kEdgeZone = 56.0f;     // a dragged piece this close to the view's edge scrolls it
+constexpr float kEdgeArm = 64.0f;      // ...once it has been this far inside (a drag from the tray mustn't)
+constexpr float kEdgeSpeed = 700.0f;   // board units per second at the very edge
+constexpr float kIntroSeconds = 2.2f;  // the pan down the machine when it opens
+constexpr float kPayoffDelay = 3.0f;   // a solved grand machine: time to watch its window light
+constexpr float kRailFade = 1.2f;      // seconds
 
 struct PieceText {
   const char* text;
@@ -188,6 +200,7 @@ void LevelScreen::OnEnter() {
 }
 
 void LevelScreen::OnExit() {
+  view_.Art().Release();
   app_.Services().Window().GetScreen().SetClearColor(ui_color::kBackground);
   app_.GetProgress().Save();
 }
@@ -219,6 +232,8 @@ void LevelScreen::StartRun() {
   ++runs_;
   ran_once_ = true;
   hint_node_ = -1;
+  fail_focused_ = false;
+  camera_.StartRide();
   app_.GetProgress().Count("runs");
 }
 
@@ -227,6 +242,7 @@ void LevelScreen::StopRun() {
   view_.ClearMarkers();
   phase_ = Phase::Edit;
   dialog_ = Dialog::None;
+  camera_.Release();  // the view stays where it is
 }
 
 void LevelScreen::Step(bool quiet) {
@@ -265,6 +281,11 @@ void LevelScreen::RunEnded() {
   earned_ = {};
   if (result_.solved) {
     done_delay_ = look_.art == ArtKind::Lantern ? 2.0f : 1.3f;  // time to watch the window light up
+    if (camera_.Scrolls()) {
+      // A grand machine's payoff: the view goes to the window while its heart lights.
+      camera_.Focus(level_->look.window.y);
+      done_delay_ = kPayoffDelay;
+    }
     app_.GetFeedback().Play(synth::Sound::Fanfare, 0.7f);
     const Placement placement = board_.GetPlacement();
     const bool shown = progress.SolutionShown(level_->id) &&
@@ -330,12 +351,14 @@ void LevelScreen::StartShowMe() {
   phase_ = Phase::ShowMe;
   clock_ = 0.0f;
   show_done_ = false;
+  if (result_.fail_node >= 0) camera_.Focus(NodeY(result_.fail_node), true);
 }
 
 void LevelScreen::Update(float dt) {
   if (!dev_started_) {
     dev_started_ = true;
     if (cv_solve.Get() && level_->pars.Known()) board_.SetPlacement(level_->pars.lean);
+    if (!cv_place.Get().empty()) ApplyDevPlacement();
   }
   if (cv_autoplay.Get() > 0.0f && !ran_once_ && phase_ == Phase::Edit) {
     dev_clock_ += dt;
@@ -343,13 +366,24 @@ void LevelScreen::Update(float dt) {
   }
   view_.Update(dt, board_);
   hint_time_ = std::max(0.0f, hint_time_ - dt);
-  if (hint_time_ <= 0.0f) hint_node_ = -1;
+  if (hint_time_ <= 0.0f) {
+    hint_node_ = -1;
+    if (phase_ == Phase::Edit && camera_.Focused()) camera_.Release();  // the hint was shown: the view is free
+  }
+  camera_.Update(dt);
+  since_motion_ = camera_.Moved() ? 0.0f : since_motion_ + dt;
   switch (phase_) {
     case Phase::Run:
       clock_ += dt * static_cast<float>(speed_);
       while (clock_ >= kTickSeconds && board_.Running()) {
         clock_ -= kTickSeconds;
         Step(false);
+      }
+      // The view rides down with the liquid, and goes to the first thing that goes wrong.
+      camera_.Follow(LiquidFront(*level_, board_), static_cast<float>(speed_));
+      if (!fail_focused_ && board_.GetOutcome().failure != Failure::None && board_.GetOutcome().fail_node >= 0) {
+        fail_focused_ = true;
+        camera_.Focus(NodeY(board_.GetOutcome().fail_node));
       }
       if (!board_.Running()) {
         clock_ = 0.0f;
@@ -432,7 +466,40 @@ void LevelScreen::ApplyHint() {
     hint_node_ = move.flap_node;
   }
   hint_time_ = 2.5f;
+  if (hint_node_ >= 0) camera_.Focus(NodeY(hint_node_));
   app_.GetFeedback().Play(synth::Sound::Place, 0.8f);
+}
+
+void LevelScreen::ApplyDevPlacement() {
+  // "separator@gp/0,turnstile@ga/1,tank8@pk": the first piece of that type still in the tray.
+  const std::string& text = cv_place.Get();
+  size_t i = 0;
+  while (i < text.size()) {
+    size_t end = text.find(',', i);
+    if (end == std::string::npos) end = text.size();
+    const std::string item = text.substr(i, end - i);
+    i = end + 1;
+    const size_t at = item.find('@');
+    if (at == std::string::npos) continue;
+    const size_t slash = item.find('/', at);
+    PieceType type;
+    if (!ParsePieceType(item.substr(0, at), type)) {
+      WLW_LOG_WARN("tl.place: unknown piece in '%s'", item.c_str());
+      continue;
+    }
+    const int node =
+        level_->NodeIndex(item.substr(at + 1, slash == std::string::npos ? std::string::npos : slash - at - 1));
+    if (node < 0) {
+      WLW_LOG_WARN("tl.place: unknown node in '%s'", item.c_str());
+      continue;
+    }
+    for (int piece = 0; piece < board_.PieceCount(); ++piece) {
+      if (board_.Locked(piece) || board_.PieceNode(piece) >= 0 || board_.PieceInfo(piece).piece.type != type) continue;
+      board_.Place(piece, node);
+      if (slash != std::string::npos) board_.SetSetting(piece, std::atoi(item.c_str() + slash + 1));
+      break;
+    }
+  }
 }
 
 void LevelScreen::ShowSolution() {
@@ -449,9 +516,32 @@ void LevelScreen::Layout(const UIContext& ui) {
   bottom_ = safe_.max.y;
   board_rect_ = {{safe_.min.x + 4.0f, top_ + 64.0f}, {safe_.max.x - 4.0f, bottom_ - 176.0f}};
   const glm::vec2 size = board_rect_.Size();
+  // One screen of board (600 units) at the same scale on every level: a taller one scrolls.
   const float scale = std::max(0.3f, std::min(size.x / kBoardSize.x, size.y / kBoardSize.y));
-  const glm::vec2 origin = board_rect_.Center() - kBoardSize * (scale * 0.5f);
-  view_.SetLayout({origin, scale});
+  const float height = std::max(kBoardSize.y, level_->look.height);
+  camera_.SetView(size.y / scale, height);
+  if (!camera_.Scrolls()) {
+    const glm::vec2 origin = board_rect_.Center() - glm::vec2(kBoardSize.x, height) * (scale * 0.5f);
+    view_.SetLayout({origin, scale});
+    return;
+  }
+  if (intro_pending_) {
+    intro_pending_ = false;
+    if (cv_scroll.Get() >= 0.0f)
+      camera_.Snap(cv_scroll.Get());
+    else if (!app_.Calm())
+      camera_.Intro(camera_.MaxY(), 0.0f, kIntroSeconds);
+  }
+  const glm::vec2 origin{board_rect_.Center().x - kBoardSize.x * scale * 0.5f, board_rect_.min.y};
+  // Whole pixels, so the still picture's tiles stay crisp.
+  const float pixels = scale * ui.canvas.PixelsPerUnit();  // per board unit
+  const float scroll = pixels > 0.0f ? std::round(camera_.Y() * pixels) / pixels : camera_.Y();
+  view_.SetLayout({origin, scale, scroll, camera_.MaxY()});
+}
+
+bool LevelScreen::InBoard(glm::vec2 point) const {
+  if (!camera_.Scrolls()) return true;
+  return point.y > board_rect_.min.y - 8.0f && point.y < board_rect_.max.y + 8.0f;
 }
 
 glm::vec2 LevelScreen::TraySlot(int slot) const {
@@ -503,12 +593,18 @@ void LevelScreen::RenderUI(UIContext& ui) {
   liquid.End();
   liquid.Draw(liquid.Picture());
 
-  if (dialog_ == Dialog::None) HandleBoardInput(ui);
+  if (dialog_ == Dialog::None) {
+    HandleBoardInput(ui);
+  } else if (panning_) {  // a card opened under the finger
+    camera_.EndDrag(0.0f);
+    panning_ = false;
+  }
 
   BoardView::Options options;
   if (dragging_ && drag_.moved) {
     options.drag_type = static_cast<int>(board_.PieceInfo(drag_.piece).piece.type);
-    options.drag_target = view_.SocketNear(drag_.at - glm::vec2(0.0f, kLift), 48.0f);
+    const glm::vec2 target = drag_.at - glm::vec2(0.0f, kLift);
+    options.drag_target = InBoard(target) ? view_.SocketNear(target, 48.0f) : -1;
   }
   options.hint_node = hint_node_;
   options.ghosts = ghosts_ && phase_ == Phase::Edit;
@@ -516,6 +612,7 @@ void LevelScreen::RenderUI(UIContext& ui) {
   view_.DrawParts(canvas, options);
   view_.DrawMarkers(canvas);
   if (phase_ == Phase::ShowMe) view_.DrawSpotlight(canvas, result_.fail_node, 1.0f);
+  if (camera_.Scrolls()) DrawScrollHints(ui);
 
   DrawTopBar(ui);
   DrawStatus(ui);
@@ -541,32 +638,66 @@ void LevelScreen::HandleBoardInput(UIContext& ui) {
   const glm::vec2 p = ui.pointer.position;
   if (!ui.interactive) {  // a fade, or something over this screen
     dragging_ = false;
+    if (panning_) camera_.EndDrag(0.0f);
+    panning_ = false;
     return;
   }
-  if (phase_ != Phase::Edit) {
-    dragging_ = false;
-    return;
-  }
-  if (ui.pointer.pressed && !dragging_) {
+  const bool editing = phase_ == Phase::Edit;
+  if (!editing) dragging_ = false;              // pieces move only while building; the view scrolls in every phase
+  if (ui.pointer.pressed) camera_.SkipIntro();  // any touch
+  if (ui.pointer.pressed && !dragging_ && !panning_) {
     int piece = -1, from = -1;
-    for (int i = 0; i < board_.PieceCount() && piece < 0; ++i) {
+    for (int i = 0; editing && i < board_.PieceCount() && piece < 0; ++i) {
       if (board_.Locked(i) || board_.PieceNode(i) >= 0) continue;
       if (glm::distance(p, TraySlot(TraySlotOf(i))) < 30.0f) piece = i;
     }
-    if (piece < 0) {
+    if (editing && piece < 0 && InBoard(p)) {
       piece = view_.PieceNear(board_, p, 30.0f * std::max(1.0f, view_.GetLayout().scale));
       if (piece >= 0) from = board_.PieceNode(piece);
     }
     if (piece >= 0) {
       drag_ = {piece, from, p, p, false, 0.0f};
       dragging_ = true;
+      autoscroll_armed_ = false;
     } else {
-      const int flap = view_.FlapNear(board_, p, 24.0f);
+      const int flap = editing && InBoard(p) ? view_.FlapNear(board_, p, 24.0f) : -1;
       if (flap >= 0) {
         board_.SetFlap(flap, 1 - board_.Flap(flap));
         app_.GetFeedback().Play(synth::Sound::Tap);
+      } else if (camera_.Scrolls() && p.y > board_rect_.min.y && p.y < board_rect_.max.y) {
+        // The empty board: a drag scrolls it.
+        panning_ = true;
+        pan_moved_ = false;
+        pan_start_ = pan_last_ = p;
+        pan_clock_ = 0.0f;
+        pan_samples_.clear();
       }
     }
+  }
+  if (panning_) {
+    pan_clock_ += ui.dt;
+    if (ui.pointer.down) {
+      if (!pan_moved_ && std::fabs(p.y - pan_start_.y) > kPanSlop) {
+        pan_moved_ = true;
+        scrolled_once_ = true;
+        camera_.BeginDrag();
+      }
+      if (pan_moved_) camera_.Drag(-(p.y - pan_last_.y) / view_.GetLayout().scale);
+      pan_last_ = p;
+      pan_samples_.push_back({pan_clock_, camera_.Y()});
+      while (pan_samples_.size() > 2 && pan_samples_[1].x < pan_clock_ - 0.1f) pan_samples_.erase(pan_samples_.begin());
+    }
+    if (ui.pointer.released || !ui.pointer.down) {
+      // The fling: how fast the view moved over the last tenth of a second.
+      float velocity = 0.0f;
+      if (pan_samples_.size() >= 2) {
+        const glm::vec2 a = pan_samples_.front(), b = pan_samples_.back();
+        if (b.x - a.x > 1e-3f) velocity = (b.y - a.y) / (b.x - a.x);
+      }
+      if (pan_moved_) camera_.EndDrag(velocity);
+      panning_ = false;
+    }
+    return;
   }
   if (!dragging_) return;
   drag_.at = p;
@@ -585,6 +716,21 @@ void LevelScreen::HandleBoardInput(UIContext& ui) {
     dialog_ = Dialog::Info;
     dragging_ = false;
     return;
+  }
+  const glm::vec2 target = drag_.at - glm::vec2(0.0f, kLift);
+  if (drag_.moved && camera_.Scrolls()) {
+    // Near the view's top or bottom edge, a dragged piece scrolls the board (once it has been well inside:
+    // a piece lifted from the tray starts below the view).
+    if (target.y > board_rect_.min.y + kEdgeArm && target.y < board_rect_.max.y - kEdgeArm) autoscroll_armed_ = true;
+    if (autoscroll_armed_) {
+      const float up = (board_rect_.min.y + kEdgeZone - target.y) / kEdgeZone;
+      const float down = (target.y - (board_rect_.max.y - kEdgeZone)) / kEdgeZone;
+      const float depth = std::clamp(std::max(up, down), 0.0f, 1.0f);
+      if (depth > 0.0f) {
+        camera_.AutoScroll((down > up ? 1.0f : -1.0f) * kEdgeSpeed * depth * depth);
+        scrolled_once_ = true;
+      }
+    }
   }
   if (!ui.pointer.released && ui.pointer.down) return;
   dragging_ = false;
@@ -605,13 +751,53 @@ void LevelScreen::HandleBoardInput(UIContext& ui) {
     }
     return;
   }
-  const int target = view_.SocketNear(drag_.at - glm::vec2(0.0f, kLift), 48.0f);
-  if (target >= 0 && board_.Place(drag_.piece, target)) {
+  const int socket = InBoard(target) ? view_.SocketNear(target, 48.0f) : -1;
+  if (socket >= 0 && board_.Place(drag_.piece, socket)) {
     app_.GetFeedback().Play(synth::Sound::Place);
     app_.GetFeedback().Vibrate(10, 0.35f);
   } else {
     board_.Unplace(drag_.piece);
     app_.GetFeedback().Play(synth::Sound::Lift, 0.6f, 0.7f);
+  }
+}
+
+void LevelScreen::DrawScrollHints(UIContext& ui) {
+  wlw::ui::Canvas& canvas = ui.canvas;
+  const glm::vec2 size = canvas.Size();
+  // The board fades into the background under the top bar and above the tray (the machine goes on
+  // past them).
+  const Rgba bg = WithAlpha(look_.background, 1.0f);
+  canvas.FillRect({{0.0f, 0.0f}, {size.x, top_ + 50.0f}}, bg);
+  canvas.FillRect({{0.0f, bottom_ - 176.0f}, {size.x, size.y}}, bg);
+  constexpr int kStrips = 5;
+  const float step = 24.0f / kStrips;
+  for (int k = 0; k < kStrips; ++k) {
+    const Rgba strip = WithAlpha(look_.background, (1.0f - (static_cast<float>(k) + 0.5f) / kStrips));
+    const float y = top_ + 50.0f + step * static_cast<float>(k);
+    canvas.FillRect({{0.0f, y}, {size.x, y + step}}, strip);
+    const float y2 = bottom_ - 176.0f - step * static_cast<float>(k + 1);
+    canvas.FillRect({{0.0f, y2}, {size.x, y2 + step}}, strip);
+  }
+  // The rail: where the view is on the machine (faint while building; it fades after the view stops).
+  const float rail_alpha =
+      phase_ == Phase::Edit ? 0.35f : 0.35f * std::clamp(1.0f - (since_motion_ - 0.3f) / kRailFade, 0.0f, 1.0f);
+  if (rail_alpha > 0.01f) {
+    const float x = board_rect_.max.x - 3.0f;
+    const float top = board_rect_.min.y + 6.0f, length = board_rect_.Size().y - 12.0f;
+    const float thumb = length * camera_.Visible() / camera_.Height();
+    const float at = top + (length - thumb) * (camera_.MaxY() > 0.0f ? camera_.Y() / camera_.MaxY() : 0.0f);
+    canvas.FillRect({{x - 1.5f, top}, {x + 1.5f, top + length}}, WithAlpha(look_.ink, rail_alpha * 0.35f), 1.5f);
+    canvas.FillRect({{x - 1.5f, at}, {x + 1.5f, at + thumb}}, WithAlpha(look_.ink, rail_alpha), 1.5f);
+  }
+  // "More below", until the player first scrolls.
+  if (phase_ == Phase::Edit && !scrolled_once_ && camera_.Y() < camera_.MaxY() - 1.0f && !camera_.InIntro()) {
+    const float wave = app_.Calm() ? 0.0f : std::sin(app_.Time() * 3.0f);
+    const Rgba color = WithAlpha(look_.accent, 0.7f + 0.2f * wave);
+    const glm::vec2 c{board_rect_.Center().x, board_rect_.max.y - 16.0f + 3.0f * wave};
+    for (float dy : {-5.0f, 3.0f}) {
+      canvas.Line(c + glm::vec2(-11.0f, dy - 5.0f), c + glm::vec2(0.0f, dy + 4.0f), 3.0f, color);
+      canvas.Line(c + glm::vec2(11.0f, dy - 5.0f), c + glm::vec2(0.0f, dy + 4.0f), 3.0f, color);
+    }
   }
 }
 

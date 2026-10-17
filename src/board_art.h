@@ -17,15 +17,21 @@ namespace threadlock {
 
 class Liquid;
 
-// Board units (a 360 x 600 board, y down) -> canvas units: set by the screen.
+// Board units (a 360 x 600 board, y down) -> canvas units: set by the screen. A tall board
+// (Level::look.height > 600) scrolls: `scroll` = the board y at the top of the view, 0..scroll_max (board units).
 struct Layout {
   glm::vec2 origin{0.0f};
   float scale = 1.0f;
-  glm::vec2 ToCanvas(Vec2 p) const { return origin + glm::vec2(p.x, p.y) * scale; }
-  Vec2 ToBoard(glm::vec2 p) const { return {(p.x - origin.x) / scale, (p.y - origin.y) / scale}; }
+  float scroll = 0.0f;
+  float scroll_max = 0.0f;
+  glm::vec2 ToCanvas(Vec2 p) const { return origin + glm::vec2(p.x, p.y - scroll) * scale; }
+  Vec2 ToBoard(glm::vec2 p) const { return {(p.x - origin.x) / scale, (p.y - origin.y) / scale + scroll}; }
+  Layout Unscrolled() const { return {origin, scale, 0.0f, scroll_max}; }
+  glm::vec2 ScrollOffset() const { return {0.0f, -scroll * scale}; }  // canvas units, unscrolled -> this
   bool operator==(const Layout&) const = default;
 };
 
+// One screen's worth of board: every level is this wide, and at least this tall.
 inline constexpr glm::vec2 kBoardSize{360.0f, 600.0f};
 
 // What the view animates per node from the board's events.
@@ -60,6 +66,8 @@ class BoardArt {
 
   // A board comes on screen: whatever the art keeps from earlier frames may be stale.
   virtual void Invalidate() {}
+  // The board left the screen: free what only a big board needed.
+  virtual void Release() {}
 
   // Behind the liquid, on the bloomed Picture layer: the place, the pipes, the backs of the parts.
   virtual void DrawBack(wlw::ui::Canvas& picture, const ArtFrame& frame) = 0;

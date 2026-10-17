@@ -85,6 +85,7 @@ TEST_SUITE("content") {
         CHECK(copy.name == level.name);
         CHECK(copy.intro == level.intro);
         CHECK(copy.type == level.type);
+        CHECK(copy.look == level.look);
         REQUIRE(copy.nodes.size() == level.nodes.size());
         for (size_t n = 0; n < level.nodes.size(); ++n) {
           const Node& a = level.nodes[n];
@@ -105,6 +106,33 @@ TEST_SUITE("content") {
         for (size_t t = 0; t < level.tray.size(); ++t) {
           CHECK((copy.tray[t].piece == level.tray[t].piece && copy.tray[t].at == level.tray[t].at &&
                  copy.tray[t].setting == level.tray[t].setting && copy.tray[t].locked == level.tray[t].locked));
+        }
+      }
+    }
+  }
+
+  TEST_CASE("a tall level's look survives the writer") {
+    Level level = LoadAll().front().levels.front();
+    level.look.height = 1200.0f;
+    level.look.window = {180.0f, 870.0f};
+    Level copy;
+    std::vector<std::string> errors;
+    REQUIRE(ParseLevel(WriteLevel(level), copy, errors));
+    CHECK(copy.look == level.look);
+    // Too short a board is an error.
+    std::string text = WriteLevel(level);
+    text.replace(text.find("1200"), 4, "500");
+    CHECK(!ParseLevel(text, copy, errors));
+  }
+
+  TEST_CASE("every node is on its board") {
+    for (const World& world : LoadAll()) {
+      for (const Level& level : world.levels) {
+        INFO("level " << level.id);
+        CHECK(level.look.height >= 600.0f);
+        for (const Node& node : level.nodes) {
+          INFO("node " << node.id);
+          CHECK((node.at.x >= 0.0f && node.at.x <= 360.0f && node.at.y >= 0.0f && node.at.y <= level.look.height));
         }
       }
     }

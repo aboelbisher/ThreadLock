@@ -25,6 +25,8 @@
 //    "slots": [{"want": "B", "count": 4, "name": "Mrs Hale"}, {"want": "B", "count": 2}]}
 //   {"id": "m", "kind": "mill", "at": [90, 300], "gears": ["g"]}
 //   {"id": "g", "kind": "gate", "at": [270, 200], "open": false}
+// Look only (the rules ignore them): "height": 1200 = a grand machine taller than one screen (board units,
+// at least 600 = one screen; it scrolls), "window": [180, 870] = where World 1's rose window stands.
 // Sockets ("socket": true; pass nodes are sockets unless false) go on forks, passes, crossings and
 // merges; any piece goes in any socket. A pipe leaving a fork is its side 0 or 1 in the order the
 // pipes are listed.

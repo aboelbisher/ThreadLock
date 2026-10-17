@@ -129,6 +129,10 @@ int Check(const std::string& assets, bool bake) {
               " PARS-STALE (file " + std::to_string(level.pars.pieces) + "/" + std::to_string(level.pars.ticks) + ")";
         }
       }
+      for (const Node& node : level.nodes) {
+        if (node.at.x < 0 || node.at.x > 360 || node.at.y < 0 || node.at.y > level.look.height)
+          notes += " OFF-BOARD(" + node.id + ")";
+      }
       if (report.two_answers) notes += " two-answers";
       if (!notes.empty() && notes.find_first_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ") != std::string::npos) ++problems;
       std::printf("  %-6s %-22s %3d pieces / %-4s (%3d ticks) | %4d solutions of %6d | empty: %-9s | %6.1f ms%s\n",
@@ -336,7 +340,8 @@ const float* LiquidRgb(Color color) {
 int Render(const Level& level, const std::string& out, const Placement& placement, int tick,
            const std::string& assets) {
   const float scale = 2.0f;
-  Image image(static_cast<int>(360 * scale), static_cast<int>(600 * scale), scale);
+  const float height = level.look.height;
+  Image image(static_cast<int>(360 * scale), static_cast<int>(height * scale), scale);
   image.LoadFont(assets + "/fonts/LilitaOne-Regular.ttf");
   const float bg[3] = {0.027f, 0.043f, 0.063f}, edge[3] = {0.075f, 0.13f, 0.18f}, inside[3] = {0.04f, 0.07f, 0.1f};
   const float ink[3] = {0.83f, 0.89f, 0.95f}, dim[3] = {0.4f, 0.46f, 0.52f}, socket[3] = {0.55f, 0.62f, 0.7f};
@@ -344,10 +349,10 @@ int Render(const Level& level, const std::string& out, const Placement& placemen
     for (int k = 0; k < 3; ++k) image.rgb[i + static_cast<size_t>(k)] = static_cast<uint8_t>(bg[k] * 255.0f);
   }
   // A faint 20-unit grid to read coordinates off.
-  for (int g = 20; g < 600; g += 20)
+  for (int g = 20; g < static_cast<int>(height); g += 20)
     image.Segment({0, static_cast<float>(g)}, {360, static_cast<float>(g)}, 0.4f, edge);
   for (int g = 20; g < 360; g += 20)
-    image.Segment({static_cast<float>(g), 0}, {static_cast<float>(g), 600}, 0.4f, edge);
+    image.Segment({static_cast<float>(g), 0}, {static_cast<float>(g), height}, 0.4f, edge);
   for (const Pipe& pipe : level.pipes) image.Polyline(pipe.points, 24.0f, edge);
   for (const Pipe& pipe : level.pipes) image.Polyline(pipe.points, 17.0f, inside);
   Board board(level);
@@ -454,7 +459,7 @@ int Render(const Level& level, const std::string& out, const Placement& placemen
       image.Disc(p, 5.0f, LiquidRgb(drop.bead.a));
       if (drop.bead.IsBlend()) image.Disc(p, 2.5f, LiquidRgb(drop.bead.b));
     }
-    image.Text({8, 590}, "tick " + std::to_string(board.Ticks()), ink);
+    image.Text({8, height - 10}, "tick " + std::to_string(board.Ticks()), ink);
   }
   image.Text({8, 16}, level.id + "  " + level.name, ink);
   if (!stbi_write_png(out.c_str(), image.w, image.h, 3, image.rgb.data(), image.w * 3)) {

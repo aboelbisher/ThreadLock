@@ -1,9 +1,13 @@
 // World 1's backdrop (DESIGN.md §5): the stone wall of the glassworks at dawn, a haze of light, and the
 // great rose window, whose panes light up as the lanterns fill. Drawn once into a still picture
-// (lantern_art.cpp), so it can afford to be a little rich.
+// (lantern_art.cpp), so it can afford to be a little rich. A tall board's still picture is several tiles
+// (screens) of one wall: positions are in the whole picture's units (p below), the tile starts at uOffset.
 shader_type canvas;
 
-uniform vec2 uCanvas;       // the canvas's size in units
+uniform vec2 uCanvas;       // this tile's canvas size in units
+uniform vec2 uOffset;       // where this tile starts in the whole picture (units)
+uniform vec2 uTotal;        // the whole picture's size (units): one screen, or a tall board's column
+uniform vec2 uScreen;       // one screen (units)
 uniform vec3 uWindow;       // the window's centre (units) and outer radius (units)
 uniform sampler2D uPanes;   // 24 x 1: rgb = a pane's light, a = how lit (0-11 outer, 12-23 inner)
 uniform vec4 uBeam;         // the light falling from the window: rgb, strength
@@ -87,11 +91,11 @@ vec3 Window(vec3 col, vec2 p, float aa_units) {
 }
 
 void fragment() {
-  vec2 p = vUV * uCanvas;
+  vec2 p = vUV * uCanvas + uOffset;
   float aa = uCanvas.x / max(uSize.x, 1.0);  // one pixel, in units
 
   // The wall: dusk-blue at the top, darker below.
-  float t = vUV.y;
+  float t = p.y / uTotal.y;
   vec3 col = t < 0.5 ? mix(kWallTop, kWallMid, t * 2.0) : mix(kWallMid, kWallLow, t * 2.0 - 1.0);
 
   // Its stones: courses 14 high, blocks 56 long, every other course shifted by half a block.
@@ -101,7 +105,7 @@ void fragment() {
   col += vec3(0.663, 0.745, 0.855) * 0.05 * Cover(to_joint - 0.6, aa);
 
   // Dawn haze: a broad band of pale light falling from the top right.
-  vec2 a = vec2(uCanvas.x * 0.82, 0.0), b = vec2(uCanvas.x * 0.05, uCanvas.y);
+  vec2 a = vec2(uTotal.x * 0.82, 0.0), b = vec2(uTotal.x * 0.05, uTotal.y);
   vec2 ab = normalize(b - a);
   float across = abs(dot(p - a, vec2(-ab.y, ab.x)));
   float width = mix(50.0, 120.0, t);
@@ -116,11 +120,12 @@ void fragment() {
   float side = abs(dot(p - from, vec2(-dir.y, dir.x)));
   float spread = uWindow.z * 0.35 + along * 0.22;
   float beam = smoothstep(spread, spread * 0.25, side) * smoothstep(0.0, uWindow.z * 0.6, along) *
-               (1.0 - smoothstep(uCanvas.y * 0.3, uCanvas.y * 0.9, along));
+               (1.0 - smoothstep(uScreen.y * 0.3, uScreen.y * 0.9, along));
   col += uBeam.rgb * uBeam.a * 0.12 * beam;
 
-  // Vignette.
-  float to_centre = length(p - uCanvas * 0.5) / (uCanvas.x * 1.33);
+  // Vignette: round one screen, which slides along a tall column (the ends stay dark).
+  vec2 middle = vec2(uTotal.x * 0.5, clamp(p.y, uScreen.y * 0.5, uTotal.y - uScreen.y * 0.5));
+  float to_centre = length(p - middle) / (uScreen.x * 1.33);
   col *= 1.0 - 0.72 * clamp((to_centre - 0.5) / 0.5, 0.0, 1.0);
 
   FragColor = vec4(col, 1.0);

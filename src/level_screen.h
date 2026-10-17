@@ -1,9 +1,11 @@
 #pragma once
 
 #include <string_view>
+#include <vector>
 
 #include <glm/glm.hpp>
 
+#include "board_camera.h"
 #include "board_view.h"
 #include "threadlock_app.h"
 #include "world_look.h"
@@ -13,7 +15,9 @@
 // The level screen (DESIGN.md §8): the board in the middle, the level's name and star targets on
 // top, the tray and the controls at the bottom. Place, then watch: drag pieces into sockets, tap
 // one to change it, tap play, and the run plays out on its own. A failed run says what went wrong
-// and where, and "Show me" replays the moment slowly under a spotlight.
+// and where, and "Show me" replays the moment slowly under a spotlight. A grand machine (a level taller
+// than one screen) scrolls: drag the empty board, or hold a piece near the edge; while it runs, the
+// view rides down with the liquid (BoardCamera).
 namespace threadlock {
 
 class LevelScreen : public wlw::app::Screen {
@@ -53,6 +57,10 @@ class LevelScreen : public wlw::app::Screen {
   void ShowSolution();
 
   void HandleBoardInput(wlw::ui::UIContext& ui);
+  bool InBoard(glm::vec2 point) const;  // a scrolling board answers touches only inside its view
+  float NodeY(int node) const { return level_->nodes[static_cast<size_t>(node)].at.y; }
+  void DrawScrollHints(wlw::ui::UIContext& ui);  // a tall board: fades at its edges, rail, "more below"
+  void ApplyDevPlacement();                      // tl.place
   void DrawTopBar(wlw::ui::UIContext& ui);
   void DrawBottom(wlw::ui::UIContext& ui);
   void DrawStatus(wlw::ui::UIContext& ui);
@@ -89,9 +97,22 @@ class LevelScreen : public wlw::app::Screen {
   Outcome result_;
   Drag drag_;
   bool dragging_ = false;
-  bool pressing_ = false;     // the pointer went down on something of ours
-  bool dev_started_ = false;  // the dev shortcuts ran (tl.solve)
-  float dev_clock_ = 0.0f;    // tl.autoplay
+  bool autoscroll_armed_ = false;  // the dragged piece went well inside the view once
+  bool pressing_ = false;          // the pointer went down on something of ours
+  bool dev_started_ = false;       // the dev shortcuts ran (tl.solve, tl.place, tl.scroll)
+  float dev_clock_ = 0.0f;         // tl.autoplay
+
+  // A tall board's view.
+  BoardCamera camera_;
+  bool panning_ = false;  // the finger went down on the empty board
+  bool pan_moved_ = false;
+  glm::vec2 pan_start_{0.0f}, pan_last_{0.0f};
+  float pan_clock_ = 0.0f;
+  std::vector<glm::vec2> pan_samples_;  // (time, view y): the fling's speed
+  bool scrolled_once_ = false;          // the "more below" chevron stops
+  bool intro_pending_ = true;           // the pan down the machine when it opens
+  bool fail_focused_ = false;
+  float since_motion_ = 10.0f;  // the rail fades after the view stops
 
   // Layout (canvas units), set each frame.
   wlw::ui::Rect safe_;

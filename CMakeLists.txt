@@ -33,6 +33,8 @@ wlw_add_game(threadlock
     src/art_shapes.h
     src/board_art.cpp
     src/board_art.h
+    src/board_camera.cpp
+    src/board_camera.h
     src/board_view.cpp
     src/board_view.h
     src/catalog.cpp
@@ -86,6 +88,8 @@ if(NOT ANDROID)
       tests/machine_parts_tests.cpp
       tests/solver_tests.cpp
       tests/content_tests.cpp
+      tests/board_camera_tests.cpp
+      src/board_camera.cpp
       tests/test_levels.h
       ${THREADLOCK_RULES})
     target_compile_features(threadlock_tests PRIVATE cxx_std_20)

@@ -112,37 +112,65 @@ void Closed(Canvas& canvas, const std::vector<glm::vec2>& points, float thicknes
 
 void LanternArt::Create(wlw::app::Application& app) {
   using namespace wlw;
-  still_ = scene::Viewport::Create(
-      {.name = "Lantern Works", .format = rendering::TextureFormat::RGBA8, .depth = false, .clear = Hex(0x080C15)});
-  still_->SetScene(nullptr);
-  still_->SetUpdateMode(scene::Viewport::UpdateMode::Disabled);
-  app.Window().AddViewport(still_);
-  wall_ = rendering::ShaderMaterial::Create(rendering::Shader::FromFile("shaders/lantern_wall.shader"));
+  window_ = &app.Window();
+  wall_shader_ = rendering::Shader::FromFile("shaders/lantern_wall.shader");
   pane_texture_ =
       rendering::WTexture2D::Create(kPanes, 1, {rendering::TextureFormat::RGBA8, false, false}, pane_pixels_.data());
-  wall_->SetParam("uPanes", pane_texture_);
+  AddTile();  // every board needs one: made up front, so the shader compiles in the warm-up
+}
+
+LanternArt::Tile& LanternArt::AddTile() {
+  using namespace wlw;
+  Tile tile;
+  tile.view = scene::Viewport::Create(
+      {.name = "Lantern Works", .format = rendering::TextureFormat::RGBA8, .depth = false, .clear = Hex(0x080C15)});
+  tile.view->SetScene(nullptr);
+  tile.view->SetUpdateMode(scene::Viewport::UpdateMode::Disabled);
+  tile.id = window_->AddViewport(tile.view);
+  tile.wall = rendering::ShaderMaterial::Create(wall_shader_);
+  tile.wall->SetParam("uPanes", pane_texture_);
+  tiles_.push_back(std::move(tile));
+  return tiles_.back();
+}
+
+void LanternArt::Invalidate() {
+  for (Tile& tile : tiles_) tile.base = tile.key = 0;
+}
+
+void LanternArt::Release() {
+  // Only a tall board has more than one tile.
+  while (tiles_.size() > 1) {
+    window_->RemoveViewport(tiles_.back().id);
+    tiles_.pop_back();
+  }
+  for (Tile& tile : tiles_) tile.tubes.clear();
+  Invalidate();
 }
 
 // ---- Geometry ----
 
 void LanternArt::Prepare(const ArtFrame& frame) {
-  if (level_ == frame.level && layout_ == frame.layout && tubes_.size() == frame.level->pipes.size()) return;
+  const Layout layout = frame.layout.Unscrolled();
+  if (level_ == frame.level && layout_ == layout && tubes_.size() == frame.level->pipes.size()) return;
   level_ = frame.level;
-  layout_ = frame.layout;
-  const Level& level = *frame.level;
-  const float s = frame.Scale();
-  tubes_.clear();
+  layout_ = layout;
+  tubes_ = MakeTubes(*frame.level, layout_);
+}
+
+std::vector<LanternArt::Tube> LanternArt::MakeTubes(const Level& level, const Layout& layout) const {
+  const float s = layout.scale;
+  std::vector<Tube> tubes;
   for (const Pipe& pipe : level.pipes) {
     Tube tube;
     std::vector<glm::vec2> points;
-    for (Vec2 p : pipe.points) points.push_back(layout_.ToCanvas(p));
+    for (Vec2 p : pipe.points) points.push_back(layout.ToCanvas(p));
     points = art::RoundCorners(points, kBend * s, 2.5f * s);
     tube.centre = art::MakePath(points);
     tube.stretch = pipe.length > 0.0f ? tube.centre.Length() / pipe.length : 1.0f;
     const Node& from = level.nodes[static_cast<size_t>(pipe.from)];
     const Node& to = level.nodes[static_cast<size_t>(pipe.to)];
     std::vector<glm::vec2> whole;
-    const glm::vec2 from_at = layout_.ToCanvas(from.at), to_at = layout_.ToCanvas(to.at);
+    const glm::vec2 from_at = layout.ToCanvas(from.at), to_at = layout.ToCanvas(to.at);
     if (glm::distance(from_at, points.front()) > 0.01f) whole.push_back(from_at);
     whole.insert(whole.end(), points.begin(), points.end());
     if (glm::distance(to_at, points.back()) > 0.01f) whole.push_back(to_at);
@@ -154,7 +182,7 @@ void LanternArt::Prepare(const ArtFrame& frame) {
     if (pipe.coil_end > pipe.coil_start) {
       tube.coil_at = {on_whole(pipe.coil_start), on_whole(pipe.coil_end)};
       gaps.push_back(tube.coil_at);
-      for (Vec2 p : CoilPoints(pipe.coil_a, pipe.coil_b, pipe.coil_turns)) tube.coil.push_back(layout_.ToCanvas(p));
+      for (Vec2 p : CoilPoints(pipe.coil_a, pipe.coil_b, pipe.coil_turns)) tube.coil.push_back(layout.ToCanvas(p));
     }
     if (pipe.drip_end > pipe.drip_start) {
       tube.drip = {on_whole(pipe.drip_start), on_whole(pipe.drip_end)};
@@ -170,8 +198,9 @@ void LanternArt::Prepare(const ArtFrame& frame) {
     if (end > at + 1.0f) tube.glass.push_back({at, end});
     tube.collar_start = Collared(from);
     tube.collar_end = Collared(to);
-    tubes_.push_back(std::move(tube));
+    tubes.push_back(std::move(tube));
   }
+  return tubes;
 }
 
 glm::vec2 LanternArt::PipePoint(const ArtFrame& frame, int pipe, float distance) const {
@@ -185,10 +214,8 @@ glm::vec2 LanternArt::PipePoint(const ArtFrame& frame, int pipe, float distance)
     const float t = (at - tube.drip.x) / (tube.drip.y - tube.drip.x);
     at = tube.drip.x + (tube.drip.y - tube.drip.x) * t * t;
   }
-  return tube.whole.PointAt(at);
+  return tube.whole.PointAt(at) + frame.layout.ScrollOffset();
 }
-
-glm::vec2 LanternArt::WindowCentre(const ArtFrame& frame) const { return frame.layout.ToCanvas({180.0f, 292.0f}); }
 
 float LanternArt::WindowRadius(const ArtFrame& frame) const { return 172.0f * frame.Scale(); }
 
@@ -247,33 +274,81 @@ void LanternArt::UpdatePanes(const ArtFrame& frame) {
 void LanternArt::DrawBack(Canvas& picture, const ArtFrame& frame) {
   Prepare(frame);
   UpdatePanes(frame);
-  // The still picture: redrawn only when something in it changed.
-  uint64_t key = Mix(0, reinterpret_cast<uintptr_t>(frame.level));
-  key = Mix(key, Bits(frame.layout.origin.x));
-  key = Mix(key, Bits(frame.layout.origin.y));
-  key = Mix(key, Bits(frame.layout.scale));
-  key = Mix(key, Bits(picture.Size().x));
-  key = Mix(key, Bits(picture.Size().y));
-  key = Mix(key, Bits(picture.PixelsPerUnit()));
-  key = Mix(key, reinterpret_cast<uintptr_t>(frame.palette));
+  // The still picture, in screen-sized tiles: each redrawn only when something in it changed.
+  const glm::vec2 screen = picture.Size();
+  const float h = screen.y;
+  const float scroll = frame.layout.scroll * frame.layout.scale;  // canvas units
+  const float total = h + frame.layout.scroll_max * frame.layout.scale;
+  const int count = std::max(1, static_cast<int>(std::ceil(total / h - 1e-4f)));
+  uint64_t board_key = Mix(0, reinterpret_cast<uintptr_t>(frame.level));
+  board_key = Mix(board_key, Bits(layout_.origin.x));
+  board_key = Mix(board_key, Bits(layout_.origin.y));
+  board_key = Mix(board_key, Bits(layout_.scale));
+  board_key = Mix(board_key, Bits(layout_.scroll_max));
+  board_key = Mix(board_key, Bits(screen.x));
+  board_key = Mix(board_key, Bits(screen.y));
+  board_key = Mix(board_key, Bits(picture.PixelsPerUnit()));
+  board_key = Mix(board_key, reinterpret_cast<uintptr_t>(frame.palette));
+  uint64_t light_key = 0;
   for (size_t p = 0; p < pane_lit_.size(); ++p) {
-    key = Mix(key, static_cast<uint64_t>(std::lround(pane_lit_[p] * 48.0f)));
-    key = Mix(key, wlw::rendering::PackColor(pane_color_[p]));
+    light_key = Mix(light_key, static_cast<uint64_t>(std::lround(pane_lit_[p] * 48.0f)));
+    light_key = Mix(light_key, wlw::rendering::PackColor(pane_color_[p]));
   }
-  if (key != still_key_) {
-    still_key_ = key;
-    DrawStill(still_->GetCanvas(), frame);
-    still_->SetUpdateMode(wlw::scene::Viewport::UpdateMode::Once);
+  // The window's light reaches only the tiles round the window and its beam (still coordinates).
+  const float window_y = layout_.ToCanvas(frame.level->look.window).y, radius = WindowRadius(frame);
+  const float lit_top = window_y - 1.05f * radius, lit_bottom = window_y + 0.3f * radius + 0.9f * h;
+  const int first = std::clamp(static_cast<int>(std::floor(scroll / h)), 0, count - 1);
+  const int last = std::clamp(static_cast<int>(std::floor((scroll + h - 0.01f) / h)), 0, count - 1);
+  // Every tile this board needs, made up front: a viewport added during a frame can only be drawn into
+  // from the next one (the window sizes it when it first draws), so a new tile waits a frame.
+  while (static_cast<int>(tiles_.size()) < count) AddTile();
+  struct Want {
+    uint64_t base, key;
+  };
+  auto want = [&](int k) {
+    const uint64_t base = Mix(board_key, static_cast<uint64_t>(k) + 1u);
+    const float top = static_cast<float>(k) * h;
+    const bool lit = top < lit_bottom && top + h > lit_top;
+    return Want{base, lit ? Mix(base, light_key) : base};
+  };
+  // A tile showing another board (or nothing) draws now; of those that only need the new light, one a
+  // frame (the most visible first), which keeps the cost at one still picture's.
+  int stale = -1;
+  float stale_shown = 0.0f;
+  for (int k = first; k <= last; ++k) {
+    Tile& tile = tiles_[static_cast<size_t>(k)];
+    if (tile.fresh) continue;
+    const Want w = want(k);
+    if (tile.base != w.base) {
+      DrawStill(tile, k, frame, screen, total);
+      tile.base = w.base;
+      tile.key = w.key;
+    } else if (tile.key != w.key) {
+      const float top = static_cast<float>(k) * h;
+      const float shown = std::min(top + h, scroll + h) - std::max(top, scroll);
+      if (shown > stale_shown) stale = k, stale_shown = shown;
+    }
   }
-  if (const auto& texture = still_->GetTexture()) {
-    wlw::ui::ImageStyle style;
-    style.uv = {{0.0f, 1.0f}, {1.0f, 0.0f}};  // render targets are bottom-up
-    picture.Image({{0.0f, 0.0f}, picture.Size()}, texture, style);
+  if (stale >= 0) {
+    Tile& tile = tiles_[static_cast<size_t>(stale)];
+    DrawStill(tile, stale, frame, screen, total);
+    tile.key = want(stale).key;
+  }
+  for (int k = first; k <= last; ++k) {
+    if (tiles_[static_cast<size_t>(k)].base == 0) continue;  // no picture yet
+    if (const auto& texture = tiles_[static_cast<size_t>(k)].view->GetTexture()) {
+      wlw::ui::ImageStyle style;
+      style.uv = {{0.0f, 1.0f}, {1.0f, 0.0f}};  // render targets are bottom-up
+      const float top = static_cast<float>(k) * h - scroll;
+      picture.Image({{0.0f, top}, {screen.x, top + h}}, texture, style);
+    }
   }
 
   const Level& level = *frame.level;
   const Board& board = *frame.board;
   const float s = frame.Scale();
+  for (Tile& tile : tiles_) tile.fresh = false;
+
   // Lanterns glow as they fill.
   for (size_t n = 0; n < level.nodes.size(); ++n) {
     const Node& node = level.nodes[n];
@@ -298,7 +373,20 @@ void LanternArt::DrawBack(Canvas& picture, const ArtFrame& frame) {
   }
 }
 
-void LanternArt::DrawStill(Canvas& canvas, const ArtFrame& frame) {
+void LanternArt::DrawStill(Tile& tile, int k, const ArtFrame& whole, glm::vec2 screen, float total) {
+  // A tile made this frame has no size yet (its canvas gets one when it is first drawn): it is the screen's.
+  Canvas& canvas = tile.view->GetCanvas();
+  // This tile's piece of the board: the layout at scroll 0, moved up by the tiles above it.
+  ArtFrame frame = whole;
+  frame.layout = layout_;
+  frame.layout.origin.y -= static_cast<float>(k) * screen.y;
+  if (k > 0 && (!(tile.layout == frame.layout) || tile.tubes.size() != frame.level->pipes.size())) {
+    tile.layout = frame.layout;
+    tile.tubes = MakeTubes(*frame.level, frame.layout);
+  }
+  const std::vector<Tube>& tubes = k == 0 ? tubes_ : tile.tubes;
+  tile.view->SetUpdateMode(wlw::scene::Viewport::UpdateMode::Once);
+
   // The wall and the window (one shader), with the window's light.
   for (size_t p = 0; p < pane_lit_.size(); ++p) {
     const Rgba& c = pane_color_[p];
@@ -316,11 +404,15 @@ void LanternArt::DrawStill(Canvas& canvas, const ArtFrame& frame) {
     lit += pane_lit_[static_cast<size_t>(p)];
   }
   if (lit > 0.0f) beam /= lit;
-  const glm::vec2 centre = WindowCentre(frame);
-  wall_->SetParam("uCanvas", canvas.Size());
-  wall_->SetParam("uWindow", glm::vec3(centre, WindowRadius(frame)));
-  wall_->SetParam("uBeam", glm::vec4(beam, lit / static_cast<float>(kOuterPanes)));
-  canvas.ShaderRect({{0.0f, 0.0f}, canvas.Size()}, wall_);
+  // The shader works in still coordinates: this tile starts uOffset down the whole picture.
+  const glm::vec2 centre = layout_.ToCanvas(frame.level->look.window);
+  tile.wall->SetParam("uCanvas", screen);
+  tile.wall->SetParam("uOffset", glm::vec2(0.0f, static_cast<float>(k) * screen.y));
+  tile.wall->SetParam("uTotal", glm::vec2(screen.x, total));
+  tile.wall->SetParam("uScreen", screen);
+  tile.wall->SetParam("uWindow", glm::vec3(centre, WindowRadius(frame)));
+  tile.wall->SetParam("uBeam", glm::vec4(beam, lit / static_cast<float>(kOuterPanes)));
+  canvas.ShaderRect({{0.0f, 0.0f}, screen}, tile.wall);
 
   const Level& level = *frame.level;
   // Behind the glass: crucibles, the lanterns' chains, the globes' and hubs' backs.
@@ -329,7 +421,7 @@ void LanternArt::DrawStill(Canvas& canvas, const ArtFrame& frame) {
     if (node.kind == NodeKind::Spout) DrawCrucible(canvas, frame, static_cast<int>(n), false);
     if (node.kind == NodeKind::Cup) DrawLantern(canvas, frame, static_cast<int>(n), false);
   }
-  for (size_t p = 0; p < level.pipes.size(); ++p) DrawTube(canvas, frame, static_cast<int>(p));
+  for (size_t p = 0; p < level.pipes.size(); ++p) DrawTube(canvas, frame, tubes[p], static_cast<int>(p));
   const float s = frame.Scale();
   for (size_t n = 0; n < level.nodes.size(); ++n) {
     const Node& node = level.nodes[n];
@@ -383,8 +475,7 @@ void LanternArt::DrawCoil(Canvas& canvas, const Tube& tube, float s) const {
   }
 }
 
-void LanternArt::DrawTube(Canvas& canvas, const ArtFrame& frame, int p) const {
-  const Tube& tube = tubes_[static_cast<size_t>(p)];
+void LanternArt::DrawTube(Canvas& canvas, const ArtFrame& frame, const Tube& tube, int p) const {
   const float s = frame.Scale();
   for (const glm::vec2 run : tube.glass) DrawGlass(canvas, tube.whole.Part(run.x, run.y), kTubeRadius, true, s);
   if (!tube.coil.empty()) DrawCoil(canvas, tube, s);
@@ -548,6 +639,8 @@ void LanternArt::DrawFront(Canvas& canvas, const ArtFrame& frame) {
   // Brass where glass meets a part: collars at crucibles and lanterns, fittings at both ends of a coil,
   // a nozzle and a funnel round a drip fall.
   auto across = [](glm::vec2 d) { return std::atan2(d.y, d.x) + kPi * 0.5f; };
+  // The tubes are measured at scroll 0.
+  const glm::vec2 off = frame.layout.ScrollOffset();
   for (size_t p = 0; p < tubes_.size(); ++p) {
     const Tube& tube = tubes_[p];
     const Node& from = level.nodes[static_cast<size_t>(level.pipes[p].from)];
@@ -556,23 +649,24 @@ void LanternArt::DrawFront(Canvas& canvas, const ArtFrame& frame) {
     const float last = tube.glass.empty() ? 0.0f : tube.glass.back().y;
     if (!tube.glass.empty() && tube.collar_start && from.kind != NodeKind::Cross && from.kind != NodeKind::Merge) {
       const glm::vec2 d = tube.whole.DirectionAt(first);
-      art::BrassBar(canvas, tube.whole.PointAt(first) + d * (2.0f * s), glm::vec2(kTubeRadius + 1.5f, 3.0f) * s,
+      art::BrassBar(canvas, tube.whole.PointAt(first) + off + d * (2.0f * s), glm::vec2(kTubeRadius + 1.5f, 3.0f) * s,
                     across(d));
     }
     if (!tube.glass.empty() && tube.collar_end && to.kind != NodeKind::Cross && to.kind != NodeKind::Merge) {
       const glm::vec2 d = tube.whole.DirectionAt(last);
-      art::BrassBar(canvas, tube.whole.PointAt(last) - d * (2.5f * s), glm::vec2(kTubeRadius + 1.5f, 3.5f) * s,
+      art::BrassBar(canvas, tube.whole.PointAt(last) + off - d * (2.5f * s), glm::vec2(kTubeRadius + 1.5f, 3.5f) * s,
                     across(d));
     }
     if (!tube.coil.empty()) {
       // Fittings across the coil's axis where it starts and ends.
       const glm::vec2 axis = glm::normalize(tube.coil.back() - tube.coil.front());
-      for (const glm::vec2 at : {tube.coil.front() - axis * (2.0f * s), tube.coil.back() + axis * (2.0f * s)})
+      for (const glm::vec2 at :
+           {tube.coil.front() + off - axis * (2.0f * s), tube.coil.back() + off + axis * (2.0f * s)})
         art::BrassBar(canvas, at, glm::vec2(kTubeRadius + 1.5f, 3.0f) * s, across(axis));
     }
     if (tube.drip.y > tube.drip.x) {
       // The nozzle: a brass tip the drops leave from.
-      const glm::vec2 top = tube.whole.PointAt(tube.drip.x), d = tube.whole.DirectionAt(tube.drip.x);
+      const glm::vec2 top = tube.whole.PointAt(tube.drip.x) + off, d = tube.whole.DirectionAt(tube.drip.x);
       const glm::vec2 side = Left(d);
       art::BrassBar(canvas, top - d * (2.5f * s), glm::vec2(kTubeRadius + 1.5f, 3.2f) * s, across(d));
       art::FillConvex(canvas,
@@ -580,7 +674,7 @@ void LanternArt::DrawFront(Canvas& canvas, const ArtFrame& frame) {
                        top + d * (6.0f * s) - side * (2.5f * s)},
                       art::brass::kShade);
       // The funnel: wide brass lips that catch them and narrow into the glass below.
-      const glm::vec2 bottom = tube.whole.PointAt(tube.drip.y), e = tube.whole.DirectionAt(tube.drip.y);
+      const glm::vec2 bottom = tube.whole.PointAt(tube.drip.y) + off, e = tube.whole.DirectionAt(tube.drip.y);
       const glm::vec2 side_e = Left(e);
       const glm::vec2 lip = bottom - e * (12.0f * s);
       art::FillConvex(canvas,

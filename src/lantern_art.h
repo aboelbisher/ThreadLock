@@ -20,14 +20,17 @@
 //
 // What doesn't move (the wall, the window, the glass) is drawn once into a texture of its own (an
 // offscreen viewport that updates only when the level, the screen or the window's light changes);
-// each frame draws that picture, the glows, the liquid and the parts' brass fronts.
+// each frame draws that picture, the glows, the liquid and the parts' brass fronts. A tall board's
+// still picture is a column of screen-sized tiles (the whole machine, as if the screen were taller),
+// made when first seen; the screen draws the ones it shows, offset by the scroll.
 namespace threadlock {
 
 class LanternArt : public BoardArt {
  public:
   void Create(wlw::app::Application& app);
 
-  void Invalidate() override { still_key_ = 0; }
+  void Invalidate() override;
+  void Release() override;
   void DrawBack(wlw::ui::Canvas& picture, const ArtFrame& frame) override;
   void DrawFront(wlw::ui::Canvas& canvas, const ArtFrame& frame) override;
   glm::vec2 PipePoint(const ArtFrame& frame, int pipe, float distance) const override;
@@ -59,24 +62,40 @@ class LanternArt : public BoardArt {
   };
 
   void DrawGlass(wlw::ui::Canvas& canvas, const art::Path& path, float radius, bool in_front, float scale) const;
+  // One screen-sized piece of the still picture: tile k covers still y [k h, (k + 1) h), h = the screen's
+  // canvas height; still coordinates = canvas coordinates at scroll 0.
+  struct Tile {
+    std::shared_ptr<wlw::scene::Viewport> view;
+    int id = -1;  // Window::AddViewport
+    std::shared_ptr<wlw::rendering::ShaderMaterial> wall;
+    uint64_t base = 0;  // what it shows apart from the window's light (0 = no picture)
+    uint64_t key = 0;   // and with it
+    bool fresh = true;  // added this frame: not sized yet
+    Layout layout;      // board -> this tile's canvas
+    std::vector<Tube> tubes;
+  };
+
   void DrawCoil(wlw::ui::Canvas& canvas, const Tube& tube, float scale) const;
+  std::vector<Tube> MakeTubes(const Level& level, const Layout& layout) const;
   void Prepare(const ArtFrame& frame);
+  Tile& AddTile();
   void UpdatePanes(const ArtFrame& frame);
-  void DrawStill(wlw::ui::Canvas& canvas, const ArtFrame& frame);  // into the offscreen picture
-  void DrawTube(wlw::ui::Canvas& canvas, const ArtFrame& frame, int pipe) const;
+  // Into tile k's offscreen picture; `screen` = one screen, `total` = the whole still picture's height
+  // (canvas units).
+  void DrawStill(Tile& tile, int k, const ArtFrame& frame, glm::vec2 screen, float total);
+  void DrawTube(wlw::ui::Canvas& canvas, const ArtFrame& frame, const Tube& tube, int pipe) const;
   void DrawCrucible(wlw::ui::Canvas& canvas, const ArtFrame& frame, int node, bool front) const;
   void DrawLantern(wlw::ui::Canvas& canvas, const ArtFrame& frame, int node, bool front) const;
   void DrawGlobe(wlw::ui::Canvas& canvas, const ArtFrame& frame, int node, bool front) const;
-  glm::vec2 WindowCentre(const ArtFrame& frame) const;
   float WindowRadius(const ArtFrame& frame) const;
 
   // The still picture.
-  std::shared_ptr<wlw::scene::Viewport> still_;
-  std::shared_ptr<wlw::rendering::ShaderMaterial> wall_;
+  wlw::scene::Window* window_ = nullptr;
+  std::vector<Tile> tiles_;
+  std::shared_ptr<wlw::rendering::Shader> wall_shader_;
   std::shared_ptr<wlw::rendering::WTexture2D> pane_texture_;
-  uint64_t still_key_ = 0;
 
-  // This level's tubes, for this layout.
+  // This level's tubes, for its layout at scroll 0.
   const Level* level_ = nullptr;
   Layout layout_;
   std::vector<Tube> tubes_;
