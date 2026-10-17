@@ -51,12 +51,14 @@ src/map_screen.{h,cpp}        the scrolling map (worlds, star gates), daily + La
 src/menus.{h,cpp}             overlays: settings (palettes), achievements, daily (streak, archive), Lab
 src/board_view.{h,cpp}        a board on screen: per-node animations, markers, hit tests, and what every world shares:
                               the pieces (DrawPiece = the brass toolkit), sockets, flaps, hints. Calls the world's art
+src/board_camera.{h,cpp}      a tall board's view (plain C++, tested): drag + fling, edge auto-scroll, the ride down with
+                              the liquid (LiquidFront), focus (failure, Show me, hints, payoff), intro pan
 src/board_art.{h,cpp}         BoardArt: a world's way of drawing a machine (back on the bloomed Picture layer, liquid
                               placement, fronts on the Overlay); ArtFrame = one frame's state; Layout
 src/world_look.h              per world: which art + the HUD/card tint (accent, panel, EDIT gradient); LookForWorld
 src/lantern_art.{h,cpp}       World 1, The Lantern Works: rose window + wall (assets/shaders/lantern_wall.shader) and
-                              glass drawn once into an offscreen viewport (redrawn when the level, screen or the
-                              window's light changes); glass tubes, coils, drip falls, globes, crucibles, lanterns
+                              glass drawn once into offscreen viewports, one screen-sized tile per screen of board
+                              (redrawn when the level, screen or the window's light changes; one light redraw a frame); glass tubes, coils, drip falls, globes, crucibles, lanterns
 src/workshop_art.{h,cpp}      the v2 look (worlds 2-4 until their art, the daily, the Lab) + shared machine parts
 src/art_shapes.{h,cpp}        drawing helpers: paths with round bends, Ribbon (seamless translucent bands), strokes,
                               glyphs, glows, brass (medallion, plate, bar)
@@ -112,14 +114,15 @@ threadlock_tool bake                   solve all, write assets/levels/pars.json 
 threadlock_tool format                 rewrite the world files in one layout (a node per line)
 threadlock_tool solve <id>             cells per pipe, every solution, how small placements fail
 threadlock_tool timing <id> [lean|swift]   when each drop enters each junction
-threadlock_tool render <id> <png> [none|lean|swift] [tick]   the board (+ drops at a tick): check layouts
+threadlock_tool render <id> <png> [none|lean|swift] [tick]   the board (+ drops at a tick), full height: check layouts
 threadlock_tool daily <yyyymmdd> <png> / lab <seed> <easy|medium|hard> <png>
 threadlock_tool search <kind> <difficulty> <seed> <count> <min pieces> <max solutions> [png dir]
                                        generated machines as level JSON (a start for hard levels)
 ```
 Level design loop: draft JSON -> `solve`/`render` -> move bends (cells follow length) -> `bake` -> tests.
 Pipe shapes: an object after the bends, `["s", "c", [[x, y], ...], {"coil": [segment, turns], "drip": segment}]`
-(segment k = point k to k+1 of from, bends..., to). A coil winds its segment round its middle (`CoilPoints`: a turn is
+(segment k = point k to k+1 of from, bends..., to). A grand machine (finale) adds look-only `"height": 1200` (board
+units, >= 600 = one screen; nodes must lie within it) and W1's `"window": [x, y]` (the rose window's centre). A coil winds its segment round its middle (`CoilPoints`: a turn is
 ~70 long, ~5 cells more than straight, so it changes the timing and the pars); a drip is look only (drops fall
 through the air: nozzle, funnel).
 
@@ -128,7 +131,7 @@ PC tests and the tool without CMake/vcpkg, from a VS developer shell (repo root)
 ```
 cl /nologo /std:c++20 /EHsc /W4 /WX /O2 /external:W0 /external:I external\WLWengine\third_party\tinygltf ^
    /external:I external\WLWengine\third_party\doctest /Fe:build\pc\threadlock_tests.exe ^
-   tests\*.cpp src\threadlock_rules.cpp src\level_io.cpp src\solver.cpp src\generator.cpp
+   tests\*.cpp src\threadlock_rules.cpp src\level_io.cpp src\solver.cpp src\generator.cpp src\board_camera.cpp
 (the tool: tools\threadlock_tool.cpp + the same four sources, plus /external:I ...\third_party\stb)
 ```
 CMake (desktop) also defines `threadlock_tests` and `threadlock_tool`; those need the engine's vcpkg submodule
@@ -142,7 +145,8 @@ The same tests on a phone (ARM64, the NDK's clang), from Git Bash with `MSYS_NO_
 ```
 $NDK/toolchains/llvm/prebuilt/windows-x86_64/bin/clang++.exe --target=aarch64-linux-android24 -std=c++20 -O2 \
   -static-libstdc++ -isystem external/WLWengine/third_party/tinygltf -isystem external/WLWengine/third_party/doctest \
-  tests/*.cpp src/threadlock_rules.cpp src/level_io.cpp src/solver.cpp src/generator.cpp -o build/android-tests/threadlock_tests
+  tests/*.cpp src/threadlock_rules.cpp src/level_io.cpp src/solver.cpp src/generator.cpp src/board_camera.cpp \
+  -o build/android-tests/threadlock_tests
 adb -s <serial> push build/android-tests/threadlock_tests /data/local/tmp/tl/   (+ assets/levels/*.json to /data/local/tmp/tl/assets/levels/)
 adb -s <serial> shell "cd /data/local/tmp/tl && ./threadlock_tests"
 ```
@@ -159,7 +163,8 @@ it) has Bluzzle with saves (never uninstall it). Ask before using an emulator. S
 `cmd /c "adb -s <serial> exec-out screencap -p > file.png"` (PowerShell's `>` corrupts PNGs). Wake the screen first
 (`adb shell input keyevent KEYCODE_WAKEUP`). Dev cvars to reach a state without tapping (quote the whole am command):
 `adb shell "am start -n com.aboelbisher.threadlock/.ThreadlockActivity --es wlw 'tl.open=1-4;tl.solve=1;tl.autoplay=1'"`
-(open a level, place its Lean solution, tap play after 1 s).
+(open a level, place its Lean solution, tap play after 1 s). Also `tl.place=separator@gp/0,turnstile@ga/1,tank8@pk`
+(place these pieces) and `tl.scroll=600` (a tall level opens scrolled this far, no intro pan).
 Ads: AdMob through the kit; **Google's sample app id and test units** until Threadlock has its own (manifest +
 MakeAdsConfig in threadlock_app.cpp). The debug build has the ImGui panel (Threadlock window: jump to any level,
 open everything, hints, wipe, ads).

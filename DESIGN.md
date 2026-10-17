@@ -138,8 +138,13 @@ concurrency idea:
   Mills and gates are not sockets.
 - **Tipping bucket N** (W5, later, batching): fills with N drops, tips, and pours them out as one train.
   v2's Collector, built as a machine. Not in the launch build.
-- **Grand machines** (finales): each world's finale is two screens tall. You scroll while building; while
-  it runs, the camera rides down with the liquid.
+- **Grand machines** (finales): each world's finale is two screens tall (`"height": 1200` in its level).
+  The screen shows one normal board's worth (600 units) at the usual scale, so pieces keep their size; the
+  rest scrolls. Building: drag the empty board (it flings), or hold a dragged piece near the view's top or
+  bottom edge. Opening: a pan from the bottom to the top (~2 s; a touch skips it; none with reduced
+  motion). Running: the view rides down with the liquid's front and never climbs back; it goes to the
+  first failure, and Show me starts there; a finger takes over for 2.5 s. Solved: the view centres the
+  payoff (W1: the rose window, `"window"`) while it lights, and the card comes after 3 s.
 
 Level files also gain look-only extras the rules ignore, added with each world's renderer: names (orders,
 districts), decor, a style per pipe (tube / coil / drip; copper; canal / aqueduct; groove, curved in W4)
@@ -172,7 +177,11 @@ waking up.
   tanks; mud.
 - **Payoff:** each lit lantern lights a pane of the great rose window; the world's map is the window
   filling pane by pane. **Fail:** mud chokes the light into grey smoke.
-- **Sound:** glass harmonica, celesta, chimes. **Finale:** The Rose Window.
+- **Sound:** glass harmonica, celesta, chimes. **Finale:** 1-15 The Rose Window, two screens: three
+  crucibles (pure blue, a blend, alternating) and a knot at the top; on the second screen the streams cross
+  in front of the window and drip into three lanterns, whose panes light it. Lean 3 (separator, tall tank on
+  the knot's loop, turnstile in front of the window), Swift 4; the trap is 1-12's habit, a turnstile on the
+  knot.
 - **Palette:** night blue #19263B, brass #C9974E, glass #E4F0FF; background #080C15, accent #F6DA9A,
   EDIT #FFE6A6 → #DFA74E.
 - **Level shapes:** The Fountain (one crucible, four lanterns: jets that must not meet); The Hourglass
@@ -264,8 +273,9 @@ on thinking, no paying to progress.
 ## 8. Screens
 
 Level: the HUD on top (back, the level's name and "n-m · world", three stars with their pars); the whole
-machine in the middle (no panning, except a finale's two screens: you scroll while building and the
-camera rides down with the liquid while it runs); the tray, hint, restart, speed (1×, 2×, 4×) and the big
+machine in the middle (no panning, except a finale's two screens, §4 Grand machines: a thin rail on the
+right shows where the view is, the board fades out under the top bar and above the tray, and a chevron
+says "more below" until the first scroll); the tray, hint, restart, speed (1×, 2×, 4×) and the big
 EDIT / play button at the bottom. Drag from the tray (every free socket lights), tap a placed piece to
 set it, drag it off to send it back, long-press for its card (what it does and where it works). During a
 run an idle piece sits dim and still. A solved card (stars, time, pieces; Next, Replay) or a failed card
