@@ -207,20 +207,24 @@
       "tray": ["separator", "turnstile", "tank4", "tank8"]
     },
     {
-      "id": "1-15", "name": "The Weave", "intro": "Locks are safe but slow. Timing is fast.",
+      "id": "1-15", "name": "The Rose Window", "intro": "The whole tower pours into the window.", "height": 1200, "window": [180, 870],
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [60, 40], "beads": "B*6", "beat": 14},
-        {"id": "sa", "kind": "spout", "at": [300, 40], "beads": "A*6", "beat": 14},
-        {"id": "p", "kind": "pass", "at": [300, 95]},
-        {"id": "x1", "kind": "cross", "at": [180, 140], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [180, 240]},
-        {"id": "x3", "kind": "cross", "at": [180, 340], "socket": true},
-        {"id": "x4", "kind": "cross", "at": [180, 440]},
-        {"id": "cb", "kind": "cup", "at": [70, 520], "want": "B", "count": 6},
-        {"id": "ca", "kind": "cup", "at": [290, 520], "want": "A", "count": 6}
+        {"id": "sl", "kind": "spout", "at": [40, 58], "beads": "B*6", "beat": 12, "start": 9},
+        {"id": "sc", "kind": "spout", "at": [130, 58], "beads": "B+A*6", "beat": 12},
+        {"id": "sr", "kind": "spout", "at": [280, 58], "beads": "B A B A B A", "beat": 12},
+        {"id": "xk", "kind": "cross", "at": [280, 150], "socket": true},
+        {"id": "pk", "kind": "pass", "at": [190, 200]},
+        {"id": "pc", "kind": "pass", "at": [130, 200]},
+        {"id": "pl", "kind": "pass", "at": [40, 200]},
+        {"id": "gp", "kind": "cross", "at": [230, 360], "socket": true},
+        {"id": "gb", "kind": "cross", "at": [100, 560], "socket": true},
+        {"id": "ga", "kind": "cross", "at": [240, 720], "socket": true},
+        {"id": "lb", "kind": "cup", "at": [50, 1060], "want": "B", "count": 9},
+        {"id": "la", "kind": "cup", "at": [170, 1060], "want": "A", "count": 9},
+        {"id": "ll", "kind": "cup", "at": [300, 1060], "want": "B", "count": 6}
       ],
-      "pipes": [["sb", "x1", [[60, 95]]], ["sa", "p"], ["p", "x1"], ["x1", "x2", [[240, 190]]], ["x1", "x2", [[105, 190]]], ["x2", "x3", [[88, 290]]], ["x2", "x3", [[240, 290]]], ["x3", "x4", [[245, 390]]], ["x3", "x4", [[115, 390]]], ["x4", "cb", [[70, 480]]], ["x4", "ca", [[290, 480]]]],
-      "tray": ["turnstile", "turnstile", "tank4", "tank8"]
+      "pipes": [["sr", "xk"], ["xk", "pk", [[280, 250], [190, 250]]], ["pk", "xk", [[190, 150]]], ["xk", "gp", [[335, 150], [335, 290]]], ["sc", "pc"], ["pc", "gp", [[130, 290]]], ["sl", "pl"], ["gp", "gb", [[150, 430]]], ["gp", "ga", [[310, 430], [310, 620]]], ["pl", "gb", [[40, 480]]], ["gb", "lb", [[50, 640], [50, 980]], {"coil": [1, 3], "drip": 2}], ["gb", "ga", [[160, 640]], {"coil": [0, 1]}], ["ga", "la", [[170, 800], [170, 980]], {"coil": [1, 2], "drip": 2}], ["ga", "ll", [[300, 800], [300, 980]], {"coil": [1, 1], "drip": 2}]],
+      "tray": ["separator", "turnstile", "tank4", "tank8"]
     },
     {
       "id": "1-C1", "name": "The Needle", "type": "challenge", "intro": "A window one tick wide.",
