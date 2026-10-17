@@ -7,6 +7,7 @@
 //   threadlock_tool render <id> <out.png> [none|lean|swift] [tick]   the board, and the drops at `tick`
 //   threadlock_tool daily <yyyymmdd> <out.png>          generate a daily puzzle, solve it, render it
 //   threadlock_tool lab <seed> <easy|medium|hard> <out.png>
+//   threadlock_tool sounds <dir>                        every sound as a WAV + 30 s of ambience + a demo run
 //
 // `assets` defaults to ./assets (run it from the repo's root).
 #include <algorithm>
@@ -22,6 +23,8 @@
 #include <tuple>
 #include <vector>
 
+#include "../src/ambience.h"
+#include "../src/audio_synth.h"
 #include "../src/generator.h"
 #include "../src/level_io.h"
 #include "../src/solver.h"
@@ -470,6 +473,103 @@ int Render(const Level& level, const std::string& out, const Placement& placemen
   return 0;
 }
 
+// ---- sounds <dir>: every synthesized sound as a WAV, to listen to on the PC ----
+
+bool WriteWav(const std::string& path, const std::vector<float>& stereo, uint32_t rate) {
+  std::ofstream file(path, std::ios::binary);
+  if (!file) return false;
+  auto u32 = [&](uint32_t v) { file.write(reinterpret_cast<const char*>(&v), 4); };
+  auto u16 = [&](uint16_t v) { file.write(reinterpret_cast<const char*>(&v), 2); };
+  const uint32_t bytes = static_cast<uint32_t>(stereo.size() * 2);
+  file.write("RIFF", 4);
+  u32(36 + bytes);
+  file.write("WAVEfmt ", 8);
+  u32(16);
+  u16(1);  // PCM
+  u16(2);
+  u32(rate);
+  u32(rate * 4);
+  u16(4);
+  u16(16);
+  file.write("data", 4);
+  u32(bytes);
+  for (float s : stereo) {
+    u16(static_cast<uint16_t>(static_cast<int16_t>(std::lround(std::clamp(s, -1.0f, 1.0f) * 32767.0f))));
+  }
+  return static_cast<bool>(file);
+}
+
+// Adds a mono sound into a stereo track at `at` seconds, at `pitch` (linear interpolation, as the mixer).
+void MixInto(std::vector<float>& stereo, const std::vector<float>& mono, uint32_t rate, float at, float volume,
+             float pitch) {
+  const size_t start = static_cast<size_t>(at * static_cast<float>(rate));
+  for (size_t i = 0;; ++i) {
+    const float pos = static_cast<float>(i) * pitch;
+    const size_t k = static_cast<size_t>(pos);
+    if (k + 1 >= mono.size() || 2 * (start + i) + 1 >= stereo.size()) break;
+    const float s = volume * (mono[k] + (pos - static_cast<float>(k)) * (mono[k + 1] - mono[k]));
+    stereo[2 * (start + i)] += s;
+    stereo[2 * (start + i) + 1] += s;
+  }
+}
+
+int Sounds(const std::string& dir) {
+  constexpr uint32_t kRate = 48000;
+  std::vector<std::vector<float>> made(static_cast<size_t>(synth::Sound::Count));
+  const auto t0 = std::chrono::steady_clock::now();
+  for (size_t i = 0; i < made.size(); ++i) made[i] = synth::Make(static_cast<synth::Sound>(i), kRate);
+  const double synth_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+  size_t frames = 0;
+  for (size_t i = 0; i < made.size(); ++i) {
+    std::vector<float> stereo(made[i].size() * 2);
+    for (size_t k = 0; k < made[i].size(); ++k) stereo[2 * k] = stereo[2 * k + 1] = made[i][k];
+    const std::string path = dir + "/" + synth::SoundName(static_cast<synth::Sound>(i)) + ".wav";
+    if (!WriteWav(path, stereo, kRate)) {
+      std::printf("can't write %s\n", path.c_str());
+      return 1;
+    }
+    frames += made[i].size();
+  }
+  std::printf("%zu sounds, %.1f s of audio, synthesized in %.1f ms (%.1f MB as stereo float)\n", made.size(),
+              static_cast<double>(frames) / kRate, synth_ms, static_cast<double>(frames) * 8.0 / 1048576.0);
+
+  // 30 s of the ambience, rendered in the mixer's block size, fading in over 2 s.
+  constexpr size_t kBedFrames = 30 * kRate;
+  std::vector<float> bed(kBedFrames * 2);
+  Ambience ambience(kRate);
+  ambience.SetTarget(1.0f, 2.0f);
+  const auto t1 = std::chrono::steady_clock::now();
+  for (size_t at = 0; at < kBedFrames; at += 512) {
+    ambience.Render(bed.data() + 2 * at, static_cast<uint32_t>(std::min<size_t>(512, kBedFrames - at)));
+  }
+  const double bed_us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t1).count();
+  std::printf("ambience: %.0f us per second of audio\n", bed_us / 30.0);
+  WriteWav(dir + "/Ambience.wav", bed, kRate);
+
+  // A World 1 run in miniature over the bed (ducked to 60%), to judge the mix: a crucible's beats, blue and
+  // amber drops climbing, panes chiming, a mud puff, drips, both lanterns filling, the heart.
+  std::vector<float> run(bed.begin(), bed.begin() + 16 * kRate * 2);
+  for (float& s : run) s *= 0.6f;
+  auto play = [&](synth::Sound s, float t, float volume, float pitch = 1.0f) {
+    MixInto(run, made[static_cast<size_t>(s)], kRate, t, volume, pitch);
+  };
+  for (int beat = 0; beat < 12; ++beat) play(synth::Sound::CruciblePour, 0.5f + 0.5f * static_cast<float>(beat), 0.22f);
+  for (int k = 0; k < 6; ++k) {
+    const float t = 1.0f + static_cast<float>(k);
+    play(synth::Sound::HarmonicaNote, t, 0.55f, synth::ClimbPitch(k));
+    play(synth::Sound::CelestaNote, t + 0.5f, 0.55f, synth::ClimbPitch(k));
+    play(synth::Sound::PaneChime, t + 0.02f, 0.4f, synth::ClimbPitch(k));
+    play(synth::Sound::Drip, t - 0.25f, 0.25f, 0.9f + 0.05f * static_cast<float>(k % 3));
+  }
+  play(synth::Sound::Smoke, 3.75f, 0.9f);
+  play(synth::Sound::LanternBlue, 7.0f, 0.6f);
+  play(synth::Sound::LanternAmber, 7.5f, 0.6f);
+  play(synth::Sound::Heart, 9.5f, 0.9f);
+  WriteWav(dir + "/demo_lantern_run.wav", run, kRate);
+  std::printf("wrote %s/*.wav (+ Ambience.wav, demo_lantern_run.wav)\n", dir.c_str());
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -478,6 +578,7 @@ int main(int argc, char** argv) {
     return 2;
   }
   const std::string command = argv[1];
+  if (command == "sounds" && argc > 2) return Sounds(argv[2]);
   if (command == "check" || command == "bake") return Check(argc > 2 ? argv[2] : "assets", command == "bake");
   // format [assets]: rewrites every world file in one tidy layout (a node per line).
   if (command == "format") {

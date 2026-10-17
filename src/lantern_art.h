@@ -7,6 +7,7 @@
 
 #include "art_shapes.h"
 #include "board_art.h"
+#include "rose_window.h"
 #include "wlw/app/application.h"
 #include "wlw/rendering/shader_material.h"
 #include "wlw/rendering/texture.h"
@@ -41,8 +42,6 @@ class LanternArt : public BoardArt {
   float SocketRadius(const Node& node) const override;
   Rgba Accent() const override { return Hex(0xF6DA9A); }
 
-  static constexpr int kOuterPanes = 12;
-  static constexpr int kInnerPanes = 12;
   static constexpr int kPanes = kOuterPanes + kInnerPanes;
 
  private:

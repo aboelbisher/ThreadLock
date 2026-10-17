@@ -231,16 +231,12 @@ void LanternArt::UpdatePanes(const ArtFrame& frame) {
   std::array<float, kPanes> target{};
   // The outer panes are shared out among the lanterns in order; each lights its panes one by one as
   // it fills, in its own colour (a lantern with mud in it stays dark).
-  std::vector<int> cups;
   for (size_t n = 0; n < level.nodes.size(); ++n) {
-    if (level.nodes[n].kind == NodeKind::Cup) cups.push_back(static_cast<int>(n));
-  }
-  const int k = static_cast<int>(cups.size());
-  for (int i = 0; i < k; ++i) {
-    const Node& node = level.nodes[static_cast<size_t>(cups[static_cast<size_t>(i)])];
-    const int first = i * kOuterPanes / k, last = (i + 1) * kOuterPanes / k;
-    const int panes = last - first;
-    const CupState& cup = board.Started() ? board.Cup(cups[static_cast<size_t>(i)]) : CupState{};
+    const Node& node = level.nodes[n];
+    if (node.kind != NodeKind::Cup) continue;
+    const PaneRange range = LanternPanes(level, static_cast<int>(n));
+    const int first = range.first, last = range.last, panes = range.Count();
+    const CupState& cup = board.Started() ? board.Cup(static_cast<int>(n)) : CupState{};
     const float filled = cup.impure || node.count <= 0
                              ? 0.0f
                              : std::min(1.0f, static_cast<float>(cup.count) / static_cast<float>(node.count));

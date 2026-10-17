@@ -20,6 +20,14 @@ set(THREADLOCK_RULES
   src/generator.cpp
   src/generator.h)
 
+# The sounds (plain C++ too): the game, the tests and the tool (`threadlock_tool sounds` writes them as WAVs).
+set(THREADLOCK_SOUND
+  src/audio_synth.cpp
+  src/audio_synth.h
+  src/ambience.cpp
+  src/ambience.h
+  src/rose_window.h)
+
 # ---- Game ----
 # One target for every platform: an .exe on desktop (the engine's dev target), libthreadlock.so on Android.
 wlw_add_game(threadlock
@@ -27,8 +35,6 @@ wlw_add_game(threadlock
     src/main.cpp
     src/threadlock_app.cpp
     src/threadlock_app.h
-    src/audio_synth.cpp
-    src/audio_synth.h
     src/art_shapes.cpp
     src/art_shapes.h
     src/board_art.cpp
@@ -59,6 +65,7 @@ wlw_add_game(threadlock
     src/workshop_art.h
     src/world_look.h
     ${THREADLOCK_RULES}
+    ${THREADLOCK_SOUND}
   ASSETS
     "${CMAKE_CURRENT_SOURCE_DIR}/assets")
 target_link_libraries(threadlock PRIVATE wlw::kit wlw_json)
@@ -68,6 +75,7 @@ target_link_libraries(threadlock PRIVATE wlw::kit wlw_json)
 # Step through them on the PC instead.
 if(NOT MSVC)
   set_source_files_properties(src/threadlock_rules.cpp src/solver.cpp src/generator.cpp src/level_io.cpp src/audio_synth.cpp
+    src/ambience.cpp
     TARGET_DIRECTORY threadlock PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Debug>:-O2>")
 endif()
 
@@ -89,15 +97,17 @@ if(NOT ANDROID)
       tests/solver_tests.cpp
       tests/content_tests.cpp
       tests/board_camera_tests.cpp
+      tests/audio_tests.cpp
       src/board_camera.cpp
       tests/test_levels.h
-      ${THREADLOCK_RULES})
+      ${THREADLOCK_RULES}
+      ${THREADLOCK_SOUND})
     target_compile_features(threadlock_tests PRIVATE cxx_std_20)
     target_link_libraries(threadlock_tests PRIVATE wlw_json wlw_doctest)
     target_compile_definitions(threadlock_tests PRIVATE THREADLOCK_ASSETS="${CMAKE_CURRENT_SOURCE_DIR}/assets")
     add_test(NAME threadlock_tests COMMAND threadlock_tests)
 
-    add_executable(threadlock_tool tools/threadlock_tool.cpp ${THREADLOCK_RULES})
+    add_executable(threadlock_tool tools/threadlock_tool.cpp ${THREADLOCK_RULES} ${THREADLOCK_SOUND})
     target_compile_features(threadlock_tool PRIVATE cxx_std_20)
     target_link_libraries(threadlock_tool PRIVATE wlw_json)
     target_include_directories(threadlock_tool SYSTEM PRIVATE "${WLW_ENGINE_DIR}/third_party/stb")

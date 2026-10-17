@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <numbers>
 
 namespace threadlock::synth {
@@ -113,6 +114,82 @@ void Sine(Buffer& out, float start, float length, float freq_from, float freq_to
     phase += kTau * f / static_cast<float>(out.rate);
     out.samples[i] += gain * std::sin(phase) * Decay(t, attack, decay);
   }
+}
+
+// ---- The Lantern set: glass and bells ----
+
+// A glass harmonica: a rubbed glass bowl, almost a pure sine with weak 2nd and 3rd partials, a slow
+// attack, and two partials 0.7 Hz apart (the bowl is never perfectly round: a slow beating).
+void Harmonica(Buffer& out, float freq, float start, float gain, float attack = 0.07f, float decay = 0.32f) {
+  const size_t from = out.At(start);
+  for (size_t i = from; i < out.samples.size(); ++i) {
+    const float t = out.T(i - from);
+    const float v = std::sin(kTau * freq * t) + 0.6f * std::sin(kTau * (freq + 0.7f) * t + 1.3f) +
+                    0.12f * std::sin(2.0f * kTau * freq * t) + 0.05f * std::sin(3.0f * kTau * freq * t);
+    out.samples[i] += gain * 0.6f * v * Decay(t, attack, decay);
+  }
+}
+
+// A celesta: a hammer on a small steel bar over a resonator: bright, quick, the 3.9 partial gone
+// almost at once.
+void Celesta(Buffer& out, float freq, float start, float gain) {
+  const float ratio[] = {1.0f, 2.0f, 3.9f}, amp[] = {1.0f, 0.3f, 0.18f}, time[] = {0.2f, 0.11f, 0.03f};
+  const size_t from = out.At(start);
+  for (size_t i = from; i < out.samples.size(); ++i) {
+    const float t = out.T(i - from);
+    float v = 0.0f;
+    for (int k = 0; k < 3; ++k) v += amp[k] * std::sin(kTau * freq * ratio[k] * t) * Decay(t, 0.001f, time[k]);
+    out.samples[i] += gain * v;
+  }
+}
+
+// A tubular chime: a free-free bar's partials 1 : 2.756 : 5.404 : 8.933 (the high ones die first),
+// struck with a short click.
+void TubularChime(Buffer& out, float freq, float start, float gain) {
+  const float ratio[] = {1.0f, 2.756f, 5.404f, 8.933f}, amp[] = {1.0f, 0.45f, 0.25f, 0.12f};
+  const float time[] = {0.45f, 0.3f, 0.14f, 0.06f};
+  const size_t from = out.At(start);
+  for (size_t i = from; i < out.samples.size(); ++i) {
+    const float t = out.T(i - from);
+    float v = 0.0f;
+    for (int k = 0; k < 4; ++k) v += amp[k] * std::sin(kTau * freq * ratio[k] * t) * Decay(t, 0.0015f, time[k]);
+    out.samples[i] += gain * v;
+  }
+  Noise noise;
+  float last = 0.0f;
+  for (size_t i = from; i < out.At(start + 0.004f); ++i) {  // the strike: a high-passed tick
+    const float n = noise.Next();
+    out.samples[i] += gain * 0.35f * (n - last) * Decay(out.T(i - from), 0.0002f, 0.001f);
+    last = n;
+  }
+}
+
+// A small glass bell (a window pane lighting): the fundamental, a soft octave and a glassy 2.76.
+void PaneBell(Buffer& out, float freq, float start, float gain) {
+  const float ratio[] = {1.0f, 2.0f, 2.76f}, amp[] = {1.0f, 0.2f, 0.3f}, time[] = {0.14f, 0.08f, 0.05f};
+  const size_t from = out.At(start);
+  for (size_t i = from; i < out.samples.size(); ++i) {
+    const float t = out.T(i - from);
+    float v = 0.0f;
+    for (int k = 0; k < 3; ++k) v += amp[k] * std::sin(kTau * freq * ratio[k] * t) * Decay(t, 0.001f, time[k]);
+    out.samples[i] += gain * v;
+  }
+}
+
+// A state-variable filter (Chamberlin): band-passed and low-passed noise for smoke, liquid and air.
+struct Svf {
+  float low = 0.0f, band = 0.0f;
+  float Band(float in, float freq, float damping, uint32_t rate) {
+    const float k = 2.0f * std::sin(std::numbers::pi_v<float> * freq / static_cast<float>(rate));
+    low += k * band;
+    band += k * (in - low - damping * band);
+    return band;
+  }
+};
+
+// The heart's 12 chimes on a pentatonic climb, at the art's own timing.
+void HeartChimes(Buffer& out, float start, float base, float gain) {
+  for (int j = 0; j < 12; ++j) PaneBell(out, base * ClimbPitch(j), start + HeartOnset(j), gain);
 }
 
 void Normalize(std::vector<float>& samples, float peak) {
@@ -271,6 +348,108 @@ std::vector<float> Make(Sound sound, uint32_t rate) {
       Normalize(out.samples, 0.3f);
       return out.samples;
     }
+    case Sound::HarmonicaNote: {
+      Buffer out(rate, 1.4f);
+      Harmonica(out, kC4, 0.0f, 1.0f);
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::CelestaNote: {
+      Buffer out(rate, 0.9f);
+      Celesta(out, kC5, 0.0f, 1.0f);
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::LanternBlue: {  // the chimes, a harmonica chord blooming under them
+      Buffer out(rate, 2.4f);
+      TubularChime(out, kC5, 0.0f, 1.0f);
+      const float chord[] = {kC4, kC4 * 1.25f, kC4 * 1.5f};
+      for (int k = 0; k < 3; ++k) Harmonica(out, chord[k], 0.04f * static_cast<float>(k), 0.45f, 0.18f, 0.45f);
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
+    case Sound::LanternAmber: {  // the chimes a fifth up, a quick celesta arpeggio
+      Buffer out(rate, 2.2f);
+      TubularChime(out, kC5 * 1.5f, 0.0f, 1.0f);
+      const float chord[] = {kC5, kC5 * 1.25f, kC5 * 1.5f, kC6};
+      for (int k = 0; k < 4; ++k) Celesta(out, chord[k], 0.05f + 0.06f * static_cast<float>(k), 0.35f);
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
+    case Sound::PaneChime: {
+      Buffer out(rate, 0.7f);
+      PaneBell(out, kC5, 0.0f, 1.0f);
+      Normalize(out.samples, 0.6f);
+      return out.samples;
+    }
+    case Sound::Heart: {  // a harmonica chord (Cadd9) blooming, the heart's 12 chimes over it
+      Buffer out(rate, 2.4f);
+      for (float f : {kC4, kC4 * 1.25f, kC4 * 1.5f, kC5 * 1.125f}) Harmonica(out, f, 0.0f, 0.35f, 0.35f, 0.5f);
+      HeartChimes(out, 0.05f, kC5, 0.4f);
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
+    case Sound::RoseWindow: {  // the finale: a deep bell, a lower and longer bloom, the chimes, a shimmer
+      Buffer out(rate, 4.2f);
+      TubularChime(out, kC4, 0.0f, 0.7f);
+      for (float f : {kC4 * 0.5f, kC4 * 0.75f, kC4, kC4 * 1.25f, kC5 * 1.125f})
+        Harmonica(out, f, 0.1f, 0.3f, 0.8f, 0.75f);
+      HeartChimes(out, 0.3f, kC5, 0.35f);
+      const float shimmer[] = {kC6 * 2.0f, kC6 * 2.25f, kC6 * 2.5f, kC6 * 3.0f};
+      for (int k = 0; k < 4; ++k) {
+        const size_t from = out.At(2.5f + 0.07f * static_cast<float>(k));
+        for (size_t i = from; i < out.samples.size(); ++i) {
+          const float t = out.T(i - from);
+          const float tremolo = 1.0f + 0.3f * std::sin(kTau * 7.0f * t + static_cast<float>(k));
+          out.samples[i] += 0.07f * tremolo * std::sin(kTau * shimmer[k] * t) * Decay(t, 0.25f, 0.3f);
+        }
+      }
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
+    case Sound::Smoke: {  // a muffled knock on glass, then a low hiss that swells and goes
+      Buffer out(rate, 0.8f);
+      Sine(out, 0.0f, 0.3f, 210.0f, 160.0f, 1.0f, 0.002f, 0.05f);
+      Sine(out, 0.0f, 0.15f, 480.0f, 400.0f, 0.3f, 0.001f, 0.025f);
+      Noise noise;
+      Svf filter;
+      for (size_t i = 0; i < out.samples.size(); ++i) {
+        const float t = out.T(i);
+        const float env = Decay(t, 0.15f, 0.14f);
+        out.samples[i] += 0.9f * env * filter.Band(noise.Next(), 500.0f - 250.0f * t, 0.7f, rate);
+      }
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::Drip: {  // a bubble: a sine whose pitch rises fast, f(t) = f0 (1 + s t), gone at once
+      Buffer out(rate, 0.12f);
+      float phase = 0.0f;
+      for (size_t i = 0; i < out.samples.size(); ++i) {
+        const float t = out.T(i);
+        phase += kTau * 1100.0f * (1.0f + 11.0f * t) / static_cast<float>(rate);
+        out.samples[i] = std::sin(phase) * Decay(t, 0.0008f, 0.025f);
+      }
+      Normalize(out.samples, 0.6f);
+      return out.samples;
+    }
+    case Sound::CruciblePour: {  // a low soft glass tone, a little liquid
+      Buffer out(rate, 0.3f);
+      Harmonica(out, 196.0f, 0.0f, 1.0f, 0.012f, 0.06f);
+      Noise noise;
+      Svf filter;
+      for (size_t i = 0; i < out.samples.size(); ++i) {
+        const float t = out.T(i);
+        out.samples[i] += 0.5f * Decay(t, 0.01f, 0.04f) * filter.Band(noise.Next(), 900.0f + 600.0f * t, 0.3f, rate);
+      }
+      Normalize(out.samples, 0.35f);
+      return out.samples;
+    }
+    case Sound::Ascent: {  // a quick climb of small bells
+      Buffer out(rate, 0.9f);
+      for (int k = 0; k < 8; ++k) PaneBell(out, kC5 * ClimbPitch(k), 0.07f * static_cast<float>(k), 0.5f);
+      Normalize(out.samples, 0.45f);
+      return out.samples;
+    }
     case Sound::Tap:
     case Sound::Count: {
       Buffer out(rate, 0.06f);
@@ -282,7 +461,9 @@ std::vector<float> Make(Sound sound, uint32_t rate) {
   return {};
 }
 
-Sound NoteFor(Color color) {
+Sound NoteFor(SoundSet set, Color color) {
+  if (set == SoundSet::Lantern && color == Color::Blue) return Sound::HarmonicaNote;
+  if (set == SoundSet::Lantern && color == Color::Amber) return Sound::CelestaNote;
   switch (color) {
     case Color::Blue: return Sound::NoteBlue;
     case Color::Amber: return Sound::NoteAmber;
@@ -292,7 +473,9 @@ Sound NoteFor(Color color) {
   }
 }
 
-Sound ChordFor(Color color) {
+Sound ChordFor(SoundSet set, Color color) {
+  if (set == SoundSet::Lantern && color == Color::Blue) return Sound::LanternBlue;
+  if (set == SoundSet::Lantern && color == Color::Amber) return Sound::LanternAmber;
   switch (color) {
     case Color::Blue: return Sound::ChordBlue;
     case Color::Amber: return Sound::ChordAmber;
@@ -301,6 +484,28 @@ Sound ChordFor(Color color) {
     default: return Sound::ChordPearl;
   }
 }
+
+const char* SoundName(Sound sound) {
+  static constexpr const char* kNames[] = {
+      "NoteBlue",      "NoteAmber",   "NoteGreen",    "NoteRose",     "NotePearl", "ChordBlue", "ChordAmber",
+      "ChordGreen",    "ChordRose",   "ChordPearl",   "Thud",         "Splash",    "Chime",     "Grind",
+      "Fanfare",       "Star",        "Pour",         "Click",        "Place",     "Lift",      "Tap",
+      "HarmonicaNote", "CelestaNote", "LanternBlue",  "LanternAmber", "PaneChime", "Heart",     "RoseWindow",
+      "Smoke",         "Drip",        "CruciblePour", "Ascent"};
+  static_assert(std::size(kNames) == static_cast<size_t>(Sound::Count));
+  return sound < Sound::Count ? kNames[static_cast<size_t>(sound)] : "?";
+}
+
+Sound MudFor(SoundSet set) { return set == SoundSet::Lantern ? Sound::Smoke : Sound::Thud; }
+
+Sound PourFor(SoundSet set) { return set == SoundSet::Lantern ? Sound::CruciblePour : Sound::Pour; }
+
+Sound SolvedFor(SoundSet set, bool grand) {
+  if (set != SoundSet::Lantern) return Sound::Fanfare;
+  return grand ? Sound::RoseWindow : Sound::Heart;
+}
+
+float HeartOnset(int j) { return -std::log(1.0f - 0.98f * static_cast<float>(std::clamp(j, 0, 11)) / 12.0f) / 3.5f; }
 
 float ClimbPitch(int step) {
   // C major pentatonic, climbing (C D E G A, then up an octave).
