@@ -112,38 +112,28 @@ void Closed(Canvas& canvas, const std::vector<glm::vec2>& points, float thicknes
 
 void LanternArt::Create(wlw::app::Application& app) {
   using namespace wlw;
-  window_ = &app.Window();
   wall_shader_ = rendering::Shader::FromFile("shaders/lantern_wall.shader");
   pane_texture_ =
       rendering::WTexture2D::Create(kPanes, 1, {rendering::TextureFormat::RGBA8, false, false}, pane_pixels_.data());
+  tiles_.Create(app.Window(), "Lantern Works", Hex(0x080C15));
   AddTile();  // every board needs one: made up front, so the shader compiles in the warm-up
 }
 
-LanternArt::Tile& LanternArt::AddTile() {
-  using namespace wlw;
-  Tile tile;
-  tile.view = scene::Viewport::Create(
-      {.name = "Lantern Works", .format = rendering::TextureFormat::RGBA8, .depth = false, .clear = Hex(0x080C15)});
-  tile.view->SetScene(nullptr);
-  tile.view->SetUpdateMode(scene::Viewport::UpdateMode::Disabled);
-  tile.id = window_->AddViewport(tile.view);
-  tile.wall = rendering::ShaderMaterial::Create(wall_shader_);
-  tile.wall->SetParam("uPanes", pane_texture_);
-  tiles_.push_back(std::move(tile));
-  return tiles_.back();
+void LanternArt::AddTile() {
+  tiles_.Add();
+  TileArt art;
+  art.wall = wlw::rendering::ShaderMaterial::Create(wall_shader_);
+  art.wall->SetParam("uPanes", pane_texture_);
+  tile_art_.push_back(std::move(art));
 }
 
-void LanternArt::Invalidate() {
-  for (Tile& tile : tiles_) tile.base = tile.key = 0;
-}
+void LanternArt::Invalidate() { tiles_.Invalidate(); }
 
 void LanternArt::Release() {
   // Only a tall board has more than one tile.
-  while (tiles_.size() > 1) {
-    window_->RemoveViewport(tiles_.back().id);
-    tiles_.pop_back();
-  }
-  for (Tile& tile : tiles_) tile.tubes.clear();
+  tiles_.Shrink(1);
+  tile_art_.resize(1);
+  for (TileArt& art : tile_art_) art.tubes.clear();
   Invalidate();
 }
 
@@ -275,7 +265,8 @@ void LanternArt::DrawBack(Canvas& picture, const ArtFrame& frame) {
   const float h = screen.y;
   const float scroll = frame.layout.scroll * frame.layout.scale;  // canvas units
   const float total = h + frame.layout.scroll_max * frame.layout.scale;
-  const int count = std::max(1, static_cast<int>(std::ceil(total / h - 1e-4f)));
+  const TilePool::Span span = TilePool::Visible(scroll, h, total);
+  const int first = span.first, last = span.last;
   uint64_t board_key = Mix(0, reinterpret_cast<uintptr_t>(frame.level));
   board_key = Mix(board_key, Bits(layout_.origin.x));
   board_key = Mix(board_key, Bits(layout_.origin.y));
@@ -293,11 +284,9 @@ void LanternArt::DrawBack(Canvas& picture, const ArtFrame& frame) {
   // The window's light reaches only the tiles round the window and its beam (still coordinates).
   const float window_y = layout_.ToCanvas(frame.level->look.window).y, radius = WindowRadius(frame);
   const float lit_top = window_y - 1.05f * radius, lit_bottom = window_y + 0.3f * radius + 0.9f * h;
-  const int first = std::clamp(static_cast<int>(std::floor(scroll / h)), 0, count - 1);
-  const int last = std::clamp(static_cast<int>(std::floor((scroll + h - 0.01f) / h)), 0, count - 1);
-  // Every tile this board needs, made up front: a viewport added during a frame can only be drawn into
-  // from the next one (the window sizes it when it first draws), so a new tile waits a frame.
-  while (static_cast<int>(tiles_.size()) < count) AddTile();
+  // The slots this board needs (a grand machine is two screens: one each), made up front: a new one
+  // waits a frame before it can draw.
+  while (tiles_.Count() < std::min(span.count, 3)) AddTile();
   struct Want {
     uint64_t base, key;
   };
@@ -309,41 +298,33 @@ void LanternArt::DrawBack(Canvas& picture, const ArtFrame& frame) {
   };
   // A tile showing another board (or nothing) draws now; of those that only need the new light, one a
   // frame (the most visible first), which keeps the cost at one still picture's.
-  int stale = -1;
+  int stale = -1, stale_k = -1;
   float stale_shown = 0.0f;
   for (int k = first; k <= last; ++k) {
-    Tile& tile = tiles_[static_cast<size_t>(k)];
-    if (tile.fresh) continue;
+    const int slot = tiles_.Hold(k, first, last);
+    if (slot < 0 || tiles_[slot].fresh) continue;
+    TilePool::Slot& tile = tiles_[slot];
     const Want w = want(k);
     if (tile.base != w.base) {
-      DrawStill(tile, k, frame, screen, total);
+      DrawStill(slot, k, frame, screen, total);
       tile.base = w.base;
       tile.key = w.key;
     } else if (tile.key != w.key) {
       const float top = static_cast<float>(k) * h;
       const float shown = std::min(top + h, scroll + h) - std::max(top, scroll);
-      if (shown > stale_shown) stale = k, stale_shown = shown;
+      if (shown > stale_shown) stale = slot, stale_k = k, stale_shown = shown;
     }
   }
   if (stale >= 0) {
-    Tile& tile = tiles_[static_cast<size_t>(stale)];
-    DrawStill(tile, stale, frame, screen, total);
-    tile.key = want(stale).key;
+    DrawStill(stale, stale_k, frame, screen, total);
+    tiles_[stale].key = want(stale_k).key;
   }
-  for (int k = first; k <= last; ++k) {
-    if (tiles_[static_cast<size_t>(k)].base == 0) continue;  // no picture yet
-    if (const auto& texture = tiles_[static_cast<size_t>(k)].view->GetTexture()) {
-      wlw::ui::ImageStyle style;
-      style.uv = {{0.0f, 1.0f}, {1.0f, 0.0f}};  // render targets are bottom-up
-      const float top = static_cast<float>(k) * h - scroll;
-      picture.Image({{0.0f, top}, {screen.x, top + h}}, texture, style);
-    }
-  }
+  tiles_.Draw(picture, first, last, scroll);
 
   const Level& level = *frame.level;
   const Board& board = *frame.board;
   const float s = frame.Scale();
-  for (Tile& tile : tiles_) tile.fresh = false;
+  tiles_.EndFrame();
 
   // Lanterns glow as they fill.
   for (size_t n = 0; n < level.nodes.size(); ++n) {
@@ -369,18 +350,20 @@ void LanternArt::DrawBack(Canvas& picture, const ArtFrame& frame) {
   }
 }
 
-void LanternArt::DrawStill(Tile& tile, int k, const ArtFrame& whole, glm::vec2 screen, float total) {
+void LanternArt::DrawStill(int slot, int k, const ArtFrame& whole, glm::vec2 screen, float total) {
+  TilePool::Slot& tile = tiles_[slot];
+  TileArt& art = tile_art_[static_cast<size_t>(slot)];
   // A tile made this frame has no size yet (its canvas gets one when it is first drawn): it is the screen's.
   Canvas& canvas = tile.view->GetCanvas();
   // This tile's piece of the board: the layout at scroll 0, moved up by the tiles above it.
   ArtFrame frame = whole;
   frame.layout = layout_;
   frame.layout.origin.y -= static_cast<float>(k) * screen.y;
-  if (k > 0 && (!(tile.layout == frame.layout) || tile.tubes.size() != frame.level->pipes.size())) {
-    tile.layout = frame.layout;
-    tile.tubes = MakeTubes(*frame.level, frame.layout);
+  if (k > 0 && (!(art.layout == frame.layout) || art.tubes.size() != frame.level->pipes.size())) {
+    art.layout = frame.layout;
+    art.tubes = MakeTubes(*frame.level, frame.layout);
   }
-  const std::vector<Tube>& tubes = k == 0 ? tubes_ : tile.tubes;
+  const std::vector<Tube>& tubes = k == 0 ? tubes_ : art.tubes;
   tile.view->SetUpdateMode(wlw::scene::Viewport::UpdateMode::Once);
 
   // The wall and the window (one shader), with the window's light.
@@ -402,13 +385,13 @@ void LanternArt::DrawStill(Tile& tile, int k, const ArtFrame& whole, glm::vec2 s
   if (lit > 0.0f) beam /= lit;
   // The shader works in still coordinates: this tile starts uOffset down the whole picture.
   const glm::vec2 centre = layout_.ToCanvas(frame.level->look.window);
-  tile.wall->SetParam("uCanvas", screen);
-  tile.wall->SetParam("uOffset", glm::vec2(0.0f, static_cast<float>(k) * screen.y));
-  tile.wall->SetParam("uTotal", glm::vec2(screen.x, total));
-  tile.wall->SetParam("uScreen", screen);
-  tile.wall->SetParam("uWindow", glm::vec3(centre, WindowRadius(frame)));
-  tile.wall->SetParam("uBeam", glm::vec4(beam, lit / static_cast<float>(kOuterPanes)));
-  canvas.ShaderRect({{0.0f, 0.0f}, screen}, tile.wall);
+  art.wall->SetParam("uCanvas", screen);
+  art.wall->SetParam("uOffset", glm::vec2(0.0f, static_cast<float>(k) * screen.y));
+  art.wall->SetParam("uTotal", glm::vec2(screen.x, total));
+  art.wall->SetParam("uScreen", screen);
+  art.wall->SetParam("uWindow", glm::vec3(centre, WindowRadius(frame)));
+  art.wall->SetParam("uBeam", glm::vec4(beam, lit / static_cast<float>(kOuterPanes)));
+  canvas.ShaderRect({{0.0f, 0.0f}, screen}, art.wall);
 
   const Level& level = *frame.level;
   // Behind the glass: crucibles, the lanterns' chains, the globes' and hubs' backs.

@@ -37,6 +37,8 @@ wlw_add_game(threadlock
     src/main.cpp
     src/threadlock_app.cpp
     src/threadlock_app.h
+    src/tile_pool.cpp
+    src/tile_pool.h
     src/art_shapes.cpp
     src/art_shapes.h
     src/board_art.cpp
