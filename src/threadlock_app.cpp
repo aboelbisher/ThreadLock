@@ -61,6 +61,7 @@ void ThreadlockApp::OnStart() {
   ApplySettings();
   liquid_.Create(App());
   lantern_art_.Create(App());
+  city_art_.Create(App());
   action_material_ =
       wlw::rendering::ShaderMaterial::Create(wlw::rendering::Shader::FromFile("shaders/ui_gradient.shader"));
   // Toasts and the desktop's stand-in ads draw over every screen, on a layer above the game UI.

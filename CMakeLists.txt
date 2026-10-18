@@ -49,6 +49,8 @@ wlw_add_game(threadlock
     src/board_view.h
     src/catalog.cpp
     src/catalog.h
+    src/city_art.cpp
+    src/city_art.h
     src/city_map.cpp
     src/city_map.h
     src/feedback.cpp

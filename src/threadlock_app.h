@@ -7,6 +7,7 @@
 
 #include "board_art.h"
 #include "catalog.h"
+#include "city_art.h"
 #include "feedback.h"
 #include "lantern_art.h"
 #include "liquid.h"
@@ -52,6 +53,7 @@ class ThreadlockApp : public wlw::app::System {
   Progress& GetProgress() { return *progress_; }
   Feedback& GetFeedback() { return feedback_; }
   Liquid& GetLiquid() { return liquid_; }
+  CityArt& GetCityArt() { return city_art_; }  // the map's look (its tiles freed while it's closed)
   // The big EDIT / PLAY button's gradient (assets/shaders/ui_gradient.shader).
   const std::shared_ptr<wlw::rendering::ShaderMaterial>& ActionMaterial() const { return action_material_; }
   // How a world's boards are drawn (world 0 = the daily and the Lab).
@@ -100,6 +102,7 @@ class ThreadlockApp : public wlw::app::System {
   Liquid liquid_;
   WorkshopArt workshop_art_;
   LanternArt lantern_art_;
+  CityArt city_art_;
   std::shared_ptr<wlw::rendering::ShaderMaterial> action_material_;
   std::shared_ptr<wlw::ui::Font> font_;
   std::unique_ptr<wlw::kit::Ads> ads_;
