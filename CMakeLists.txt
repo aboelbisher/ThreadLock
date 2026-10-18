@@ -47,6 +47,8 @@ wlw_add_game(threadlock
     src/board_view.h
     src/catalog.cpp
     src/catalog.h
+    src/city_map.cpp
+    src/city_map.h
     src/feedback.cpp
     src/feedback.h
     src/lantern_art.cpp
@@ -62,6 +64,7 @@ wlw_add_game(threadlock
     src/palette.h
     src/progress.cpp
     src/progress.h
+    src/stars.h
     src/ui_parts.h
     src/workshop_art.cpp
     src/workshop_art.h
@@ -99,9 +102,11 @@ if(NOT ANDROID)
       tests/solver_tests.cpp
       tests/content_tests.cpp
       tests/board_camera_tests.cpp
+      tests/city_map_tests.cpp
       tests/audio_tests.cpp
       tests/sound_cue_tests.cpp
       src/board_camera.cpp
+      src/city_map.cpp
       tests/test_levels.h
       ${THREADLOCK_RULES}
       ${THREADLOCK_SOUND})

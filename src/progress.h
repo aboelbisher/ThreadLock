@@ -7,6 +7,8 @@
 #include <string_view>
 
 #include "catalog.h"
+#include "city_map.h"
+#include "stars.h"
 #include "wlw/kit/daily.h"
 #include "wlw/kit/progress.h"
 #include "wlw/kit/save_store.h"
@@ -21,13 +23,6 @@
 // The rules of progress live here too: stars (Solve / Lean / Swift, DESIGN.md §6), which levels and
 // worlds are open, achievements.
 namespace threadlock {
-
-enum StarBits : int {
-  kSolveStar = 1,
-  kLeanStar = 2,
-  kSwiftStar = 4,
-  kGoldFrame = 8,  // Lean and Swift in the same run
-};
 
 struct Settings {
   bool sound = true;
@@ -121,6 +116,14 @@ class Progress {
   bool PaletteOwned(const Catalog& catalog, std::string_view key) const;
   static const char* PaletteUnlockText(std::string_view key);
 
+  // ---- The city map (this device) ----
+  // What the map last showed (city::Seen). An old or restored save has none: the map seeds it
+  // (city::SeedSeen) so it only animates what is new.
+  bool HasMapSeen() const { return map_seen_known_; }
+  const city::Seen& MapSeen() const { return map_seen_; }
+  void SetMapSeen(const city::Seen& seen);
+  const StarMap& Stars() const { return stars_; }
+
   const std::string& DeviceId() const { return device_id_; }
 
  private:
@@ -130,7 +133,7 @@ class Progress {
   wlw::kit::SaveStore progress_;
   wlw::kit::SaveStore device_;
   std::string device_id_;
-  std::map<std::string, int> stars_;  // level -> StarBits (merged with OR)
+  StarMap stars_;  // merged with OR
   std::set<std::string> shown_;
   std::set<std::string> achievements_;
   std::set<std::string> two_answers_;  // levels where Lean and Swift came from different runs
@@ -141,6 +144,8 @@ class Progress {
   int hint_ads_ = 0;
   int ad_games_ = 0;
   int last_mend_ = 0;
+  bool map_seen_known_ = false;
+  city::Seen map_seen_;
 };
 
 }  // namespace threadlock

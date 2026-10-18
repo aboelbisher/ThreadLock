@@ -76,6 +76,17 @@ void Progress::Read() {
   const Json lab = d.contains("lab") ? d["lab"] : Json::object();
   lab_difficulty = Get<std::string>(lab, "difficulty", "medium");
   lab_seed = Get<int64_t>(lab, "seed", 1);
+  map_seen_known_ = d.contains("map_seen") && d["map_seen"].is_object();
+  map_seen_ = {};
+  if (map_seen_known_) {
+    const Json& seen = d["map_seen"];
+    if (seen.contains("stars") && seen["stars"].is_object()) {
+      for (const auto& [level, bits] : seen["stars"].items()) {
+        if (bits.is_number_integer()) map_seen_.stars[level] = bits.get<int>();
+      }
+    }
+    map_seen_.gates = Get(seen, "gates", 1);
+  }
 }
 
 void Progress::Write() {
@@ -101,6 +112,13 @@ void Progress::Write() {
   d["ad_games"] = ad_games_;
   d["last_mend"] = last_mend_;
   d["lab"] = {{"difficulty", lab_difficulty}, {"seed", lab_seed}};
+  if (map_seen_known_) {
+    Json seen_stars = Json::object();
+    for (const auto& [level, bits] : map_seen_.stars) seen_stars[level] = bits;
+    d["map_seen"] = {{"stars", seen_stars}, {"gates", map_seen_.gates}};
+  } else {
+    d.erase("map_seen");
+  }
 }
 
 void Progress::Save() {
@@ -300,6 +318,15 @@ void Progress::HintAdWatched(int today) {
 void Progress::SetAdGames(int games) {
   if (games == ad_games_) return;
   ad_games_ = games;
+  device_.MarkDirty();
+}
+
+// ---- The city map ----
+
+void Progress::SetMapSeen(const city::Seen& seen) {
+  if (map_seen_known_ && map_seen_.stars == seen.stars && map_seen_.gates == seen.gates) return;
+  map_seen_known_ = true;
+  map_seen_ = seen;
   device_.MarkDirty();
 }
 

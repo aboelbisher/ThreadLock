@@ -1,0 +1,179 @@
+#pragma once
+
+#include <array>
+#include <string>
+#include <vector>
+
+#include "stars.h"
+#include "threadlock_rules.h"
+
+// The city map (DESIGN.md §5, §8): the level select. One tall picture of the city, read top to bottom:
+// World 1's tower (the rose window, then a path of numbered lanterns, one per level, and the challenges'
+// diamonds on a side branch), then the market square, the canal quarter and the sanctum (worlds 2-4),
+// each behind a brass valve that opens with stars. The window isn't a button: petal n lights when level
+// n is solved (its big pane in the level's lantern colours, the two small panes for Lean and Swift),
+// the heart's three lobes with the challenges.
+//
+// Plain C++ (no engine), tested on the PC: where everything stands, what is lit, and what is new since
+// the player last saw the map (the seen record), which the map animates.
+//
+// Map units: kWidth wide (the screen's width; the screen scales them), y down, kHeight tall. The layout
+// was drawn for a 390 x 844 view (the approved mock).
+namespace threadlock::city {
+
+inline constexpr float kWidth = 390.0f;
+inline constexpr float kHeight = 5400.0f;
+inline constexpr float kMockView = 844.0f;  // the view height the scroll targets were tuned on
+
+inline constexpr int kPetals = 15;  // World 1's main path
+inline constexpr int kLobes = 3;    // its challenges
+inline constexpr int kLanterns = kPetals + kLobes;
+inline constexpr int kDistrictLamps = 18;  // worlds 2-4: 15 + 3 challenges
+
+// ---- The rose window ----
+inline constexpr Vec2 kWindow{195.0f, 468.0f};
+inline constexpr float kWindowRim = 188.0f;     // the brass ring
+inline constexpr float kWindowInside = 177.0f;  // the dark glass inside it
+inline constexpr float kHeart = 66.0f;          // the heart's disc
+inline constexpr float kSmallInner = 76.0f;     // the Lean / Swift panes: kSmallInner..kSmallOuter
+inline constexpr float kSmallOuter = 100.0f;
+inline constexpr float kTipInner = 104.0f;  // the big pane: kTipInner out to its pointed tip
+inline constexpr float kTipShoulder = 148.0f;
+inline constexpr float kTipBulge = 172.0f;
+inline constexpr float kPetalHalf = 10.5f;  // degrees
+inline constexpr float kLobeRing = 31.0f;   // the heart's lobes: centres this far out, kLobeRadius each
+inline constexpr float kLobeRadius = 23.0f;
+
+float PetalAngle(int petal);              // degrees, -90 = up, clockwise on screen; petal 0 = 1-1 at the top
+Vec2 Polar(float radius, float degrees);  // around the window's centre
+
+// A ring-shaped strip of glass (a pane): pairs of points at the same angle; draw it as the convex quads
+// inner[k], outer[k], outer[k + 1], inner[k + 1].
+struct Band {
+  std::vector<Vec2> inner, outer;
+};
+Band PetalTip(int petal, int steps);                   // the big pane
+Band PetalSliver(int petal, int k, int n, int steps);  // the k-th of its n colour slivers, left to right
+Band LeanPane(int petal, int steps);                   // the small pane before the petal's middle
+Band SwiftPane(int petal, int steps);                  // and after it
+float TipOuter(int petal, float degrees);              // how far out the big pane reaches at an angle
+Vec2 LobeCentre(int lobe);
+
+// ---- The lantern path (World 1's level select) ----
+struct Lantern {
+  Vec2 at;
+  bool diamond = false;  // a challenge
+  float radius = 27.0f;  // the glass
+  float ring = 35.0f;    // the brass ring (and the breathing halo)
+  float hit = 36.0f;     // a tap within this (a diamond: |dx| + |dy| <= hit)
+  float stars_y = 0.0f;  // the row of its three stars
+};
+inline constexpr float kStarSpacing = 16.0f;
+inline constexpr float kStarRadius = 6.5f;
+const std::array<Lantern, kLanterns>& Lanterns();
+int HitLantern(Vec2 at);  // the lantern a tap at `at` (map units) picks, -1 if none
+
+// The dotted trail between lanterns: 14 pieces down the main path, then 1-15 -> C1 -> C2 -> C3. A piece
+// lights once the lantern it leaves from is lit.
+struct TrailPiece {
+  int from = 0, to = 0;  // lanterns
+};
+const std::vector<TrailPiece>& Trail();
+std::vector<Vec2> TrailPoints(int piece, int samples);  // samples + 1 points along it
+
+// ---- Districts ----
+struct District {
+  int world = 1;
+  float top = 0.0f, bottom = 0.0f;  // the stretch of the map it owns
+  const char* place = "";           // its name plate's second line
+  float valve = 0.0f;               // the gate's brass valve (world > 1)
+  float plate = 0.0f;               // the name plate's top
+  float lamps_top = 0.0f, lamps_bottom = 0.0f, phase = 0.0f;
+};
+inline constexpr int kDistricts = 4;
+const std::array<District, kDistricts>& Districts();
+int DistrictAt(float y);  // the world whose stretch holds map y
+
+// Worlds 2-4 asleep in mist: their levels as lamps, 15 on a winding path then 3 challenge diamonds.
+// Until each world gets its own art they stay playable: an open district's lamps are buttons.
+std::array<Vec2, kDistrictLamps> DistrictLamps(int world);
+inline constexpr float kLampHit = 30.0f;
+int HitLamp(int world, Vec2 at);  // the lamp a tap picks, -1 if none
+
+struct Cubic {
+  Vec2 a, b, c, d;
+  Vec2 At(float t) const;
+  std::vector<Vec2> Points(int samples) const;  // samples + 1
+};
+Cubic GatePipe(int world);  // the valve down to the district's first lamp
+Cubic LinkPipe(int world);  // the district before it (its last lamp) down to this one's valve; world >= 3
+// The tower's pipe, from under the lantern path down to World 2's valve: it fills with stars toward the gate.
+inline constexpr Vec2 kTowerPipeTop{195.0f, 2050.0f};
+inline constexpr Vec2 kTowerPipeBottom{195.0f, 2392.0f};
+float PipeFill(int stars, int gate);  // 0..1
+
+// ---- The view ----
+// Scroll (map y at the top of a view `view` tall) that shows lantern i, the window, or the gate of a world.
+float LanternScroll(int lantern, float view);
+float WindowScroll(float view);
+float GateScroll(int world, float view);
+float ClampScroll(float y, float view);
+bool WindowInView(float scroll, float view);  // most of the window is on screen
+
+// ---- What the map shows ----
+// The levels the map knows, in map order (the screen fills it from the catalog).
+struct WorldLevels {
+  int world = 1;
+  int gate = 0;  // stars before the world needed to open it
+  std::vector<std::string> main, challenges;
+};
+using MapLevels = std::vector<WorldLevels>;
+
+// A lamp's or lantern's state as drawn.
+struct Light {
+  int bits = 0;  // StarBits
+  bool locked = true;
+};
+// World 1's lanterns (15 then the challenges): a main lantern is open once the one before it is solved,
+// the challenges once 1-15 is; every one is locked while its world's gate is shut.
+std::array<Light, kLanterns> LanternLights(const MapLevels& levels, const StarMap& stars);
+std::array<Light, kDistrictLamps> DistrictLights(const MapLevels& levels, const StarMap& stars, int world);
+// The lantern that breathes (the next level to play): the first unsolved one on the main path, then the
+// challenges; -1 when everything is solved.
+int CurrentLantern(const std::array<Light, kLanterns>& lights);
+int MainStars(const MapLevels& levels, const StarMap& stars, int world);  // the main path's stars
+int StarsBefore(const MapLevels& levels, const StarMap& stars, int world);
+bool GateOpen(const MapLevels& levels, const StarMap& stars, int world);
+int OpenGates(const MapLevels& levels, const StarMap& stars);  // the last world whose gate is open (1 = none)
+
+// The sky's dawn (0 = night, 1 = sunrise), from all the stars on the map.
+float Dawn(int stars);
+std::vector<Color> LanternColors(const Level& level);  // its cups (rack bottles too), left to right
+
+// ---- What's new ----
+// What the map last showed this device (device.json): every level's stars as they were drawn, and the
+// last world whose gate was seen opening.
+struct Seen {
+  StarMap stars;
+  int gates = 1;
+};
+// No record yet (an old save or a restored one): what the map shows as already seen. The first visit
+// after 1-3 (nothing solved past World 1's first three levels) sees nothing, so the three light up;
+// otherwise everything is seen (a restored save doesn't replay a hundred solves).
+Seen SeedSeen(const MapLevels& levels, const StarMap& stars);
+
+struct Reveal {
+  int world = 1;
+  int index = 0;  // a lantern (World 1) or a lamp: main path then challenges
+  std::string level;
+  int fresh = 0;  // star bits to light (kSolveStar, kLeanStar, kSwiftStar)
+};
+struct News {
+  std::vector<Reveal> reveals;  // in map order
+  std::vector<int> gates;       // worlds whose gate opened, in order
+  bool Empty() const { return reveals.empty() && gates.empty(); }
+};
+News WhatsNew(const MapLevels& levels, const Seen& seen, const StarMap& stars);
+Seen SeeAll(const MapLevels& levels, const StarMap& stars);  // the record once the news has played
+
+}  // namespace threadlock::city
