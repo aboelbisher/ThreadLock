@@ -167,6 +167,24 @@ piece learnt in World 1 reads the same in World 4.
 quarter, the sanctum). Solving a level lights its corner of its district, so progress shows as the city
 waking up.
 
+**The map as built (the level select).** One tall picture read top to bottom, ~6.5 screens, drawn from the
+approved mock (390 map units wide, scaled to the screen; `city_map.h` has every position): the tower at
+dawn (the sky brightens with your stars, 0-45), the great rose window, then a path of numbered lanterns
+winding down the tower face, one per level, 1-1 under the window and 1-15 at the bottom, with the three
+challenges as diamonds on a short side branch. A lantern is a button (≥ 56 units to tap): lit in its
+level's colours (its cups, left to right) once solved, its 1-3 stars under it; locked = dark with a faint
+number; the next level to play breathes. **The window is not a button, it's the progress picture:** petal n
+lights when level n is solved, its big pane in that level's colours, its two small panes for Lean and
+Swift, gold leading at 3 stars; the heart's three lobes light with the challenges. Its light spills onto
+the roofs at the tower's foot. Below, a pipe fills with stars toward World 2's brass valve ("20 ★"), and
+worlds 2-4 sleep in mist, each with a name plate and its levels as 18 small lamps (playable once the gate
+is open, until each world gets its own art). **What's new since the last visit plays as an animation**
+(the "seen" record in device.json): the view glides to the lantern, it lights and its stars pop with
+chimes, then glides up while the petal's panes light, and back down to the next lantern, which pulses; a
+gate's valve turns, light pours down the pipe (the view rides with it) and the district wakes. A tap
+skips it. The first visit (after 1-3) lights 1-1 to 1-3 and their petals; a restored save doesn't replay;
+at most the last three levels animate, earlier news shows at once.
+
 ### World 1 · First Light · The Lantern Works
 - **Place:** the glassworks at the top of the tower, at dawn.
 - **Board:** a cascade seen from the side: light pours from crucibles at the top and falls tier by tier,
@@ -282,7 +300,9 @@ run an idle piece sits dim and still. A solved card (stars, time, pieces; Next, 
 (what went wrong and where; Show me, Edit), tinted per world. **Show me** replays a second before the
 failure at quarter speed under a spotlight. Hints in three steps: Show me (free), place one (1 hint),
 show the solution (2 hints or a rewarded ad; Lean and Swift then need a machine of your own).
-Map: the city (§5); worlds open behind star gates.
+Map: the city (§5); worlds open behind star gates. A slim top bar (stars, hints; trophies, settings) and
+the Daily puzzle and the Lab as round buttons in the bottom corners; drag and fling to scroll, tap a
+lantern to play its level. Coming back from a level focuses its lantern.
 
 ## 9. Look, sound and feel
 
@@ -315,7 +335,7 @@ committed after the owner's OK, in small commits:
 2. World 1 complete, as the vertical slice: the Lantern Works renderer; the brass toolkit and the HUD;
    its 15 levels + 3 challenges, redesigned as named machines in the cascade grammar; The Rose Window
    finale (two screens, scroll + a camera that rides down with the liquid); its sounds; the city map with
-   the tower district.
+   the tower district. **Done (18 October).**
 3. Worlds 2, 3 and 4, one at a time, the same way.
 4. Playtest World 1 with 5–10 people; adjust levels with the tool.
 5. Launch: Threadlock's own AdMob app and units, analytics, store page, closed test. Then worlds 5–8 as

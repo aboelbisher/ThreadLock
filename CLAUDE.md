@@ -43,11 +43,17 @@ src/solver.{h,cpp}            every placement where each piece acts, run each: p
 src/generator.{h,cpp}         daily puzzle + Lab: 4 templates (race, shares, mixer, shared pipe), solver-filtered
 src/catalog.{h,cpp}           loads assets/levels/world*.json + pars.json (platform::ReadFile)
 src/progress.{h,cpp}          saves (kit::SaveStore): progress.json (mergeable: star bits, counters, daily log,
-                              achievements) + device.json (settings, hints, ad pacing, Lab); unlock rules
+                              achievements) + device.json (settings, hints, ad pacing, Lab, the map's seen record); unlock rules
 src/threadlock_app.{h,cpp}    the one System: services (catalog, progress, feedback, liquid, ads) + navigation, toasts,
                               debug panel (WLW_DEBUG_UI)
 src/level_screen.{h,cpp}      the level screen: drag/tap/long-press, run loop (1x/2x/4x), result card, Show me, hints
-src/map_screen.{h,cpp}        the scrolling map (worlds, star gates), daily + Lab cards
+src/map_screen.{h,cpp}        the city map (level select): input, camera, HUD (stars, hints, trophies, settings; Daily +
+                              Lab round buttons), the news since the last visit as animations (glides, lights, gates)
+src/city_map.{h,cpp}          the map in plain C++ (tested): every position (lantern path, window panes, districts, lamps,
+                              pipes), hit tests, scroll targets, lights from progress, the seen record and WhatsNew
+src/city_art.{h,cpp}          the map's look: still art in pooled tiles, lit panes / lanterns / lamps / mist each frame
+src/tile_pool.{h,cpp}         a tall still picture as a pool of screen-sized offscreen tiles (LanternArt, CityArt)
+src/stars.h                   StarBits + StarMap (level id -> bits)
 src/menus.{h,cpp}             overlays: settings (palettes), achievements, daily (streak, archive), Lab
 src/board_view.{h,cpp}        a board on screen: per-node animations, markers, hit tests, and what every world shares:
                               the pieces (DrawPiece = the brass toolkit), sockets, flaps, hints. Calls the world's art
@@ -58,7 +64,7 @@ src/board_art.{h,cpp}         BoardArt: a world's way of drawing a machine (back
 src/world_look.h              per world: which art + the HUD/card tint (accent, panel, EDIT gradient); LookForWorld
 src/lantern_art.{h,cpp}       World 1, The Lantern Works: rose window + wall (assets/shaders/lantern_wall.shader) and
                               glass drawn once into offscreen viewports, one screen-sized tile per screen of board
-                              (redrawn when the level, screen or the window's light changes; one light redraw a frame); glass tubes, coils, drip falls, globes, crucibles, lanterns
+                              (redrawn when the level, screen or the window's light changes; one light redraw a frame; tile_pool.h); glass tubes, coils, drip falls, globes, crucibles, lanterns
 src/workshop_art.{h,cpp}      the v2 look (worlds 2-4 until their art, the daily, the Lab) + shared machine parts
 src/art_shapes.{h,cpp}        drawing helpers: paths with round bends, Ribbon (seamless translucent bands), strokes,
                               glyphs, glows, brass (medallion, plate, bar)
@@ -72,7 +78,7 @@ assets/levels/                world1-4.json (handmade levels) + pars.json (gener
 assets/shaders/               canvas shaders: lantern_wall (World 1's backdrop), ui_gradient (the EDIT / PLAY button)
 tools/threadlock_tool.cpp     the level tool (below)
 tests/                        doctest: rules, sockets (the piece x socket table), machine parts, solver, content
-                              (every shipped level + generated ones)
+                              (every shipped level + generated ones), board camera, sounds, the city map
 android/                      Gradle project: ThreadlockActivity (WlwActivity + AdMobService)
 external/WLWengine/           the engine (v0.2.0 + KeepScreenOn, 4371105)
 ```
@@ -133,8 +139,8 @@ PC tests and the tool without CMake/vcpkg, from a VS developer shell (repo root)
 cl /nologo /std:c++20 /EHsc /W4 /WX /O2 /external:W0 /external:I external\WLWengine\third_party\tinygltf ^
    /external:I external\WLWengine\third_party\doctest /Fe:build\pc\threadlock_tests.exe ^
    tests\*.cpp src\threadlock_rules.cpp src\level_io.cpp src\solver.cpp src\generator.cpp src\board_camera.cpp ^
-   src\audio_synth.cpp src\ambience.cpp src\sound_cues.cpp
-(the tool: tools\threadlock_tool.cpp + the same sources but board_camera and sound_cues, plus /external:I ...\third_party\stb)
+   src\audio_synth.cpp src\ambience.cpp src\sound_cues.cpp src\city_map.cpp
+(the tool: tools\threadlock_tool.cpp + the same sources but board_camera, sound_cues and city_map, plus /external:I ...\third_party\stb)
 ```
 CMake (desktop) also defines `threadlock_tests` and `threadlock_tool`; those need the engine's vcpkg submodule
 (`git submodule update --init --recursive`). VS is at `C:\Program Files\Microsoft Visual Studio\18\Community`
@@ -148,7 +154,7 @@ The same tests on a phone (ARM64, the NDK's clang), from Git Bash with `MSYS_NO_
 $NDK/toolchains/llvm/prebuilt/windows-x86_64/bin/clang++.exe --target=aarch64-linux-android24 -std=c++20 -O2 \
   -static-libstdc++ -isystem external/WLWengine/third_party/tinygltf -isystem external/WLWengine/third_party/doctest \
   tests/*.cpp src/threadlock_rules.cpp src/level_io.cpp src/solver.cpp src/generator.cpp src/board_camera.cpp \
-  src/audio_synth.cpp src/ambience.cpp src/sound_cues.cpp \
+  src/audio_synth.cpp src/ambience.cpp src/sound_cues.cpp src/city_map.cpp \
   -o build/android-tests/threadlock_tests
 adb -s <serial> push build/android-tests/threadlock_tests /data/local/tmp/tl/   (+ assets/levels/*.json to /data/local/tmp/tl/assets/levels/)
 adb -s <serial> shell "cd /data/local/tmp/tl && ./threadlock_tests"
@@ -167,7 +173,9 @@ it) has Bluzzle with saves (never uninstall it). Ask before using an emulator. S
 (`adb shell input keyevent KEYCODE_WAKEUP`). Dev cvars to reach a state without tapping (quote the whole am command):
 `adb shell "am start -n com.aboelbisher.threadlock/.ThreadlockActivity --es wlw 'tl.open=1-4;tl.solve=1;tl.autoplay=1'"`
 (open a level, place its Lean solution, tap play after 1 s). Also `tl.place=separator@gp/0,turnstile@ga/1,tank8@pk`
-(place these pieces) and `tl.scroll=600` (a tall level opens scrolled this far, no intro pan).
+(place these pieces), `tl.scroll=600` (a tall level opens scrolled this far, no intro pan) and `tl.map=seen:1-3` /
+`seen:none` / `gate:2` (the map replays its news as if it last saw World 1 up to 1-3 / nothing / everything but
+World 2's gate). The map's screen goes to sleep like any app: wake the phone before each screenshot.
 Ads: AdMob through the kit; **Google's sample app id and test units** until Threadlock has its own (manifest +
 MakeAdsConfig in threadlock_app.cpp). The debug build has the ImGui panel (Threadlock window: jump to any level,
 open everything, hints, wipe, ads).
@@ -181,10 +189,5 @@ open everything, hints, wipe, ads).
 - Research competitors before pitching new game ideas.
 
 ## Next steps
-1. Play it on the Pixel 4 (checked 2026-10-16: levels 1-1..1-4, mud + Show me, the solved/failed cards, the
-   map, daily, settings, hints, the 3-8 THREADLOCKED picture all work). Still to tune: feel, the liquid look,
-   performance per quality tier; check Lab, achievements, palettes and ads in play.
-2. Playtest World 1 with 5-10 people (DESIGN.md §11 step 4); adjust levels with the tool.
-3. Launch work: Threadlock's own AdMob app + units, analytics (Firebase via a kit bridge), store page, closed
-   test. Then worlds 5-8 as updates (collector, bell, gates, layered glasses, ink, clock gates, rings).
-4. A desktop level editor (Dear ImGui, live run) would speed up level design beyond the tool.
+DESIGN.md §11 is the build order (World 1 is done, city map included). Next: §11 step 3, worlds 2, 3 and 4
+one at a time (each its own art, sounds, and its district on the map), then the World 1 playtest and launch.
