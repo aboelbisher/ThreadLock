@@ -13,6 +13,7 @@
 #include "world_look.h"
 #include "wlw/core/cvar.h"
 #include "wlw/core/log.h"
+#include "wlw/platform/platform.h"
 #include "wlw/ui/icons.h"
 #include "wlw/ui/widgets.h"
 
@@ -204,6 +205,7 @@ void LevelScreen::OnExit() {
   view_.Art().Release();
   app_.GetFeedback().SetSoundSet(synth::SoundSet::Workshop);
   app_.GetFeedback().SetAmbience(false, false);
+  wlw::platform::KeepScreenOn(false);
   app_.Services().Window().GetScreen().SetClearColor(ui_color::kBackground);
   app_.GetProgress().Save();
 }
@@ -373,6 +375,8 @@ void LevelScreen::Update(float dt) {
   // World 1's ambience while the level is open, ducked while the machine runs (or replays for Show me).
   app_.GetFeedback().SetAmbience(look_.sounds == synth::SoundSet::Lantern,
                                  phase_ == Phase::Run || phase_ == Phase::ShowMe);
+  // The player watches a run without touching, and a grand machine's run outlasts a 30 s screen timeout.
+  wlw::platform::KeepScreenOn(phase_ == Phase::Run || phase_ == Phase::ShowMe);
   view_.Update(dt, board_);
   hint_time_ = std::max(0.0f, hint_time_ - dt);
   if (hint_time_ <= 0.0f) {

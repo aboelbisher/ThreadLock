@@ -74,7 +74,7 @@ tools/threadlock_tool.cpp     the level tool (below)
 tests/                        doctest: rules, sockets (the piece x socket table), machine parts, solver, content
                               (every shipped level + generated ones)
 android/                      Gradle project: ThreadlockActivity (WlwActivity + AdMobService)
-external/WLWengine/           the engine (pinned at v0.1.0)
+external/WLWengine/           the engine (v0.2.0 + KeepScreenOn, 4371105)
 ```
 
 ## Rules v3 (threadlock_rules.h)
