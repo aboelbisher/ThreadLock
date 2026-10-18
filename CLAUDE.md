@@ -133,8 +133,8 @@ PC tests and the tool without CMake/vcpkg, from a VS developer shell (repo root)
 cl /nologo /std:c++20 /EHsc /W4 /WX /O2 /external:W0 /external:I external\WLWengine\third_party\tinygltf ^
    /external:I external\WLWengine\third_party\doctest /Fe:build\pc\threadlock_tests.exe ^
    tests\*.cpp src\threadlock_rules.cpp src\level_io.cpp src\solver.cpp src\generator.cpp src\board_camera.cpp ^
-   src\audio_synth.cpp src\ambience.cpp
-(the tool: tools\threadlock_tool.cpp + the same sources but board_camera, plus /external:I ...\third_party\stb)
+   src\audio_synth.cpp src\ambience.cpp src\sound_cues.cpp
+(the tool: tools\threadlock_tool.cpp + the same sources but board_camera and sound_cues, plus /external:I ...\third_party\stb)
 ```
 CMake (desktop) also defines `threadlock_tests` and `threadlock_tool`; those need the engine's vcpkg submodule
 (`git submodule update --init --recursive`). VS is at `C:\Program Files\Microsoft Visual Studio\18\Community`
@@ -148,7 +148,7 @@ The same tests on a phone (ARM64, the NDK's clang), from Git Bash with `MSYS_NO_
 $NDK/toolchains/llvm/prebuilt/windows-x86_64/bin/clang++.exe --target=aarch64-linux-android24 -std=c++20 -O2 \
   -static-libstdc++ -isystem external/WLWengine/third_party/tinygltf -isystem external/WLWengine/third_party/doctest \
   tests/*.cpp src/threadlock_rules.cpp src/level_io.cpp src/solver.cpp src/generator.cpp src/board_camera.cpp \
-  src/audio_synth.cpp src/ambience.cpp \
+  src/audio_synth.cpp src/ambience.cpp src/sound_cues.cpp \
   -o build/android-tests/threadlock_tests
 adb -s <serial> push build/android-tests/threadlock_tests /data/local/tmp/tl/   (+ assets/levels/*.json to /data/local/tmp/tl/assets/levels/)
 adb -s <serial> shell "cd /data/local/tmp/tl && ./threadlock_tests"

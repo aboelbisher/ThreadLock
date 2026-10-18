@@ -1,6 +1,7 @@
 #include "feedback.h"
 
 #include <algorithm>
+#include <chrono>
 
 #include "wlw/core/log.h"
 #include "wlw/platform/platform.h"
@@ -10,6 +11,7 @@ namespace threadlock {
 void Feedback::Load(wlw::audio::Audio& audio) {
   audio_ = &audio;
   const uint32_t rate = audio.GetMixer().SampleRate();
+  const auto start = std::chrono::steady_clock::now();
   for (size_t i = 0; i < ids_.size(); ++i) {
     const std::vector<float> mono = synth::Make(static_cast<synth::Sound>(i), rate);
     wlw::audio::SoundData data;
@@ -19,77 +21,53 @@ void Feedback::Load(wlw::audio::Audio& audio) {
     ids_[i] = audio.GetMixer().AddSound(std::move(data));
   }
   audio.GetMixer().max_instances_per_sound = 3;
-  WLW_LOG_INFO("Synthesized %zu sounds at %u Hz", ids_.size(), rate);
+  ambience_ = std::make_unique<AmbienceStream>(rate);
+  const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+  WLW_LOG_INFO("Synthesized %zu sounds at %u Hz in %.1f ms", ids_.size(), rate, ms);
 }
 
 void Feedback::Play(synth::Sound sound, float volume, float pitch, float pan) {
-  if (!sound_on || !audio_) return;
+  if (!sound_on_ || !audio_) return;
   audio_->Play(ids_[static_cast<size_t>(sound)],
                {.volume = volume, .pitch = pitch, .pan = std::clamp(pan, -1.0f, 1.0f)});
 }
 
 void Feedback::Vibrate(int milliseconds, float strength) {
-  if (haptics_on) wlw::platform::Vibrate(milliseconds, strength);
+  if (haptics_on_) wlw::platform::Vibrate(milliseconds, strength);
 }
 
-void Feedback::OnEvents(const std::vector<Event>& events, const Level& level, const Board& board) {
-  auto pan_of = [&](int node) {
-    return node >= 0 ? (level.nodes[static_cast<size_t>(node)].at.x - 180.0f) / 180.0f * 0.6f : 0.0f;
-  };
-  // What a cup (or a rack's bottle) wants.
-  auto want_of = [&](const Event& e) {
-    const Node& node = level.nodes[static_cast<size_t>(e.node)];
-    return node.kind == NodeKind::Rack && e.slot >= 0 ? node.slots[static_cast<size_t>(e.slot)].want : node.want;
-  };
-  bool landed = false;
-  for (const Event& e : events) {
-    switch (e.type) {
-      case EventType::Land: {
-        const Node& node = level.nodes[static_cast<size_t>(e.node)];
-        if (node.kind != NodeKind::Cup && node.kind != NodeKind::Rack) break;
-        const Color want = want_of(e);
-        const bool pure = e.bead.a == want && (!e.bead.IsBlend() || e.bead.b == want);
-        if (!pure) {
-          Play(synth::Sound::Splash, 0.8f, 1.0f, pan_of(e.node));
-        } else {
-          const int step = std::max(0, e.value - e.bead.Drops());
-          Play(synth::NoteFor(want), 0.55f, synth::ClimbPitch(step), pan_of(e.node));
-        }
-        landed = true;
-        break;
-      }
-      case EventType::CupFull: Play(synth::ChordFor(want_of(e)), 0.6f, 1.0f, pan_of(e.node)); break;
-      case EventType::Flip: Play(synth::Sound::Click, 0.55f, e.value ? 1.25f : 0.7f, pan_of(e.node)); break;
-      case EventType::Turn: Play(synth::Sound::Click, 0.3f, 0.6f, pan_of(e.node)); break;
-      case EventType::Leave:
-        if (level.nodes[static_cast<size_t>(e.node)].kind == NodeKind::Mill)
-          Play(synth::Sound::Click, 0.4f, 0.5f, pan_of(e.node));  // the wheel turns a notch
-        break;
-      case EventType::Collide:
-        Play(synth::Sound::Thud, 0.9f, 1.0f, pan_of(e.node));
-        Vibrate(35, 0.85f);
-        break;
-      case EventType::NearMiss: Play(synth::Sound::Chime, 0.5f, 1.0f, pan_of(e.node)); break;
-      case EventType::Spill: Play(synth::Sound::Splash, 0.7f, 0.8f, pan_of(e.node)); break;
-      case EventType::Jammed:
-        Play(synth::Sound::Grind, 0.9f);
-        Vibrate(70, 1.0f);
-        break;
-      case EventType::Pour: Play(synth::Sound::Pour, 0.22f, 1.0f, pan_of(e.node)); break;
-      case EventType::Mix: Play(synth::Sound::NoteGreen, 0.45f, 0.75f, pan_of(e.node)); break;
-      case EventType::Enter: {
-        const int piece = board.PieceAt(e.node);
-        if (piece < 0 || board.RoleOf(piece) != PieceRole::Acts) break;  // an idle piece stays still and silent
-        const PieceType type = board.PieceInfo(piece).piece.type;
-        if (type == PieceType::Turnstile || type == PieceType::Flipper || type == PieceType::Overflow) {
-          Play(synth::Sound::Click, 0.45f, type == PieceType::Flipper ? 0.85f : 1.0f, pan_of(e.node));
-        }
-        break;
-      }
-      default: break;
-    }
-  }
-  if (landed) Vibrate(8, 0.25f);
+void Feedback::OnEvents(const std::vector<Event>& events, const Level& level, const Board& board,
+                        const Listener& listener) {
+  const Cues cues = CuesFor(events, level, board, set_, listener);
+  for (const Cue& cue : cues.sounds) Play(cue.sound, cue.volume, cue.pitch, cue.pan);
+  for (const Buzz& buzz : cues.buzzes) Vibrate(buzz.milliseconds, buzz.strength);
+}
+
+void Feedback::SetAmbience(bool on, bool running) {
+  ambience_wanted_ = on;
+  ambience_running_ = running;
+}
+
+void Feedback::SetSettings(bool sound, bool haptics, bool music) {
+  sound_on_ = sound;
+  haptics_on_ = haptics;
+  music_on_ = music;
+  if (audio_) audio_->SetBusVolume(wlw::audio::Bus::Music, sound && music ? 1.0f : 0.0f);
+}
+
+void Feedback::Update() {
+  if (!audio_ || !ambience_) return;
+  // Muted = not rendered at all (no audio-thread work for nothing).
+  const bool play = ambience_wanted_ && sound_on_ && music_on_;
+  if (play) ambience_->ambience.SetTarget(ambience_running_ ? 0.6f : 1.0f, 0.8f);
+  if (play == ambience_playing_) return;
+  ambience_playing_ = play;
+  ambience_used_ = ambience_used_ || play;
+  audio_->GetMixer().PlayStream(play ? ambience_.get() : nullptr, play ? 2.0f : 1.0f);
+}
+
+void Feedback::Shutdown() {
+  if (audio_ && ambience_used_) audio_->Suspend();
 }
 
 }  // namespace threadlock

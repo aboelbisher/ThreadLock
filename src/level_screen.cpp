@@ -196,11 +196,14 @@ LevelScreen::LevelScreen(ThreadlockApp& app, const Level* level, LevelSource sou
 void LevelScreen::OnEnter() {
   app_.GetLiquid().SetActive(true);
   view_.Art().Invalidate();
+  app_.GetFeedback().SetSoundSet(look_.sounds);
   WLW_LOG_INFO("Level %s %s (%s)", level_->id.c_str(), level_->name.c_str(), LevelTypeKey(level_->type));
 }
 
 void LevelScreen::OnExit() {
   view_.Art().Release();
+  app_.GetFeedback().SetSoundSet(synth::SoundSet::Workshop);
+  app_.GetFeedback().SetAmbience(false, false);
   app_.Services().Window().GetScreen().SetClearColor(ui_color::kBackground);
   app_.GetProgress().Save();
 }
@@ -249,7 +252,9 @@ void LevelScreen::Step(bool quiet) {
   const std::vector<Event>& events = board_.Tick();
   if (quiet) return;
   view_.OnEvents(events, board_);
-  app_.GetFeedback().OnEvents(events, *level_, board_);
+  // On a tall board the camera is the listener: what happens off the view is softer.
+  const Listener listener = camera_.Scrolls() ? Listener{camera_.Y(), camera_.Visible()} : Listener{};
+  app_.GetFeedback().OnEvents(events, *level_, board_, listener);
   if (phase_ != Phase::Run) return;
   Progress& progress = app_.GetProgress();
   for (const Event& e : events) {
@@ -286,7 +291,8 @@ void LevelScreen::RunEnded() {
       camera_.Focus(level_->look.window.y);
       done_delay_ = kPayoffDelay;
     }
-    app_.GetFeedback().Play(synth::Sound::Fanfare, 0.7f);
+    // World 1: the window's heart lights (a grand machine's rose window, longer); elsewhere the fanfare.
+    app_.GetFeedback().Play(synth::SolvedFor(look_.sounds, camera_.Scrolls()), 0.7f);
     const Placement placement = board_.GetPlacement();
     const bool shown = progress.SolutionShown(level_->id) &&
                        (SamePlacement(placement, level_->pars.lean) || SamePlacement(placement, level_->pars.swift));
@@ -364,6 +370,9 @@ void LevelScreen::Update(float dt) {
     dev_clock_ += dt;
     if (dev_clock_ >= cv_autoplay.Get()) StartRun();
   }
+  // World 1's ambience while the level is open, ducked while the machine runs (or replays for Show me).
+  app_.GetFeedback().SetAmbience(look_.sounds == synth::SoundSet::Lantern,
+                                 phase_ == Phase::Run || phase_ == Phase::ShowMe);
   view_.Update(dt, board_);
   hint_time_ = std::max(0.0f, hint_time_ - dt);
   if (hint_time_ <= 0.0f) {
@@ -529,8 +538,10 @@ void LevelScreen::Layout(const UIContext& ui) {
     intro_pending_ = false;
     if (cv_scroll.Get() >= 0.0f)
       camera_.Snap(cv_scroll.Get());
-    else if (!app_.Calm())
+    else if (!app_.Calm()) {
       camera_.Intro(camera_.MaxY(), 0.0f, kIntroSeconds);
+      app_.GetFeedback().Play(synth::Sound::Ascent, 0.5f);  // short: a skipped pan doesn't leave it hanging
+    }
   }
   const glm::vec2 origin{board_rect_.Center().x - kBoardSize.x * scale * 0.5f, board_rect_.min.y};
   // Whole pixels, so the still picture's tiles stay crisp.

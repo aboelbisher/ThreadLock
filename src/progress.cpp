@@ -65,6 +65,7 @@ void Progress::Read() {
   const Json settings_json = d.contains("settings") ? d["settings"] : Json::object();
   settings.sound = Get(settings_json, "sound", true);
   settings.haptics = Get(settings_json, "haptics", true);
+  settings.music = Get(settings_json, "music", true);
   settings.reduced_motion = Get(settings_json, "reduced_motion", false);
   settings.palette = Get<std::string>(settings_json, "palette", "classic");
   hints_ = Get(d, "hints", kStartHints);
@@ -91,6 +92,7 @@ void Progress::Write() {
   Json& d = device_.Data();
   d["settings"] = {{"sound", settings.sound},
                    {"haptics", settings.haptics},
+                   {"music", settings.music},
                    {"reduced_motion", settings.reduced_motion},
                    {"palette", settings.palette}};
   d["hints"] = hints_;

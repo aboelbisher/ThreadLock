@@ -88,8 +88,8 @@ void ThreadlockApp::OnStart() {
 }
 
 void ThreadlockApp::ApplySettings() {
-  feedback_.sound_on = progress_->settings.sound;
-  feedback_.haptics_on = progress_->settings.haptics;
+  const Settings& settings = progress_->settings;
+  feedback_.SetSettings(settings.sound, settings.haptics, settings.music);
 }
 
 BoardArt& ThreadlockApp::ArtFor(int world) {
@@ -105,6 +105,7 @@ int ThreadlockApp::Today() const { return wlw::kit::Today().ToNumber(); }
 void ThreadlockApp::OnUpdate(float dt) {
   time_ += dt;
   ads_->Update(dt);
+  feedback_.Update();
   for (ToastItem& toast : toasts_) toast.age += dt;
   while (!toasts_.empty() && toasts_.front().age > 2.6f) toasts_.pop_front();
 }
@@ -120,7 +121,10 @@ bool ThreadlockApp::OnBack() { return false; }
 
 void ThreadlockApp::OnAppPaused() { progress_->Save(); }
 
-void ThreadlockApp::OnShutdown() { progress_->Save(); }
+void ThreadlockApp::OnShutdown() {
+  progress_->Save();
+  feedback_.Shutdown();
+}
 
 // ---- Moving between screens ----
 

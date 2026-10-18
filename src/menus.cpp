@@ -47,7 +47,8 @@ void MenuScreen::Settings(UIContext& ui) {
   wlw::ui::Canvas& canvas = ui.canvas;
   const wlw::ui::Font& font = app_.GetFont();
   Progress& progress = app_.GetProgress();
-  const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, "Settings", {330.0f, 640.0f}, true);
+  const bool privacy = app_.GetAds().PrivacyOptionsRequired();
+  const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, "Settings", {330.0f, privacy ? 692.0f : 640.0f}, true);
   if (dialog.close) {
     Close();
     return;
@@ -60,22 +61,27 @@ void MenuScreen::Settings(UIContext& ui) {
     return rect;
   };
   threadlock::Settings& settings = progress.settings;
-  if (wlw::ui::SettingRow(ui, Icon::Sound, "Sound", settings.sound, row(46.0f))) {
+  // Four switches, six palettes and the links in a dialog that fits a phone: rows a little tighter.
+  if (wlw::ui::SettingRow(ui, Icon::Sound, "Sound", settings.sound, row(42.0f))) {
     progress.SettingsChanged();
     app_.ApplySettings();
   }
-  if (wlw::ui::SettingRow(ui, Icon::Vibration, "Vibration", settings.haptics, row(46.0f))) {
+  if (wlw::ui::SettingRow(ui, Icon::Music, "Music", settings.music, row(42.0f))) {
+    progress.SettingsChanged();
+    app_.ApplySettings();
+  }
+  if (wlw::ui::SettingRow(ui, Icon::Vibration, "Vibration", settings.haptics, row(42.0f))) {
     progress.SettingsChanged();
     app_.ApplySettings();
     app_.GetFeedback().Vibrate(30, 0.7f);
   }
-  if (wlw::ui::SettingRow(ui, Icon::Clock, "Reduced motion", settings.reduced_motion, row(46.0f)))
+  if (wlw::ui::SettingRow(ui, Icon::Clock, "Reduced motion", settings.reduced_motion, row(42.0f)))
     progress.SettingsChanged();
 
   canvas.Text(font, "Liquid colours", {r.min.x + 10.0f, y + 10.0f}, 16.0f, Align::Left, Outlined(ui_color::kMuted));
   y += 24.0f;
   for (const Palette& palette : kPalettes) {
-    const Rect rect = row(34.0f);
+    const Rect rect = row(32.0f);
     const bool owned = progress.PaletteOwned(app_.GetCatalog(), palette.key);
     const bool chosen = settings.palette == palette.key;
     const wlw::ui::Press press = wlw::ui::Pressable(ui, wlw::ui::WidgetId(palette.key, rect), rect);
@@ -102,7 +108,7 @@ void MenuScreen::Settings(UIContext& ui) {
     }
   }
   y += 4.0f;
-  if (app_.GetAds().PrivacyOptionsRequired() && wlw::ui::LinkRow(ui, Icon::Privacy, "Privacy options", row(44.0f))) {
+  if (privacy && wlw::ui::LinkRow(ui, Icon::Privacy, "Privacy options", row(44.0f))) {
     app_.GetAds().ShowPrivacyOptions();
   }
   if (wlw::ui::LinkRow(ui, Icon::Trophy, "Achievements", row(44.0f))) {

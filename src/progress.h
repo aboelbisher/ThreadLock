@@ -32,6 +32,7 @@ enum StarBits : int {
 struct Settings {
   bool sound = true;
   bool haptics = true;
+  bool music = true;  // the ambience (World 1)
   bool reduced_motion = false;
   std::string palette = "classic";
 };
