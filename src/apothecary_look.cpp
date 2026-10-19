@@ -6,7 +6,7 @@
 namespace threadlock::apothecary {
 namespace {
 
-constexpr float kBoardRight = 356.0f, kBoardTop = 2.0f, kBoardPad = 5.0f;
+constexpr float kBoardRight = 356.0f, kBoardPad = 5.0f;
 constexpr float kBoardHeight = 72.0f;
 constexpr int kMaxSlips = 4;        // more share the same board, overlapping
 constexpr float kShelfFace = 9.0f;  // a shelf's top face (a jar's feet stand on it)
@@ -42,26 +42,28 @@ std::vector<Order> Orders(const Level& level) {
   return orders;
 }
 
-Box CorkBoard(int slips) {
+float CorkTop(const Level& level) { return std::max(0.0f, level.look.height - 600.0f) + kCorkTop; }
+
+Box CorkBoard(int slips, float top) {
   if (slips <= 0) return {};
   const float width = Step(slips) * static_cast<float>(slips - 1) + kSlipWidth + 2.0f * kBoardPad;
-  return {{kBoardRight - width, kBoardTop}, {kBoardRight, kBoardTop + kBoardHeight}};
+  return {{kBoardRight - width, top}, {kBoardRight, top + kBoardHeight}};
 }
 
-Vec2 SlipPin(int slips, int k) {
-  const Box board = CorkBoard(slips);
+Vec2 SlipPin(int slips, int k, float top) {
+  const Box board = CorkBoard(slips, top);
   return {board.min.x + kBoardPad + kSlipWidth * 0.5f + Step(slips) * static_cast<float>(k), board.min.y + 6.0f};
 }
 
-Vec2 BellHang(int slips) {
-  const Box board = CorkBoard(slips);
+Vec2 BellHang(int slips, float top) {
+  const Box board = CorkBoard(slips, top);
   return {board.min.x - 18.0f, board.min.y + 8.0f};
 }
 
-Box BellBox(int slips) {
+Box BellBox(int slips, float top) {
   if (slips <= 0) return {};
   // The bracket reaches 26 in from the wall on the left; the bell is 28 wide, its clapper 37 below.
-  const Vec2 h = BellHang(slips);
+  const Vec2 h = BellHang(slips, top);
   return {{h.x - 27.0f, h.y - 9.0f}, {h.x + 15.0f, h.y + 38.0f}};
 }
 

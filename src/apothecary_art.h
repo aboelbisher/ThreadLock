@@ -128,7 +128,8 @@ class ApothecaryArt : public BoardArt {
   std::vector<apothecary::Box> clear_;        // where the shop's own stock and herbs keep clear
   std::vector<apothecary::Order> orders_;
   int slips_ = 0;
-  float counter_ = 0.0f;  // the counter's top
+  float cork_top_ = apothecary::kCorkTop;  // where the cork board hangs (CorkTop)
+  float counter_ = 0.0f;                   // the counter's top
   art::Glow glow_;
 };
 

@@ -38,14 +38,18 @@ struct Order {
 };
 std::vector<Order> Orders(const Level& level);
 
-// The cork board for this many slips (empty for none): pinned to the wall's top right.
-Box CorkBoard(int slips);
+// The cork board for this many slips (empty for none): pinned to the wall's top right, its top at `top`.
+// A grand shop (a board taller than one screen) pins it at the top of the last screen, over the counter:
+// CorkTop.
+inline constexpr float kCorkTop = 2.0f;
+float CorkTop(const Level& level);
+Box CorkBoard(int slips, float top = kCorkTop);
 inline constexpr float kSlipWidth = 38.0f, kSlipHeight = 62.0f, kSlipStep = 42.0f;
 // Where slip k's pin is (its top middle).
-Vec2 SlipPin(int slips, int k);
+Vec2 SlipPin(int slips, int k, float top = kCorkTop);
 // The shop bell, on a bracket left of the cork board (empty with no orders), and the point it hangs from.
-Box BellBox(int slips);
-Vec2 BellHang(int slips);
+Box BellBox(int slips, float top = kCorkTop);
+Vec2 BellHang(int slips, float top = kCorkTop);
 
 // The top of the counter's surface: just above the feet of the lowest bottles.
 float CounterTop(const Level& level);

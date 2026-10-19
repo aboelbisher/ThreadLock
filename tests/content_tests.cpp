@@ -272,6 +272,21 @@ TEST_SUITE("content") {
     // More than four share a four-slip board.
     CHECK(apothecary::CorkBoard(6).min.x == apothecary::CorkBoard(4).min.x);
     CHECK(apothecary::SlipPin(6, 5).x == apothecary::SlipPin(4, 3).x);
+    // A grand shop two screens tall pins its board at the top of the second, over the counter; the bell
+    // and the slips go with it, and so does the room the machine must leave them.
+    CHECK(apothecary::CorkTop(level) == 2.0f);
+    Level grand = level;
+    grand.look.height = 1200.0f;
+    const float top = apothecary::CorkTop(grand);
+    CHECK(top == 602.0f);
+    CHECK((apothecary::CorkBoard(2, top).min == Vec2{266.0f, 602.0f} && apothecary::CorkBoard(2, top).max.y == 674.0f));
+    CHECK(apothecary::SlipPin(2, 1, top) == Vec2{332.0f, 608.0f});
+    CHECK(apothecary::BellBox(2, top).min == Vec2{221.0f, 601.0f});
+    CHECK(apothecary::BellHang(2, top).y == apothecary::BellHang(2).y + 600.0f);
+    grand.nodes[1].at = {300.0f, 640.0f};
+    CHECK(Has(LookProblems(grand), "node f is under the cork board"));
+    grand.nodes[1].at = {300.0f, 40.0f};
+    CHECK(!Has(LookProblems(grand), "node f is under the cork board"));
     // The counter's top: the lowest bottle's feet on its face (the cup at 480: feet at 532, 10 down it).
     CHECK(apothecary::CounterTop(level) == 480.0f + apothecary::kBottleBase - apothecary::kBottleLip);
   }
@@ -402,8 +417,6 @@ TEST_SUITE("content") {
     for (const World& world : LoadAll()) {
       if (world.number != 2) continue;
       for (const Level& level : world.levels) {
-        // The finale, Market Day, replaces the old 2-15 in the next step (3d B).
-        if (level.id == "2-15") continue;
         INFO("level " << level.id);
         CHECK(!level.look.shelves.empty());
         int bottles = 0;

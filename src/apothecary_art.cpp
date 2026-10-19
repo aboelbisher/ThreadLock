@@ -572,7 +572,7 @@ void ApothecaryArt::DrawCounter(Canvas& canvas, const ArtFrame& frame, float wid
 void ApothecaryArt::DrawCorkBoard(Canvas& canvas, const ArtFrame& frame) const {
   const std::vector<apothecary::Order> orders = apothecary::Orders(*frame.level);
   const int n = static_cast<int>(orders.size());
-  const apothecary::Box box = apothecary::CorkBoard(n);
+  const apothecary::Box box = apothecary::CorkBoard(n, apothecary::CorkTop(*frame.level));
   if (box.Empty()) return;
   const Layout& layout = frame.layout;
   const float s = frame.Scale();
@@ -600,7 +600,7 @@ void ApothecaryArt::DrawSlips(Canvas& canvas, const ArtFrame& frame) const {
   const wlw::ui::Font& hand = *hand_;
   for (int k = 0; k < n; ++k) {
     const apothecary::Order& order = orders_[static_cast<size_t>(k)];
-    const glm::vec2 pin = layout.ToCanvas(apothecary::SlipPin(n, k));
+    const glm::vec2 pin = layout.ToCanvas(apothecary::SlipPin(n, k, cork_top_));
     float unpaid_age = -1.0f;
     for (const Marker::Kind kind : {Marker::Spill, Marker::Dry, Marker::WrongCup}) {
       if (const Marker* m = Moment(frame, kind, order.node, order.slot)) unpaid_age = std::max(unpaid_age, m->age);
@@ -792,7 +792,8 @@ void ApothecaryArt::Prepare(const ArtFrame& frame) {
     if (orders[k].slot >= 0)
       rack_order_[static_cast<size_t>(orders[k].node)][static_cast<size_t>(orders[k].slot)] = static_cast<int>(k);
   }
-  clear_ = {apothecary::CorkBoard(slips_), apothecary::BellBox(slips_)};
+  cork_top_ = apothecary::CorkTop(level);
+  clear_ = {apothecary::CorkBoard(slips_, cork_top_), apothecary::BellBox(slips_, cork_top_)};
   for (size_t n = 0; n < level.nodes.size(); ++n) {
     if (level.nodes[n].kind != NodeKind::Spout) continue;
     const apothecary::Jar jar = jars_[n] = apothecary::JarAt(level, static_cast<int>(n));
@@ -1044,9 +1045,9 @@ void ApothecaryArt::DrawFront(Canvas& canvas, const ArtFrame& frame) {
       default: break;
     }
   }
-  const apothecary::Box board = apothecary::CorkBoard(slips_);
+  const apothecary::Box board = apothecary::CorkBoard(slips_, cork_top_);
   if (!board.Empty() && board.min.y < bottom && board.max.y + 20.0f > top) DrawSlips(canvas, frame);
-  const apothecary::Box bell = apothecary::BellBox(slips_);
+  const apothecary::Box bell = apothecary::BellBox(slips_, cork_top_);
   if (!bell.Empty() && bell.min.y < bottom && bell.max.y > top) DrawBell(canvas, frame);
 }
 
@@ -1320,7 +1321,7 @@ void ApothecaryArt::DrawChalk(Canvas& canvas, const ArtFrame& frame, int spout) 
 
 void ApothecaryArt::DrawBell(Canvas& canvas, const ArtFrame& frame) const {
   const float s = frame.Scale();
-  const Vec2 hang = apothecary::BellHang(slips_);
+  const Vec2 hang = apothecary::BellHang(slips_, cork_top_);
   // Rung by the last order paid: it swings about where it hangs, sound waves spreading either side.
   float rung = -1.0f;
   for (const Marker& marker : frame.markers) {

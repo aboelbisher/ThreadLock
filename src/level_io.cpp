@@ -590,7 +590,8 @@ std::vector<std::string> LookProblems(const Level& level) {
     // The order slips hang on a cork board in the top right, the bell beside it: nothing of the machine
     // behind them.
     const int slips = static_cast<int>(apothecary::Orders(level).size());
-    const apothecary::Box cork = apothecary::CorkBoard(slips), bell = apothecary::BellBox(slips);
+    const float cork_top = apothecary::CorkTop(level);
+    const apothecary::Box cork = apothecary::CorkBoard(slips, cork_top), bell = apothecary::BellBox(slips, cork_top);
     for (const Node& node : level.nodes) {
       if (cork.Contains(node.at)) problems.push_back("node " + node.id + " is under the cork board");
       if (bell.Contains(node.at)) problems.push_back("node " + node.id + " is under the bell");

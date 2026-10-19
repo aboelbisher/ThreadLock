@@ -164,14 +164,14 @@
       "tray": ["flipper"]
     },
     {
-      "id": "2-13", "name": "Rush Order", "intro": "Two colours, four orders, one tap. The rack won't wait.", "shelves": [90, 226, 362],
+      "id": "2-13", "name": "Rush Order", "intro": "Blue for Mrs Hale, amber for the Baker. One tap, and the rack won't wait.", "shelves": [90, 226, 362],
       "nodes": [
         {"id": "sb", "kind": "spout", "at": [80, 80], "beads": "B*3", "beat": 8},
         {"id": "sa", "kind": "spout", "at": [290, 212], "beads": "A*3", "beat": 8},
         {"id": "pb", "kind": "pass", "at": [140, 200]},
         {"id": "pa", "kind": "pass", "at": [220, 250]},
         {"id": "m", "kind": "merge", "at": [180, 300], "socket": true},
-        {"id": "r", "kind": "rack", "at": [180, 388], "period": 4, "slots": [{"want": "B", "count": 2, "order": "Mrs Hale"}, {"want": "A", "count": 1, "order": "Baker"}, {"want": "B", "count": 1, "order": "Dr Moss"}, {"want": "A", "count": 2, "order": "Miss Lark"}]}
+        {"id": "r", "kind": "rack", "at": [180, 388], "period": 4, "slots": [{"want": "B", "count": 3, "order": "Mrs Hale"}, {"want": "A", "count": 3, "order": "Baker"}]}
       ],
       "pipes": [["sb", "pb", [[140, 80]]], ["pb", "m", [[140, 300]]], ["sa", "pa", [[220, 212]]], ["pa", "m", [[220, 300]]], ["m", "r"]],
       "tray": ["tank4", "tank8", "turnstile"]
@@ -193,21 +193,24 @@
       "tray": ["separator", "flipper", {"type": "overflow", "n": 2}, "tank4"]
     },
     {
-      "id": "2-15", "name": "Fair Shares", "intro": "Five cups, every count different.",
+      "id": "2-15", "name": "Market Day", "intro": "Market day: every jar, every order, the whole shop.", "height": 1200, "payoff": [180, 900], "shelves": [90, 226, 362, 498, 790, 926],
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [90, 40], "beads": "B*7", "beat": 8},
-        {"id": "sa", "kind": "spout", "at": [270, 40], "beads": "A*8", "beat": 8},
-        {"id": "fb1", "kind": "fork", "at": [90, 130], "socket": true},
-        {"id": "fb2", "kind": "fork", "at": [130, 260], "socket": true},
-        {"id": "fa", "kind": "fork", "at": [270, 200], "socket": true},
-        {"id": "b4", "kind": "cup", "at": [35, 490], "want": "B", "count": 4},
-        {"id": "b1", "kind": "cup", "at": [105, 490], "want": "B", "count": 1},
-        {"id": "b2", "kind": "cup", "at": [175, 490], "want": "B", "count": 2},
-        {"id": "a3", "kind": "cup", "at": [250, 490], "want": "A", "count": 3},
-        {"id": "a5", "kind": "cup", "at": [325, 490], "want": "A", "count": 5}
+        {"id": "sb", "kind": "spout", "at": [80, 80], "beads": "B*2", "beat": 4},
+        {"id": "sa", "kind": "spout", "at": [290, 212], "beads": "A*3", "beat": 4, "start": 7},
+        {"id": "sm", "kind": "spout", "at": [290, 484], "beads": "B+A*3", "beat": 4},
+        {"id": "x1", "kind": "cross", "at": [230, 212], "socket": true},
+        {"id": "pb", "kind": "pass", "at": [230, 320]},
+        {"id": "pa", "kind": "pass", "at": [120, 320]},
+        {"id": "m", "kind": "merge", "at": [120, 420], "socket": true},
+        {"id": "x2", "kind": "cross", "at": [120, 484], "socket": true},
+        {"id": "pr", "kind": "pass", "at": [250, 800]},
+        {"id": "fs", "kind": "fork", "at": [40, 760], "socket": true},
+        {"id": "r", "kind": "rack", "at": [250, 988], "period": 4, "slots": [{"want": "B", "count": 1, "order": "Mrs Hale"}, {"want": "A", "count": 3, "order": "Baker"}, {"want": "B", "count": 1, "order": "Dr Moss"}]},
+        {"id": "c1", "kind": "cup", "at": [40, 1025], "want": "B", "count": 3, "order": "Miss Lark"},
+        {"id": "d", "kind": "drain", "at": [110, 1072]}
       ],
-      "pipes": [["sb", "fb1"], ["fb1", "b4", [[35, 190]]], ["fb1", "fb2", [[130, 190]]], ["fb2", "b1", [[105, 360]]], ["fb2", "b2", [[175, 360]]], ["sa", "fa"], ["fa", "a3", [[250, 300]]], ["fa", "a5", [[325, 300]]]],
-      "tray": ["flipper", "flipper", {"type": "overflow", "n": 4}, {"type": "overflow", "n": 3}]
+      "pipes": [["sb", "x1", [[230, 80]]], ["x1", "pb"], ["pb", "m", [[230, 420]]], ["sa", "x1"], ["x1", "pa", [[120, 212]]], ["pa", "m"], ["m", "x2"], ["x2", "pr", [[120, 700], [250, 700]]], ["pr", "r"], ["sm", "x2"], ["x2", "fs", [[40, 484]]], ["fs", "c1"], ["fs", "d", [[110, 760]]]],
+      "tray": ["separator", "turnstile", "tank4", "tank8", "flipper"]
     },
     {
       "id": "2-C1", "name": "Exact Change", "type": "challenge", "intro": "Overflows only. Every count matters.", "shelves": [90, 226, 362],

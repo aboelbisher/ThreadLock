@@ -31,7 +31,7 @@
   "2-12": {"pieces":1,"ticks":63,"solutions":2,"lean":{"at":["x"],"set":[1]},"swift":{"at":["x"],"set":[1]}},
   "2-13": {"pieces":3,"ticks":65,"solutions":1,"lean":{"at":["pa","pb","m"],"set":[0,0,1]},"swift":{"at":["pa","pb","m"],"set":[0,0,1]}},
   "2-14": {"pieces":3,"ticks":77,"solutions":4,"lean":{"at":["f","gb","ga",null],"set":[0,0,0,0]},"swift":{"at":["f","gb","ga",null],"set":[0,0,0,0]}},
-  "2-15": {"pieces":3,"ticks":101,"solutions":2,"lean":{"at":[null,"fb2","fb1","fa"],"set":[0,1,0,0]},"swift":{"at":[null,"fb2","fb1","fa"],"set":[0,1,0,0]}},
+  "2-15": {"pieces":4,"ticks":148,"solutions":1,"lean":{"at":["fs","m","pr","pa",null],"set":[0,0,0,0,0]},"swift":{"at":["fs","m","pr","pa",null],"set":[0,0,0,0,0]}},
   "2-C1": {"pieces":3,"ticks":85,"solutions":1,"lean":{"at":["f2","f3","f1"],"set":[0,1,0]},"swift":{"at":["f2","f3","f1"],"set":[0,1,0]}},
   "2-C2": {"pieces":3,"ticks":94,"solutions":1,"lean":{"at":["pr","m","pl","f"],"set":[0,0,0,0]},"swift":{"at":["pr","m","pl","f"],"set":[0,0,0,0]}},
   "2-C3": {"pieces":4,"ticks":74,"solutions":1,"lean":{"at":["f","g","x2","x1"],"set":[0,1,0,1]},"swift":{"at":["f","g","x2","x1"],"set":[0,1,0,1]}},
