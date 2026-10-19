@@ -103,7 +103,19 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
       reader.Error("'height' should be a number");
     if (level.look.height < 600.0f) reader.Error("'height' should be at least 600");
   }
-  if (json.contains("window")) reader.Point(json["window"], level.look.window);
+  if (json.contains("payoff")) reader.Point(json["payoff"], level.look.payoff);
+  if (json.contains("shelves")) {
+    if (!json["shelves"].is_array()) reader.Error("'shelves' should be a list of heights");
+    for (const Json& value : json["shelves"]) {
+      if (!value.is_number()) {
+        reader.Error("a shelf is a height (y)");
+        continue;
+      }
+      const float y = value.get<float>();
+      if (y < 0.0f || y > level.look.height) reader.Error("a shelf is off the board");
+      level.look.shelves.push_back(y);
+    }
+  }
   const std::string type = reader.String(json, "type", "build");
   if (!ParseLevelType(type, level.type)) reader.Error("unknown type '" + type + "'");
   if (level.id.empty()) reader.Error("no id");
@@ -135,6 +147,7 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
     if (node.kind == NodeKind::Cup) {
       reader.Color(item, "want", node.want);
       node.count = reader.Int(item, "count", 0);
+      node.order = reader.String(item, "order");
     }
     if (node.kind == NodeKind::Rack) {
       node.period = reader.Int(item, "period", 4);
@@ -150,7 +163,7 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
           Slot slot;
           reader.Color(value, "want", slot.want);
           slot.count = reader.Int(value, "count", 0);
-          slot.name = reader.String(value, "name");
+          slot.order = reader.String(value, "order");
           node.slots.push_back(std::move(slot));
         }
       }
@@ -439,7 +452,12 @@ std::string WriteLevel(const Level& level) {
   if (!level.intro.empty()) out += ", \"intro\": " + text(level.intro);
   const Level::LevelLook look_default;
   if (level.look.height != look_default.height) out += ", \"height\": " + number(level.look.height);
-  if (!(level.look.window == look_default.window)) out += ", \"window\": " + point(level.look.window);
+  if (!(level.look.payoff == look_default.payoff)) out += ", \"payoff\": " + point(level.look.payoff);
+  if (!level.look.shelves.empty()) {
+    out += ", \"shelves\": [";
+    for (size_t s = 0; s < level.look.shelves.size(); ++s) out += (s ? ", " : "") + number(level.look.shelves[s]);
+    out += "]";
+  }
   out += ",\n  \"nodes\": [\n";
   for (size_t i = 0; i < level.nodes.size(); ++i) {
     const Node& n = level.nodes[i];
@@ -450,6 +468,7 @@ std::string WriteLevel(const Level& level) {
     }
     if (n.kind == NodeKind::Cup) {
       out += std::string(", \"want\": \"") + ColorLetter(n.want) + "\", \"count\": " + std::to_string(n.count);
+      if (!n.order.empty()) out += ", \"order\": " + text(n.order);
     }
     if (n.kind == NodeKind::Rack) {
       out += ", \"period\": " + std::to_string(n.period);
@@ -458,7 +477,7 @@ std::string WriteLevel(const Level& level) {
       for (size_t s = 0; s < n.slots.size(); ++s) {
         out += std::string(s ? ", " : "") + "{\"want\": \"" + ColorLetter(n.slots[s].want) +
                "\", \"count\": " + std::to_string(n.slots[s].count);
-        if (!n.slots[s].name.empty()) out += ", \"name\": " + text(n.slots[s].name);
+        if (!n.slots[s].order.empty()) out += ", \"order\": " + text(n.slots[s].order);
         out += "}";
       }
       out += "]";
@@ -542,6 +561,31 @@ std::string PlacementText(const Level& level, const Placement& placement) {
     text += "flap@" + level.nodes[n].id + "/" + std::to_string(placement.flap[n]);
   }
   return text.empty() ? "(nothing)" : text;
+}
+
+std::vector<std::string> LookProblems(const Level& level) {
+  std::vector<std::string> problems;
+  for (const Node& node : level.nodes) {
+    if (node.at.x < 0 || node.at.x > 360 || node.at.y < 0 || node.at.y > level.look.height)
+      problems.push_back("node " + node.id + " is off the board");
+  }
+  if (!level.look.shelves.empty()) {
+    // The copper lines of a shop wall: every stretch from node to bend to node runs across or down.
+    for (const Pipe& pipe : level.pipes) {
+      std::vector<Vec2> points{level.nodes[static_cast<size_t>(pipe.from)].at};
+      points.insert(points.end(), pipe.via.begin(), pipe.via.end());
+      points.push_back(level.nodes[static_cast<size_t>(pipe.to)].at);
+      for (size_t k = 0; k + 1 < points.size(); ++k) {
+        if (points[k].x != points[k + 1].x && points[k].y != points[k + 1].y) {
+          problems.push_back("pipe " + level.nodes[static_cast<size_t>(pipe.from)].id + " -> " +
+                             level.nodes[static_cast<size_t>(pipe.to)].id + " runs at a slant (segment " +
+                             std::to_string(k) + ")");
+          break;
+        }
+      }
+    }
+  }
+  return problems;
 }
 
 }  // namespace threadlock

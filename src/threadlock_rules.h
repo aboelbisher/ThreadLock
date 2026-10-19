@@ -125,7 +125,7 @@ struct Vec2 {
 struct Slot {
   Color want = Color::Blue;
   int count = 0;
-  std::string name;  // the order it fills (look only)
+  std::string order;  // the order it fills, e.g. "Mrs Hale" (look only: its slip)
   bool operator==(const Slot&) const = default;
 };
 
@@ -144,6 +144,7 @@ struct Node {
   // Cup
   Color want = Color::Blue;
   int count = 0;
+  std::string order;  // the order it fills (look only: World 2's bottles, named on a slip)
   // Pass: the other half of a twin pair (-1 = none)
   int twin = -1;
   // Rack: a drop arriving at tick t lands in slot (first + t / period) % slots.size()
@@ -247,7 +248,10 @@ struct Level {
   // Look only (the rules ignore it): a grand machine is taller than one screen and scrolls.
   struct LevelLook {
     float height = 600.0f;        // board units; one screen shows 600
-    Vec2 window{180.0f, 292.0f};  // World 1's rose window centre
+    Vec2 payoff{180.0f, 292.0f};  // where the payoff happens (W1: the rose window's centre); a solved
+                                  // grand machine's view centres it
+    std::vector<float> shelves;   // World 2: the shop wall's shelves (y, board units); with shelves, the
+                                  // copper lines run along them and straight down (pipes axis-aligned)
     bool operator==(const LevelLook&) const = default;
   } look;
 

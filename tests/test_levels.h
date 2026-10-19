@@ -220,8 +220,8 @@ inline const std::string kRack = R"({
     {"id": "s", "kind": "spout", "at": [180, 40], "beads": "B*6", "beat": 4},
     {"id": "t", "kind": "pass", "at": [180, 140]},
     {"id": "r", "kind": "rack", "at": [180, 300], "period": 8,
-     "slots": [{"want": "B", "count": 2, "name": "Mrs Hale"}, {"want": "B", "count": 2, "name": "Baker"},
-               {"want": "B", "count": 2, "name": "Dr Moss"}]}
+     "slots": [{"want": "B", "count": 2, "order": "Mrs Hale"}, {"want": "B", "count": 2, "order": "Baker"},
+               {"want": "B", "count": 2, "order": "Dr Moss"}]}
   ],
   "pipes": [["s", "t"], ["t", "r"]],
   "tray": ["tank4", "tank8"]

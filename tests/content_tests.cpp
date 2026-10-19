@@ -93,7 +93,7 @@ TEST_SUITE("content") {
           CHECK((a.id == b.id && a.kind == b.kind && a.at.x == b.at.x && a.at.y == b.at.y && a.socket == b.socket));
           CHECK((a.beads == b.beads && a.beat == b.beat && a.start == b.start));
           CHECK((a.flap == b.flap && a.flap_tappable == b.flap_tappable && a.want == b.want && a.count == b.count &&
-                 a.twin == b.twin));
+                 a.order == b.order && a.twin == b.twin));
           CHECK((a.slots == b.slots && a.period == b.period && a.first == b.first && a.gears == b.gears &&
                  a.open == b.open));
         }
@@ -114,26 +114,55 @@ TEST_SUITE("content") {
   TEST_CASE("a tall level's look survives the writer") {
     Level level = LoadAll().front().levels.front();
     level.look.height = 1200.0f;
-    level.look.window = {180.0f, 870.0f};
+    level.look.payoff = {180.0f, 870.0f};
+    level.look.shelves = {150.0f, 330.0f, 1100.0f};
     Level copy;
     std::vector<std::string> errors;
     REQUIRE(ParseLevel(WriteLevel(level), copy, errors));
     CHECK(copy.look == level.look);
-    // Too short a board is an error.
+    // Too short a board is an error (and its shelf is now off it).
     std::string text = WriteLevel(level);
     text.replace(text.find("1200"), 4, "500");
     CHECK(!ParseLevel(text, copy, errors));
   }
 
-  TEST_CASE("every node is on its board") {
+  TEST_CASE("a shop wall: orders on cups and bottles, pipes straight across or down") {
+    // World 2's grammar: jars on shelves, copper lines along them and straight down to the counter.
+    const std::string shop = R"({"id": "t-1", "name": "Shop", "shelves": [60, 300],
+      "nodes": [{"id": "s", "kind": "spout", "at": [60, 40], "beads": "B*3", "beat": 4},
+                {"id": "f", "kind": "fork", "at": [180, 160], "socket": true},
+                {"id": "a", "kind": "cup", "at": [90, 480], "want": "B", "count": 2, "order": "Mrs Hale"},
+                {"id": "b", "kind": "cup", "at": [270, 480], "want": "B", "count": 1, "order": "Baker"}],
+      "pipes": [["s", "f", [[180, 40]]], ["f", "a", [[90, 160]]], ["f", "b", [[270, 160]]]],
+      "tray": [{"type": "overflow", "n": 2}]})";
+    Level level;
+    std::vector<std::string> errors;
+    REQUIRE(ParseLevel(shop, level, errors));
+    CHECK(level.nodes[2].order == "Mrs Hale");
+    CHECK(level.look.shelves == std::vector<float>{60.0f, 300.0f});
+    CHECK(LookProblems(level).empty());
+    Level copy;
+    REQUIRE(ParseLevel(WriteLevel(level), copy, errors));
+    CHECK(copy.nodes[3].order == "Baker");
+    CHECK(copy.look == level.look);
+
+    // A slanted line is wrong on a shop wall, fine elsewhere.
+    std::string slanted = shop;
+    slanted.replace(slanted.find("[[90, 160]]"), 11, "[[120, 200]]");
+    REQUIRE(ParseLevel(slanted, level, errors));
+    const std::vector<std::string> problems = LookProblems(level);
+    REQUIRE(problems.size() == 1);
+    CHECK(problems[0] == "pipe f -> a runs at a slant (segment 0)");
+    level.look.shelves.clear();
+    CHECK(LookProblems(level).empty());
+  }
+
+  TEST_CASE("every level's look is right: nodes on the board, shop walls straight") {
     for (const World& world : LoadAll()) {
       for (const Level& level : world.levels) {
         INFO("level " << level.id);
         CHECK(level.look.height >= 600.0f);
-        for (const Node& node : level.nodes) {
-          INFO("node " << node.id);
-          CHECK((node.at.x >= 0.0f && node.at.x <= 360.0f && node.at.y >= 0.0f && node.at.y <= level.look.height));
-        }
+        for (const std::string& problem : LookProblems(level)) CHECK_MESSAGE(false, problem);
       }
     }
   }

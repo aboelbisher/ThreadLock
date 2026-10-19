@@ -132,10 +132,7 @@ int Check(const std::string& assets, bool bake) {
               " PARS-STALE (file " + std::to_string(level.pars.pieces) + "/" + std::to_string(level.pars.ticks) + ")";
         }
       }
-      for (const Node& node : level.nodes) {
-        if (node.at.x < 0 || node.at.x > 360 || node.at.y < 0 || node.at.y > level.look.height)
-          notes += " OFF-BOARD(" + node.id + ")";
-      }
+      for (const std::string& problem : LookProblems(level)) notes += " LOOK(" + problem + ")";
       if (report.two_answers) notes += " two-answers";
       if (!notes.empty() && notes.find_first_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ") != std::string::npos) ++problems;
       std::printf("  %-6s %-22s %3d pieces / %-4s (%3d ticks) | %4d solutions of %6d | empty: %-9s | %6.1f ms%s\n",

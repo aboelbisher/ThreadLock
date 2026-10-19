@@ -282,7 +282,7 @@ void LanternArt::DrawBack(Canvas& picture, const ArtFrame& frame) {
     light_key = Mix(light_key, wlw::rendering::PackColor(pane_color_[p]));
   }
   // The window's light reaches only the tiles round the window and its beam (still coordinates).
-  const float window_y = layout_.ToCanvas(frame.level->look.window).y, radius = WindowRadius(frame);
+  const float window_y = layout_.ToCanvas(frame.level->look.payoff).y, radius = WindowRadius(frame);
   const float lit_top = window_y - 1.05f * radius, lit_bottom = window_y + 0.3f * radius + 0.9f * h;
   // The slots this board needs (a grand machine is two screens: one each), made up front: a new one
   // waits a frame before it can draw.
@@ -384,7 +384,7 @@ void LanternArt::DrawStill(int slot, int k, const ArtFrame& whole, glm::vec2 scr
   }
   if (lit > 0.0f) beam /= lit;
   // The shader works in still coordinates: this tile starts uOffset down the whole picture.
-  const glm::vec2 centre = layout_.ToCanvas(frame.level->look.window);
+  const glm::vec2 centre = layout_.ToCanvas(frame.level->look.payoff);
   art.wall->SetParam("uCanvas", screen);
   art.wall->SetParam("uOffset", glm::vec2(0.0f, static_cast<float>(k) * screen.y));
   art.wall->SetParam("uTotal", glm::vec2(screen.x, total));

@@ -129,7 +129,10 @@ threadlock_tool search <kind> <difficulty> <seed> <count> <min pieces> <max solu
 Level design loop: draft JSON -> `solve`/`render` -> move bends (cells follow length) -> `bake` -> tests.
 Pipe shapes: an object after the bends, `["s", "c", [[x, y], ...], {"coil": [segment, turns], "drip": segment}]`
 (segment k = point k to k+1 of from, bends..., to). A grand machine (finale) adds look-only `"height": 1200` (board
-units, >= 600 = one screen; nodes must lie within it) and W1's `"window": [x, y]` (the rose window's centre). A coil winds its segment round its middle (`CoilPoints`: a turn is
+units, >= 600 = one screen; nodes must lie within it) and `"payoff": [x, y]` (where the view goes when it's
+solved: W1's rose window centre). W2 adds `"shelves": [y, ...]` (the shop wall; its pipes must then run straight
+across or down: `LookProblems`, checked by `check` and the tests) and a cup's or rack bottle's `"order": "Mrs Hale"`
+(its slip). A coil winds its segment round its middle (`CoilPoints`: a turn is
 ~70 long, ~5 cells more than straight, so it changes the timing and the pars); a drip is look only (drops fall
 through the air: nozzle, funnel).
 

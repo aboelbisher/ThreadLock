@@ -22,11 +22,13 @@
 //    "placed": [{"piece": "turnstile", "at": "x", "set": 1, "locked": true}]}
 // Machine parts (DESIGN.md §4):
 //   {"id": "r", "kind": "rack", "at": [180, 470], "period": 4, "first": 0,
-//    "slots": [{"want": "B", "count": 4, "name": "Mrs Hale"}, {"want": "B", "count": 2}]}
+//    "slots": [{"want": "B", "count": 4, "order": "Mrs Hale"}, {"want": "B", "count": 2}]}
 //   {"id": "m", "kind": "mill", "at": [90, 300], "gears": ["g"]}
 //   {"id": "g", "kind": "gate", "at": [270, 200], "open": false}
 // Look only (the rules ignore them): "height": 1200 = a grand machine taller than one screen (board units,
-// at least 600 = one screen; it scrolls), "window": [180, 870] = where World 1's rose window stands.
+// at least 600 = one screen; it scrolls), "payoff": [180, 870] = where the payoff happens (World 1's rose
+// window), "shelves": [150, 330] = World 2's shop wall (its pipes then run straight across or down), and a
+// cup's or bottle's "order": "Mrs Hale" (the slip it fills).
 // Sockets ("socket": true; pass nodes are sockets unless false) go on forks, passes, crossings and
 // merges; any piece goes in any socket. A pipe leaving a fork is its side 0 or 1 in the order the
 // pipes are listed.
@@ -56,5 +58,9 @@ std::string PlacementText(const Level& level, const Placement& placement);  // o
 // A level in the file format (one level object), e.g. to turn a generated machine into a handmade
 // level's first draft.
 std::string WriteLevel(const Level& level);
+
+// What's wrong with a level's look (the rules don't care, the art does): a node off its board; on a shop
+// wall (World 2, a level with shelves) a pipe that isn't straight across or straight down. Empty = good.
+std::vector<std::string> LookProblems(const Level& level);
 
 }  // namespace threadlock

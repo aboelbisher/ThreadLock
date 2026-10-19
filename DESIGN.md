@@ -144,7 +144,7 @@ concurrency idea:
   bottom edge. Opening: a pan from the bottom to the top (~2 s; a touch skips it; none with reduced
   motion). Running: the view rides down with the liquid's front and never climbs back; it goes to the
   first failure, and Show me starts there; a finger takes over for 2.5 s. Solved: the view centres the
-  payoff (W1: the rose window, `"window"`) while it lights, and the card comes after 3 s.
+  payoff (`"payoff"`; W1: the rose window) while it lights, and the card comes after 3 s.
 
 Level files also gain look-only extras the rules ignore, added with each world's renderer: names (orders,
 districts), decor, a style per pipe (tube / coil / drip; copper; canal / aqueduct; groove, curved in W4)

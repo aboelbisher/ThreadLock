@@ -154,7 +154,7 @@ TEST_SUITE("machine parts") {
     const Level rack = MakeLevel(kRack);
     const Node& r = rack.nodes[static_cast<size_t>(NodeOf(rack, "r"))];
     CHECK(r.slots.size() == 3);
-    CHECK(r.slots[0].name == "Mrs Hale");
+    CHECK(r.slots[0].order == "Mrs Hale");
     CHECK(rack.CupCount() == 3);
   }
 

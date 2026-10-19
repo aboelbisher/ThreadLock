@@ -151,11 +151,13 @@ const char* FailureTitle(const Outcome& outcome) {
 
 std::string FailureText(const Level& level, const Board& board, const Outcome& outcome) {
   const Node* node = outcome.fail_node >= 0 ? &level.nodes[static_cast<size_t>(outcome.fail_node)] : nullptr;
-  // A rack's bottle is named after its order when it has one.
+  // A rack's bottle, or a cup with an order (World 2), is named after its order.
   std::string bottle;
   if (node && node->kind == NodeKind::Rack && outcome.fail_slot >= 0) {
-    const std::string& name = node->slots[static_cast<size_t>(outcome.fail_slot)].name;
-    bottle = name.empty() ? "A bottle" : "The bottle for " + name;
+    const std::string& order = node->slots[static_cast<size_t>(outcome.fail_slot)].order;
+    bottle = order.empty() ? "A bottle" : "The bottle for " + order;
+  } else if (node && node->kind == NodeKind::Cup && !node->order.empty()) {
+    bottle = "The bottle for " + node->order;
   }
   switch (outcome.failure) {
     case Failure::Mud:
@@ -289,8 +291,8 @@ void LevelScreen::RunEnded() {
   if (result_.solved) {
     done_delay_ = look_.art == ArtKind::Lantern ? 2.0f : 1.3f;  // time to watch the window light up
     if (camera_.Scrolls()) {
-      // A grand machine's payoff: the view goes to the window while its heart lights.
-      camera_.Focus(level_->look.window.y);
+      // A grand machine's payoff: the view goes there (W1: the rose window, while its heart lights).
+      camera_.Focus(level_->look.payoff.y);
       done_delay_ = kPayoffDelay;
     }
     // World 1: the window's heart lights (a grand machine's rose window, longer); elsewhere the fanfare.

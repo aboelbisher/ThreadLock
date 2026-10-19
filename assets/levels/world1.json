@@ -207,7 +207,7 @@
       "tray": ["separator", "turnstile", "tank4", "tank8"]
     },
     {
-      "id": "1-15", "name": "The Rose Window", "intro": "The whole tower pours into the window.", "height": 1200, "window": [180, 870],
+      "id": "1-15", "name": "The Rose Window", "intro": "The whole tower pours into the window.", "height": 1200, "payoff": [180, 870],
       "nodes": [
         {"id": "sl", "kind": "spout", "at": [40, 58], "beads": "B*6", "beat": 12, "start": 9},
         {"id": "sc", "kind": "spout", "at": [130, 58], "beads": "B+A*6", "beat": 12},
