@@ -30,6 +30,8 @@ using wlw::ui::Variant;
 wlw::CVar<bool> cv_solve{"tl.solve", false, "Place the level's Lean solution when it opens (dev)"};
 wlw::CVar<float> cv_autoplay{"tl.autoplay", 0.0f, "Seconds after opening a level to tap play; 0 = never (dev)"};
 wlw::CVar<float> cv_scroll{"tl.scroll", -1.0f, "A tall level opens scrolled this far (board units); -1 = intro (dev)"};
+wlw::CVar<float> cv_timescale{"tl.timescale", 1.0f,
+                              "The level screen's clock: 0.1 = ten times slower, to catch frames (dev)"};
 wlw::CVar<std::string> cv_place{"tl.place", "",
                                 "Pieces placed when a level opens: \"separator@gp/0,turnstile@ga/1,tank8@pk\" (dev)"};
 
@@ -254,8 +256,8 @@ void LevelScreen::StopRun() {
 
 void LevelScreen::Step(bool quiet) {
   const std::vector<Event>& events = board_.Tick();
+  view_.OnEvents(events, board_);  // quiet too: a bottle filled before Show me's replay stays corked
   if (quiet) return;
-  view_.OnEvents(events, board_);
   // On a tall board the camera is the listener: what happens off the view is softer.
   const Listener listener = camera_.Scrolls() ? Listener{camera_.Y(), camera_.Visible()} : Listener{};
   app_.GetFeedback().OnEvents(events, *level_, board_, listener);
@@ -295,6 +297,7 @@ void LevelScreen::RunEnded() {
       camera_.Focus(level_->look.payoff.y);
       done_delay_ = kPayoffDelay;
     }
+    done_delay_ = std::max(done_delay_, view_.MomentsLeft());  // the last order's stamp comes down first
     // World 1: the window's heart lights (a grand machine's rose window, longer); elsewhere the fanfare.
     app_.GetFeedback().Play(synth::SolvedFor(look_.sounds, camera_.Scrolls()), 0.7f);
     const Placement placement = board_.GetPlacement();
@@ -341,6 +344,7 @@ void LevelScreen::RunEnded() {
     progress.Save();
   } else {
     done_delay_ = result_.jammed ? 1.6f : 1.0f;
+    done_delay_ = std::max(done_delay_, view_.MomentsLeft());
     progress.Count("fails");
     for (const std::string& key : progress.UpdateAchievements(app_.GetCatalog())) {  // Threadlocked: the first jam
       for (const Achievement& achievement : kAchievements) {
@@ -358,6 +362,7 @@ void LevelScreen::StartShowMe() {
   board_.Start();
   view_.ClearMarkers();
   while (board_.Running() && board_.Ticks() < show_from_) Step(true);
+  view_.Settle(board_);
   phase_ = Phase::ShowMe;
   clock_ = 0.0f;
   show_done_ = false;
@@ -365,6 +370,7 @@ void LevelScreen::StartShowMe() {
 }
 
 void LevelScreen::Update(float dt) {
+  dt *= std::max(0.0f, cv_timescale.Get());
   if (!dev_started_) {
     dev_started_ = true;
     if (cv_solve.Get() && level_->pars.Known()) board_.SetPlacement(level_->pars.lean);
@@ -628,7 +634,7 @@ void LevelScreen::RenderUI(UIContext& ui) {
   options.ghost_placement = &level_->pars.lean;
   view_.DrawParts(canvas, options);
   view_.DrawMarkers(canvas);
-  if (phase_ == Phase::ShowMe) view_.DrawSpotlight(canvas, result_.fail_node, 1.0f);
+  if (phase_ == Phase::ShowMe) view_.DrawSpotlight(canvas, result_.fail_node, result_.fail_slot, 1.0f);
   if (camera_.Scrolls()) DrawScrollHints(ui);
 
   DrawTopBar(ui);

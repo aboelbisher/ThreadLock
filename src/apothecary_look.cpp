@@ -117,6 +117,28 @@ ChalkMark ChalkAt(const Box& slate, int k) {
   return {{slate.min.x + MarkX(g, j), top}};
 }
 
+float EaseOut(float t) {
+  const float u = 1.0f - std::clamp(t, 0.0f, 1.0f);
+  return 1.0f - u * u * u;
+}
+
+PaidMoment PaidAt(float age, bool calm) {
+  if (calm) return {1.0f, 1.0f, 1.0f};
+  auto part = [&](float from, float to) { return std::clamp((age - from) / (to - from), 0.0f, 1.0f); };
+  return {part(0.0f, 0.35f), part(0.4f, 0.8f), part(1.0f, kPaidStamp)};
+}
+
+BellRing BellAt(float since, bool calm) {
+  constexpr float kSwing = 26.0f * 3.14159265f / 180.0f;
+  if (calm || since < 0.0f || since > 2.4f) return {};
+  // The mock's: 26 degrees dying away over ~0.65 s, swinging ~2 times a second; the waves spread for 0.9 s.
+  BellRing ring;
+  ring.swing = kSwing * std::exp(-since / 0.65f) * std::sin(since / 0.085f);
+  ring.wave = 18.0f + since * 25.0f;
+  ring.wave_alpha = std::max(0.0f, 1.0f - since / 0.9f);
+  return ring;
+}
+
 Jar JarAt(const Level& level, int spout) {
   const Node& node = level.nodes[static_cast<size_t>(spout)];
   Vec2 next{node.at.x, node.at.y + 1.0f};

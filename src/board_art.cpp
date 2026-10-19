@@ -73,6 +73,12 @@ Vec2 BoardArt::BottleAt(const ArtFrame& frame, int rack, int slot) const {
   return threadlock::BottleAt(frame, rack, slot);
 }
 
+glm::vec2 BoardArt::Spotlight(const ArtFrame& frame, int node, int slot) const {
+  if (slot >= 0 && frame.level->nodes[static_cast<size_t>(node)].kind == NodeKind::Rack)
+    return frame.layout.ToCanvas(BottleAt(frame, node, slot));
+  return frame.At(node);
+}
+
 void BoardArt::CupLiquid(Liquid& liquid, const ArtFrame& frame, int cup) const {
   const Node& node = frame.level->nodes[static_cast<size_t>(cup)];
   const CupState& state = frame.board->Started() ? frame.board->Cup(cup) : CupState{};

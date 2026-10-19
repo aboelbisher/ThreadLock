@@ -238,6 +238,7 @@ void BoardView::OnEvents(const std::vector<Event>& events, const Board& board) {
         break;
       }
       case EventType::Spill: add(Marker::Spill, e.node, e.slot); break;
+      case EventType::CupFull: add(Marker::Paid, e.node, e.slot); break;
       case EventType::Finished:
         for (size_t n = 0; n < level_->nodes.size(); ++n) {
           const Node& node = level_->nodes[n];
@@ -293,6 +294,29 @@ void BoardView::Update(float dt, const Board& board) {
   std::erase_if(markers_, [](const Marker& marker) { return marker.kind == Marker::NearMiss && marker.age > 1.4f; });
 }
 
+void BoardView::Settle(const Board& board) {
+  if (!level_) return;
+  for (Marker& marker : markers_) marker.age += 100.0f;
+  Update(0.0f, board);  // the racks' turns; faded near misses go
+  for (size_t n = 0; n < anims_.size(); ++n) {
+    anims_[n].spin = anims_[n].spin_target;
+    anims_[n].flash = 0.0f;
+    if (level_->nodes[n].kind == NodeKind::Cup && board.Started())
+      cup_fill_[n] = static_cast<float>(board.Cup(static_cast<int>(n)).count);
+    for (size_t s = 0; s < bottle_fill_[n].size() && board.Started(); ++s)
+      bottle_fill_[n][s] = static_cast<float>(board.Bottle(static_cast<int>(n), static_cast<int>(s)).count);
+  }
+}
+
+float BoardView::MomentsLeft() const {
+  float left = 0.0f;
+  if (frame_.calm) return left;  // every moment shows its end at once
+  for (const Marker& marker : markers_) {
+    if (art_) left = std::max(left, art_->MomentLength(marker) - marker.age);
+  }
+  return left;
+}
+
 void BoardView::BeginFrame(const Board& board, const Palette& palette, const wlw::ui::Font& font, float time, float dt,
                            bool calm, bool editing) {
   frame_.level = level_;
@@ -307,6 +331,7 @@ void BoardView::BeginFrame(const Board& board, const Palette& palette, const wlw
   frame_.anims = anims_;
   frame_.cup_fill = cup_fill_;
   frame_.bottle_fill = bottle_fill_;
+  frame_.markers = markers_;
 }
 
 void BoardView::DrawBack(Canvas& picture) {
@@ -453,6 +478,7 @@ void BoardView::DrawMarkers(Canvas& canvas) {
   const float s = layout_.scale;
   const float time = frame_.time;
   for (const Marker& marker : markers_) {
+    if (art_->DrawMarker(canvas, frame_, marker)) continue;
     const float pop = std::min(1.0f, marker.age * 6.0f);
     switch (marker.kind) {
       case Marker::Mud: {
@@ -494,6 +520,7 @@ void BoardView::DrawMarkers(Canvas& canvas) {
         }
         break;
       }
+      case Marker::Paid: break;  // the world's art shows it, if it does
       case Marker::Jam: {
         const JamReport jam = board.Jam();
         for (int node : jam.stuck_nodes) {
@@ -527,9 +554,9 @@ void BoardView::DrawMarkers(Canvas& canvas) {
   }
 }
 
-void BoardView::DrawSpotlight(Canvas& canvas, int node, float amount) const {
-  if (!level_ || node < 0 || amount <= 0.0f) return;
-  const glm::vec2 c = NodeCanvas(node);
+void BoardView::DrawSpotlight(Canvas& canvas, int node, int slot, float amount) const {
+  if (!level_ || !art_ || node < 0 || amount <= 0.0f) return;
+  const glm::vec2 c = art_->Spotlight(frame_, node, slot);
   const float r = 70.0f * layout_.scale;
   canvas.Arc(c, r + 1500.0f, 3000.0f, 0.0f, 7.0f, WithAlpha(ui_color::kBackground, 0.62f * amount));
   canvas.Ring(c, r, 2.0f, WithAlpha(ui_color::kInk, 0.35f * amount));

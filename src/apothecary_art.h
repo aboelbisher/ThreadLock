@@ -43,6 +43,12 @@ class ApothecaryArt : public BoardArt {
   // A rack bottle's mouth, wherever the turntable has turned it.
   Vec2 BottleAt(const ArtFrame& frame, int rack, int slot) const override;
   void DrawMud(wlw::ui::Canvas& canvas, glm::vec2 at, float age, float scale, float time) const override;
+  // An order filled is shown in the shop itself: the cork and label on its bottle, the PAID stamp on its slip and
+  // the bell (DrawFront).
+  bool DrawMarker(wlw::ui::Canvas& canvas, const ArtFrame& frame, const Marker& marker) const override;
+  float MomentLength(const Marker& marker) const override;
+  // A bottle's middle.
+  glm::vec2 Spotlight(const ArtFrame& frame, int node, int slot) const override;
   glm::vec2 PipePoint(const ArtFrame& frame, int pipe, float distance) const override;
   float DropSize() const override { return 8.0f; }
   float SocketRadius(const Node&) const override { return 15.0f; }
@@ -78,6 +84,8 @@ class ApothecaryArt : public BoardArt {
   void DrawShelf(wlw::ui::Canvas& canvas, const ArtFrame& frame, int shelf, float width) const;
   void DrawCounter(wlw::ui::Canvas& canvas, const ArtFrame& frame, float width, float bottom) const;
   void DrawCorkBoard(wlw::ui::Canvas& canvas, const ArtFrame& frame) const;
+  // The slips on it (over the liquid: they get stamped): one per order, pinned a little askew.
+  void DrawSlips(wlw::ui::Canvas& canvas, const ArtFrame& frame) const;
   // A spout's jar (on its shelf or its own bracket) and the slate beside it, without the chalk.
   void DrawJar(wlw::ui::Canvas& canvas, const ArtFrame& frame, int spout) const;
   // A drain: a copper sink set into the counter, or on a bracket of its own higher up the wall.
@@ -86,7 +94,8 @@ class ApothecaryArt : public BoardArt {
   void DrawBottleBack(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
   // The copper lines' dark bores and soft shadows, under the liquid.
   void DrawBores(wlw::ui::Canvas& canvas, const ArtFrame& frame) const;
-  // Over the liquid: a bottle's tonic, glass, marks, nozzle and brass tag; a slate's chalk; the bell.
+  // Over the liquid: a bottle's tonic, glass, marks, nozzle and brass tag (and once paid, its cork and label); a
+  // slate's chalk; the bell (swinging when an order is paid).
   void DrawBottle(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
   void DrawChalk(wlw::ui::Canvas& canvas, const ArtFrame& frame, int spout) const;
   void DrawBell(wlw::ui::Canvas& canvas, const ArtFrame& frame) const;
@@ -95,6 +104,8 @@ class ApothecaryArt : public BoardArt {
   void DrawTurntable(wlw::ui::Canvas& picture, const ArtFrame& frame, int rack) const;
   void DrawClockFace(wlw::ui::Canvas& canvas, const ArtFrame& frame, int rack) const;
   void DrawRack(wlw::ui::Canvas& canvas, const ArtFrame& frame, int rack) const;
+  // A paid bottle's cork and label (mouth at `mouth`, board units, `scale` its size); `order` = its slip, -1 = none.
+  void DrawPaid(wlw::ui::Canvas& canvas, const ArtFrame& frame, Vec2 mouth, float scale, int order, float age) const;
 
   TilePool tiles_;
   std::vector<TileArt> tile_art_;  // per slot
@@ -107,6 +118,7 @@ class ApothecaryArt : public BoardArt {
   std::vector<int> cup_order_;                // per node: a cup's order (its slip's number - 1), -1 = none
   std::vector<std::vector<int>> rack_order_;  // per node, per bottle: a rack bottle's order, -1 = none
   std::vector<apothecary::Box> clear_;        // where the shop's own stock and herbs keep clear
+  std::vector<apothecary::Order> orders_;
   int slips_ = 0;
   float counter_ = 0.0f;  // the counter's top
   art::Glow glow_;

@@ -41,6 +41,15 @@ struct NodeAnim {
   float flash = 0.0f;                     // a mix, a gate flipping
 };
 
+// A moment on the board, shown where it happened (from the board's events): what went wrong, a near miss,
+// an order filled. The view keeps them and draws its own words for them; a world may draw them its way.
+struct Marker {
+  enum Kind { Mud, NearMiss, WrongCup, Spill, Dry, Jam, Paid } kind;
+  int node;
+  float age;      // seconds since it happened (real time, whatever the run's speed)
+  int slot = -1;  // a rack's bottle
+};
+
 // One frame of a board, for the art to read.
 struct ArtFrame {
   const Level* level = nullptr;
@@ -56,6 +65,7 @@ struct ArtFrame {
   std::span<const NodeAnim> anims;
   std::span<const float> cup_fill;                  // per node: drops in it (animated)
   std::span<const std::vector<float>> bottle_fill;  // per rack, per bottle
+  std::span<const Marker> markers;
 
   float Scale() const { return layout.scale; }
   glm::vec2 At(int node) const { return layout.ToCanvas(level->nodes[static_cast<size_t>(node)].at); }
@@ -91,6 +101,13 @@ class BoardArt {
   virtual glm::vec2 CupTop(const ArtFrame& frame, int cup) const = 0;
   // Mud in a junction, `age` seconds after it happened.
   virtual void DrawMud(wlw::ui::Canvas& canvas, glm::vec2 at, float age, float scale, float time) const = 0;
+  // A moment drawn the world's way, over the pieces: true = drawn (the view leaves out its own words for it).
+  // A world that shows a moment in its parts (DrawFront reads frame.markers) answers true and draws nothing.
+  virtual bool DrawMarker(wlw::ui::Canvas&, const ArtFrame&, const Marker&) const { return false; }
+  // How long a moment plays (seconds): the result card waits for it.
+  virtual float MomentLength(const Marker&) const { return 0.0f; }
+  // Where "Show me" shines its light for a failure at this node (and a rack's bottle), in canvas units.
+  virtual glm::vec2 Spotlight(const ArtFrame& frame, int node, int slot) const;
   // A drop's size in the liquid (board units): it must stay inside the world's pipes.
   virtual float DropSize() const { return 12.0f; }
   // How far out a free socket's ring is drawn (it goes round the part that holds the socket).

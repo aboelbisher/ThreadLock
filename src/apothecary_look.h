@@ -96,4 +96,26 @@ struct ChalkMark {
 ChalkMark ChalkAt(const Box& slate, int k);
 Vec2 SlateSize(int marks);
 
+// ---- The moments, in seconds of real time (whatever the run's speed) ----
+// An order filled: the cork drops into the bottle, the label slides onto it, the shop bell rings and the
+// PAID stamp thumps onto its slip. `age` = seconds since it filled; reduced motion shows the end at once.
+inline constexpr float kPaidLength = 1.6f;
+inline constexpr float kPaidPop = 0.0f, kPaidBell = 0.7f, kPaidStamp = 1.3f;  // the sounds (3e): cork, bell, stamp
+struct PaidMoment {
+  float cork = 0.0f;   // 0..1: falling into the mouth
+  float label = 0.0f;  // 0..1: sliding on from the left
+  float stamp = 0.0f;  // 0..1: coming down onto the slip
+};
+PaidMoment PaidAt(float age, bool calm);
+// The bell, `since` seconds after it was rung (< 0: not yet): its swing (radians, clockwise about where it
+// hangs, dying away) and its sound waves (how far out beside it, how strong).
+struct BellRing {
+  float swing = 0.0f;
+  float wave = 0.0f;
+  float wave_alpha = 0.0f;
+};
+BellRing BellAt(float since, bool calm);
+// Ease out: fast, then settling (0..1 -> 0..1).
+float EaseOut(float t);
+
 }  // namespace threadlock::apothecary

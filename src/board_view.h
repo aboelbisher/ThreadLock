@@ -56,6 +56,11 @@ class BoardView {
   void OnEvents(const std::vector<Event>& events, const Board& board);
   void Update(float dt, const Board& board);
   void ClearMarkers();
+  // After a fast-forward (Show me starts before the failure): every moment so far has played, every
+  // fill and turn caught up.
+  void Settle(const Board& board);
+  // Seconds until the moments now playing are over (the result card waits).
+  float MomentsLeft() const;
 
   // ---- One frame: BeginFrame, then the layers in order ----
   void BeginFrame(const Board& board, const Palette& palette, const wlw::ui::Font& font, float time, float dt,
@@ -64,7 +69,7 @@ class BoardView {
   void DrawLiquid(Liquid& liquid, float alpha);  // alpha: how far between the last tick and the next
   void DrawParts(wlw::ui::Canvas& canvas, const Options& options);
   void DrawMarkers(wlw::ui::Canvas& canvas);
-  void DrawSpotlight(wlw::ui::Canvas& canvas, int node, float amount) const;
+  void DrawSpotlight(wlw::ui::Canvas& canvas, int node, int slot, float amount) const;
 
   // Hit tests, in canvas units.
   int SocketNear(glm::vec2 point, float radius) const;                     // any piece goes in any socket
@@ -75,13 +80,6 @@ class BoardView {
   glm::vec2 PieceCenter(const Board& board, int node) const;
 
  private:
-  struct Marker {
-    enum Kind { Mud, NearMiss, WrongCup, Spill, Dry, Jam } kind;
-    int node;
-    float age;
-    int slot = -1;  // a rack's bottle
-  };
-
   // Where a fork's flap handle is drawn: just off its centre, or outside a piece that sits on it (a
   // tank or a turnstile leaves the flap in charge).
   glm::vec2 FlapHandle(const Board& board, int fork) const;

@@ -276,6 +276,27 @@ TEST_SUITE("content") {
     CHECK(apothecary::CounterTop(level) == 480.0f + apothecary::kBottleBase - apothecary::kBottleLip);
   }
 
+  TEST_CASE("a shop's paid moment: cork, label, bell, stamp, in real seconds") {
+    using apothecary::PaidAt;
+    // Nothing yet, then the cork (0..0.35 s), the label (0.4..0.8 s), the stamp (1.0..1.3 s).
+    CHECK((PaidAt(0.0f, false).cork == 0.0f && PaidAt(0.0f, false).label == 0.0f && PaidAt(0.0f, false).stamp == 0.0f));
+    CHECK(PaidAt(0.35f, false).cork == doctest::Approx(1.0f));
+    CHECK((PaidAt(0.6f, false).label == doctest::Approx(0.5f) && PaidAt(0.6f, false).stamp == 0.0f));
+    CHECK((PaidAt(1.15f, false).stamp == doctest::Approx(0.5f) && PaidAt(1.15f, false).label == 1.0f));
+    CHECK(PaidAt(apothecary::kPaidLength, false).stamp == 1.0f);
+    // Reduced motion: the end at once.
+    CHECK((PaidAt(0.0f, true).cork == 1.0f && PaidAt(0.0f, true).label == 1.0f && PaidAt(0.0f, true).stamp == 1.0f));
+    CHECK((apothecary::EaseOut(0.0f) == 0.0f && apothecary::EaseOut(1.0f) == 1.0f && apothecary::EaseOut(0.5f) > 0.5f));
+
+    // The bell: still before it rings, swinging and dying away after, quiet after 2.4 s.
+    CHECK(apothecary::BellAt(-0.1f, false).swing == 0.0f);
+    CHECK(std::fabs(apothecary::BellAt(0.13f, false).swing) > 0.2f);
+    CHECK(std::fabs(apothecary::BellAt(1.6f, false).swing) < 0.04f);
+    CHECK((apothecary::BellAt(2.5f, false).swing == 0.0f && apothecary::BellAt(0.1f, true).swing == 0.0f));
+    CHECK((apothecary::BellAt(0.0f, false).wave_alpha == 1.0f && apothecary::BellAt(1.0f, false).wave_alpha == 0.0f));
+    CHECK(apothecary::BellAt(0.5f, false).wave > apothecary::BellAt(0.1f, false).wave);
+  }
+
   TEST_CASE("a shop's rack: a lazy susan on the counter, its bottles round the ring, a clock under it") {
     const std::string shop = R"({"id": "t-1", "name": "Rack", "shelves": [90, 226, 362],
       "nodes": [{"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*8", "beat": 2},
