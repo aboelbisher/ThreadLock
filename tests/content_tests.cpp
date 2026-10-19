@@ -398,6 +398,25 @@ TEST_SUITE("content") {
     }
   }
 
+  TEST_CASE("every World 2 level is a shop: a shop wall, an order on every bottle") {
+    for (const World& world : LoadAll()) {
+      if (world.number != 2) continue;
+      for (const Level& level : world.levels) {
+        // The finale, Market Day, replaces the old 2-15 in the next step (3d B).
+        if (level.id == "2-15") continue;
+        INFO("level " << level.id);
+        CHECK(!level.look.shelves.empty());
+        int bottles = 0;
+        for (const Node& node : level.nodes) {
+          if (node.kind == NodeKind::Cup) ++bottles;
+          if (node.kind == NodeKind::Rack) bottles += static_cast<int>(node.slots.size());
+        }
+        CHECK(bottles > 0);
+        CHECK(static_cast<int>(apothecary::Orders(level).size()) == bottles);
+      }
+    }
+  }
+
   TEST_CASE("generated levels are the same on every device") {
     // Fingerprints of a week of dailies and three Lab levels. The daily puzzle is "the same for everyone":
     // a compiler or platform that builds a different level from the same seed fails here (run these
