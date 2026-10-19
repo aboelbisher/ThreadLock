@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <map>
 #include <tuple>
+#include <utility>
 
 #include "apothecary_look.h"
 #include "json.hpp"  // nlohmann::json (vendored in the engine's third_party/tinygltf)
@@ -585,10 +587,53 @@ std::vector<std::string> LookProblems(const Level& level) {
         }
       }
     }
-    // The order slips hang on a cork board in the top right: nothing of the machine behind it.
-    const apothecary::Box cork = apothecary::CorkBoard(static_cast<int>(apothecary::Orders(level).size()));
+    // The order slips hang on a cork board in the top right, the bell beside it: nothing of the machine
+    // behind them.
+    const int slips = static_cast<int>(apothecary::Orders(level).size());
+    const apothecary::Box cork = apothecary::CorkBoard(slips), bell = apothecary::BellBox(slips);
     for (const Node& node : level.nodes) {
       if (cork.Contains(node.at)) problems.push_back("node " + node.id + " is under the cork board");
+      if (bell.Contains(node.at)) problems.push_back("node " + node.id + " is under the bell");
+    }
+    // Each spout's jar and its slate: on the board, clear of the machine and of each other.
+    auto off_board = [&](const apothecary::Box& box) {
+      return box.min.x < 0.0f || box.max.x > 360.0f || box.min.y < 0.0f || box.max.y > level.look.height;
+    };
+    std::vector<std::pair<std::string, apothecary::Box>> walls;  // what hangs on the wall so far
+    for (size_t s = 0; s < level.nodes.size(); ++s) {
+      const Node& spout = level.nodes[s];
+      if (spout.kind != NodeKind::Spout) continue;
+      const apothecary::Jar jar = apothecary::JarAt(level, static_cast<int>(s));
+      const std::pair<std::string, apothecary::Box> parts[] = {{"the jar of spout " + spout.id, jar.whole},
+                                                               {"the slate of spout " + spout.id, jar.slate}};
+      for (const auto& [name, box] : parts) {
+        if (off_board(box)) problems.push_back(name + " is off the board");
+        for (const Node& node : level.nodes) {
+          if (&node != &spout && box.Contains(node.at)) problems.push_back("node " + node.id + " is under " + name);
+        }
+        for (const auto& [other, earlier] : walls) {
+          if (box.Overlaps(earlier)) problems.push_back(name + " overlaps " + other);
+        }
+        if (box.Overlaps(cork) || box.Overlaps(bell)) problems.push_back(name + " overlaps the cork board or bell");
+      }
+      walls.insert(walls.end(), std::begin(parts), std::end(parts));
+    }
+    // The bottles: on the counter, filled from above through a nozzle, each for an order.
+    const float counter = apothecary::CounterTop(level);
+    for (const Node& node : level.nodes) {
+      if (node.kind != NodeKind::Cup) continue;
+      const float feet = node.at.y + apothecary::kBottleBase;
+      if (feet < counter || feet > counter + apothecary::kCounterFace)
+        problems.push_back("bottle " + node.id + " isn't on the counter");
+      if (node.order.empty()) problems.push_back("bottle " + node.id + " has no order");
+    }
+    for (const Pipe& pipe : level.pipes) {
+      const Node& to = level.nodes[static_cast<size_t>(pipe.to)];
+      if (to.kind != NodeKind::Cup) continue;
+      const Vec2 last = pipe.via.empty() ? level.nodes[static_cast<size_t>(pipe.from)].at : pipe.via.back();
+      if (last.x != to.at.x || last.y >= to.at.y)
+        problems.push_back("pipe " + level.nodes[static_cast<size_t>(pipe.from)].id + " -> " + to.id +
+                           " doesn't come down into the bottle");
     }
   }
   return problems;

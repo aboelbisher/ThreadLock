@@ -82,6 +82,9 @@ class BoardArt {
   virtual wlw::ui::Rect CupPool(const ArtFrame& frame, int cup) const = 0;
   // A spout's swirl of what it still has to pour.
   virtual void SpoutLiquid(Liquid& liquid, const ArtFrame& frame, int spout) const = 0;
+  // A cup's liquid: a pool filling CupPool from the bottom. A world that draws what's in its cups
+  // itself (over the liquid) leaves it out.
+  virtual void CupLiquid(Liquid& liquid, const ArtFrame& frame, int cup) const;
   // Just above a cup: where "dry", "spill" and "wrong colour" go.
   virtual glm::vec2 CupTop(const ArtFrame& frame, int cup) const = 0;
   // Mud in a junction, `age` seconds after it happened.

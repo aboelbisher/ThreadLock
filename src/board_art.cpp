@@ -64,14 +64,18 @@ void BoardArt::DrawLiquid(Liquid& liquid, const ArtFrame& frame, float alpha) co
   for (size_t n = 0; n < level.nodes.size(); ++n) {
     const Node& node = level.nodes[n];
     if (node.kind == NodeKind::Spout) SpoutLiquid(liquid, frame, static_cast<int>(n));
-    if (node.kind == NodeKind::Cup && frame.cup_fill[n] > 0.01f) {
-      const CupState& cup = board.Started() ? board.Cup(static_cast<int>(n)) : CupState{};
-      const Rgba color = cup.impure ? kMud : LiquidColor(palette, node.want);
-      const wlw::ui::Rect pool = CupPool(frame, static_cast<int>(n));
-      liquid.Pool(pool.min, pool.max, frame.cup_fill[n] / static_cast<float>(std::max(1, node.count)), color,
-                  static_cast<uint32_t>(n) * 7919u);
-    }
+    if (node.kind == NodeKind::Cup && frame.cup_fill[n] > 0.01f) CupLiquid(liquid, frame, static_cast<int>(n));
   }
+}
+
+void BoardArt::CupLiquid(Liquid& liquid, const ArtFrame& frame, int cup) const {
+  const Node& node = frame.level->nodes[static_cast<size_t>(cup)];
+  const CupState& state = frame.board->Started() ? frame.board->Cup(cup) : CupState{};
+  const Rgba color = state.impure ? kMud : LiquidColor(*frame.palette, node.want);
+  const wlw::ui::Rect pool = CupPool(frame, cup);
+  liquid.Pool(pool.min, pool.max,
+              frame.cup_fill[static_cast<size_t>(cup)] / static_cast<float>(std::max(1, node.count)), color,
+              static_cast<uint32_t>(cup) * 7919u);
 }
 
 }  // namespace threadlock

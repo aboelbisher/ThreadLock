@@ -60,7 +60,9 @@ std::string PlacementText(const Level& level, const Placement& placement);  // o
 std::string WriteLevel(const Level& level);
 
 // What's wrong with a level's look (the rules don't care, the art does): a node off its board; on a shop
-// wall (World 2, a level with shelves) a pipe that isn't straight across or straight down. Empty = good.
+// wall (World 2, a level with shelves) a pipe that isn't straight across or straight down, a node behind the
+// cork board, the bell, a jar or its slate, a jar or slate off the board or on another, a bottle off the
+// counter, without an order or not filled from above. Empty = good.
 std::vector<std::string> LookProblems(const Level& level);
 
 }  // namespace threadlock

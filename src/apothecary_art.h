@@ -16,12 +16,13 @@
 // shelves of the back wall and straight down to the counter, where the bottles stand; the orders they fill
 // hang as handwritten slips on a cork board. A filled bottle is corked, labelled and paid.
 //
-// What doesn't move (the planked wall, the shelves with the shop's own jars, the counter, the cork board
-// and its slips) is drawn once into a still picture, a column of screen-sized tiles (tile_pool.h) redrawn
-// only when the level or the screen changes, with the copper lines' dark bores in it. Over the liquid each
-// frame: the copper, with a porthole per cell where the drops show and glint, brass fittings at the bends and
-// a copper boss with a porthole on every junction. The rest of the machine is the workshop look's for now
-// (the jar, the bottles and the rack come in v3 step 3c).
+// What doesn't move (the planked wall, the shelves with the shop's own jars, the spouts' stoneware jars and
+// their slates, the counter, the sink, the bottles' glass, the cork board and its slips) is drawn once into
+// a still picture, a column of screen-sized tiles (tile_pool.h) redrawn only when the level or the screen
+// changes, with the copper lines' dark bores in it. Over the liquid each frame: the copper, with a porthole
+// per cell where the drops show and glint, brass fittings at the bends and a copper boss with a porthole on
+// every junction; the bottles' tonic filling up behind their glass, the chalk tally of each jar's drops,
+// the shop bell. The turning rack, mills and gates are still the shared machine parts (v3 step 3c C3).
 namespace threadlock {
 
 class ApothecaryArt : public BoardArt {
@@ -33,7 +34,9 @@ class ApothecaryArt : public BoardArt {
   void DrawBack(wlw::ui::Canvas& picture, const ArtFrame& frame) override;
   void DrawFront(wlw::ui::Canvas& canvas, const ArtFrame& frame) override;
   wlw::ui::Rect CupPool(const ArtFrame& frame, int cup) const override;
-  void SpoutLiquid(Liquid& liquid, const ArtFrame& frame, int spout) const override;
+  // The jars are opaque stoneware, and the bottles' tonic is drawn over the liquid: neither has any.
+  void SpoutLiquid(Liquid&, const ArtFrame&, int) const override {}
+  void CupLiquid(Liquid&, const ArtFrame&, int) const override {}
   glm::vec2 CupTop(const ArtFrame& frame, int cup) const override;
   void DrawMud(wlw::ui::Canvas& canvas, glm::vec2 at, float age, float scale, float time) const override;
   glm::vec2 PipePoint(const ArtFrame& frame, int pipe, float distance) const override;
@@ -71,19 +74,33 @@ class ApothecaryArt : public BoardArt {
   void DrawShelf(wlw::ui::Canvas& canvas, const ArtFrame& frame, int shelf, float width) const;
   void DrawCounter(wlw::ui::Canvas& canvas, const ArtFrame& frame, float width, float bottom) const;
   void DrawCorkBoard(wlw::ui::Canvas& canvas, const ArtFrame& frame) const;
-  // The copper lines' dark bores and soft shadows, under the liquid; and the workshop backs of the parts
-  // that have no art of their own yet.
+  // A spout's jar (on its shelf or its own bracket) and the slate beside it, without the chalk.
+  void DrawJar(wlw::ui::Canvas& canvas, const ArtFrame& frame, int spout) const;
+  // A drain: a copper sink set into the counter, or on a bracket of its own higher up the wall.
+  void DrawSink(wlw::ui::Canvas& canvas, const ArtFrame& frame, int drain) const;
+  // A cup's bottle as it stands: its shadow on the counter and the faint glass.
+  void DrawBottleBack(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
+  // The copper lines' dark bores and soft shadows, under the liquid.
   void DrawBores(wlw::ui::Canvas& canvas, const ArtFrame& frame) const;
+  // Over the liquid: a bottle's tonic, glass, marks, nozzle and brass tag; a slate's chalk; the bell.
+  void DrawBottle(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
+  void DrawChalk(wlw::ui::Canvas& canvas, const ArtFrame& frame, int spout) const;
+  void DrawBell(wlw::ui::Canvas& canvas, const ArtFrame& frame) const;
 
   TilePool tiles_;
   std::vector<TileArt> tile_art_;  // per slot
   std::shared_ptr<wlw::rendering::Shader> wall_shader_;
   std::shared_ptr<wlw::ui::Font> hand_;
-  // This level's copper.
+  // This level's shop.
   const Level* level_ = nullptr;
   std::vector<Tube> tubes_;
+  std::vector<apothecary::Jar> jars_;   // per node (a spout's)
+  std::vector<int> cup_order_;          // per node: a cup's order (its slip's number - 1), -1 = none
+  std::vector<apothecary::Box> clear_;  // where the shop's own stock and herbs keep clear
+  int slips_ = 0;
+  float counter_ = 0.0f;  // the counter's top
   art::Glow glow_;
-  WorkshopArt parts_;  // spouts, cups and machine parts, until their own art (step 3c)
+  WorkshopArt parts_;  // mud, until its own art (step 3c D)
 };
 
 }  // namespace threadlock
