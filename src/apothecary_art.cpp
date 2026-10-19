@@ -36,6 +36,19 @@ constexpr float kStockAlpha = 0.55f;
 constexpr float kPlank = 9.0f, kPlankFront = 8.0f;  // a shelf's top face and its front edge
 constexpr float kCounterFace = 14.0f;               // the counter's top surface, seen from above
 
+// The copper lines (board units). The liquid runs inside them, seen only through a porthole per cell: the
+// copper is drawn over it, cut round each porthole (flat ends) with a rim over the window's corners.
+constexpr Rgba kCopperEdge = Hex(0x4A2210), kCopper = Hex(0xB5683A), kCopperShade = Hex(0x8E4A26);
+constexpr Rgba kCopperShine = Hex(0xD59060), kCopperRim = Hex(0xE8B48A), kBore = Hex(0x150B06);
+constexpr float kPipeHalf = 6.5f;                 // the copper's outer edge
+constexpr float kCopperHalf = 5.0f;               // inside its dark edge
+constexpr float kHole = 2.8f;                     // a porthole
+constexpr float kPipeBend = 14.0f;                // how round the bends are
+constexpr float kFitting = 8.0f;                  // half a bend's brass fitting
+constexpr float kBoss = 11.0f, kBossHole = 4.0f;  // a crossing's or a merge's copper boss
+constexpr float kForkBoss = 9.0f, kForkHole = 3.5f;
+constexpr glm::vec2 kLightFrom{-0.45f, -0.89f};  // the shop's light falls from the top left
+
 const char* const kRoman[] = {"I", "II", "III", "IV", "V", "VI", "VII", "VIII"};
 constexpr float kSlipTilt[] = {-3.0f, 2.0f, -2.0f, 3.0f, -1.5f, 2.5f};  // degrees, as pinned
 
@@ -66,6 +79,68 @@ float Hash01(uint32_t x) {
 }
 
 glm::vec2 Turn(glm::vec2 v, float c, float s) { return {v.x * c - v.y * s, v.x * s + v.y * c}; }
+
+glm::vec2 Unit(glm::vec2 v) {
+  const float length = glm::length(v);
+  return length > 1e-5f ? v / length : glm::vec2(0.0f, 1.0f);
+}
+
+glm::vec2 Left(glm::vec2 d) { return {d.y, -d.x}; }
+
+glm::vec2 V(Vec2 p) { return {p.x, p.y}; }
+
+// How far from a node's centre its copper stops: the boss or the part drawn there covers the rest.
+float CopperStop(const Node& node) {
+  switch (node.kind) {
+    case NodeKind::Spout:
+    case NodeKind::Mill:
+    case NodeKind::Drain: return node.radius;
+    case NodeKind::Fork: return kForkBoss - 1.0f;
+    case NodeKind::Cross:
+    case NodeKind::Merge: return kBoss - 1.0f;
+    case NodeKind::Rack: return 12.0f;
+    case NodeKind::Cup:
+    case NodeKind::Pass:
+    case NodeKind::Gate: return 0.0f;
+  }
+  return 0.0f;
+}
+
+// The porthole into a node (a drop inside it shows there): its radius, 0 = none.
+float NodeHole(const Node& node) {
+  switch (node.kind) {
+    case NodeKind::Pass: return kHole;
+    case NodeKind::Fork: return kForkHole;
+    case NodeKind::Cross:
+    case NodeKind::Merge: return kBossHole;
+    default: return 0.0f;
+  }
+}
+
+// A band from -half to half across a line, opaque, with flat ends. Runs along the axes are rectangles;
+// others are quads that overlap their neighbours a little and are drawn as both fans (an anti-aliased edge
+// inside the band would let the liquid show through).
+void FlatBand(Canvas& canvas, const std::vector<glm::vec2>& points, float half, float overlap, const Rgba& color) {
+  for (size_t i = 1; i < points.size(); ++i) {
+    const glm::vec2 a = points[i - 1], b = points[i];
+    if (std::fabs(a.x - b.x) < 0.01f || std::fabs(a.y - b.y) < 0.01f) {
+      const glm::vec2 h = std::fabs(a.x - b.x) < 0.01f ? glm::vec2(half, 0.0f) : glm::vec2(0.0f, half);
+      canvas.FillRect({glm::min(a, b) - h, glm::max(a, b) + h}, color);
+      continue;
+    }
+    const glm::vec2 d = Unit(b - a), n = Left(d) * half;
+    const glm::vec2 p = a - d * (i > 1 ? overlap : 0.0f), q = b + d * (i + 1 < points.size() ? overlap : 0.0f);
+    art::FillConvex(canvas, {p - n, q - n, q + n, p + n}, color);
+    art::FillConvex(canvas, {q - n, q + n, p + n, p - n}, color);
+  }
+}
+
+// A porthole's rim (the window cut for it is square; this covers its corners).
+void HoleRim(Canvas& canvas, glm::vec2 c, float hole, float s) {
+  const float rim = hole * 1.42f;
+  canvas.Ring(c, (hole + rim) * 0.5f * s, (rim - hole) * s, kCopperRim);
+  canvas.Arc(c, (rim - 0.3f) * s, 0.7f * s, kPi * 0.4f, kPi * 0.9f, kCopperEdge);
+}
 
 // Whether anything of the machine stands in this board rectangle (the shop's stock keeps clear of it).
 bool Busy(const Level& level, float x0, float x1, float y0, float y1, const apothecary::Box& cork) {
@@ -107,6 +182,7 @@ void ApothecaryArt::Release() {
 // ---- The still picture ----
 
 void ApothecaryArt::DrawBack(Canvas& picture, const ArtFrame& frame) {
+  Prepare(frame);
   const glm::vec2 screen = picture.Size();
   const float h = screen.y;
   const float scroll = frame.layout.scroll * frame.layout.scale;  // canvas units
@@ -133,7 +209,6 @@ void ApothecaryArt::DrawBack(Canvas& picture, const ArtFrame& frame) {
   }
   tiles_.Draw(picture, span.first, span.last, scroll);
   tiles_.EndFrame();
-  parts_.DrawBack(picture, frame);
 }
 
 void ApothecaryArt::DrawStill(int slot, int k, const ArtFrame& whole, glm::vec2 screen, float total) {
@@ -158,6 +233,7 @@ void ApothecaryArt::DrawStill(int slot, int k, const ArtFrame& whole, glm::vec2 
     DrawShelf(canvas, frame, static_cast<int>(shelf), screen.x);
   DrawCounter(canvas, frame, screen.x, total - static_cast<float>(k) * screen.y);
   DrawCorkBoard(canvas, frame);
+  DrawBores(canvas, frame);
   canvas.ShaderRect({{0.0f, 0.0f}, screen}, art.vignette);
 }
 
@@ -327,9 +403,256 @@ void ApothecaryArt::DrawCorkBoard(Canvas& canvas, const ArtFrame& frame) const {
   }
 }
 
-// ---- The machine (the workshop look's, until step 3c) ----
+// ---- The copper lines ----
 
-void ApothecaryArt::DrawFront(Canvas& canvas, const ArtFrame& frame) { parts_.DrawFront(canvas, frame); }
+void ApothecaryArt::Prepare(const ArtFrame& frame) {
+  const Level& level = *frame.level;
+  if (level_ == &level && tubes_.size() == level.pipes.size()) return;
+  level_ = &level;
+  tubes_.clear();
+  for (const Pipe& pipe : level.pipes) {
+    Tube tube;
+    const Node& from = level.nodes[static_cast<size_t>(pipe.from)];
+    const Node& to = level.nodes[static_cast<size_t>(pipe.to)];
+    std::vector<glm::vec2> points;
+    for (Vec2 p : pipe.points) points.push_back(V(p));
+    points = art::RoundCorners(points, kPipeBend, 2.5f);
+    const float rounded = art::MakePath(points).Length();
+    tube.stretch = pipe.length > 0.0f ? rounded / pipe.length : 1.0f;
+    std::vector<glm::vec2> whole;
+    if (glm::distance(V(from.at), points.front()) > 0.01f) whole.push_back(V(from.at));
+    whole.insert(whole.end(), points.begin(), points.end());
+    if (glm::distance(V(to.at), points.back()) > 0.01f) whole.push_back(V(to.at));
+    tube.whole = art::MakePath(std::move(whole));
+    tube.lead = glm::distance(V(from.at), points.front());
+    tube.copper = {CopperStop(from), tube.whole.Length() - CopperStop(to)};
+    // A brass fitting on each bend, at its corner.
+    std::vector<glm::vec2> corners{V(from.at)};
+    for (Vec2 p : pipe.via) corners.push_back(V(p));
+    corners.push_back(V(to.at));
+    for (size_t i = 1; i + 1 < corners.size(); ++i) {
+      if (glm::dot(Unit(corners[i] - corners[i - 1]), Unit(corners[i + 1] - corners[i])) < 0.995f)
+        tube.bends.push_back(corners[i]);
+    }
+    // A porthole in the middle of each cell (where a drop rests), unless a fitting or a part covers it.
+    for (int k = 0; k < pipe.cells; ++k) {
+      const float d =
+          tube.lead + (static_cast<float>(k) + 0.5f) * pipe.length / static_cast<float>(pipe.cells) * tube.stretch;
+      bool shown = d > tube.copper.x + kHole + 1.0f && d < tube.copper.y - kHole - 1.0f;
+      for (const glm::vec2 bend : tube.bends)
+        shown = shown && glm::distance(tube.whole.PointAt(d), bend) > kFitting + kHole + 0.5f;
+      tube.holes.push_back(shown ? d : -1.0f);
+      if (shown) tube.windows.push_back(d);
+    }
+    if (from.kind == NodeKind::Pass) tube.windows.insert(tube.windows.begin(), 0.0f);
+    if (to.kind == NodeKind::Pass) tube.windows.push_back(tube.whole.Length());
+    tube.top = tube.bottom = tube.whole.points.front().y;
+    for (const glm::vec2 p : tube.whole.points) {
+      tube.top = std::min(tube.top, p.y - kFitting);
+      tube.bottom = std::max(tube.bottom, p.y + kFitting);
+    }
+    tubes_.push_back(std::move(tube));
+  }
+}
+
+glm::vec2 ApothecaryArt::PipePoint(const ArtFrame& frame, int pipe, float distance) const {
+  const Pipe& rules = frame.level->pipes[static_cast<size_t>(pipe)];
+  if (level_ != frame.level || static_cast<size_t>(pipe) >= tubes_.size() || rules.length <= 0.0f)
+    return BoardArt::PipePoint(frame, pipe, distance);
+  const Tube& tube = tubes_[static_cast<size_t>(pipe)];
+  const glm::vec2 p = tube.whole.PointAt(tube.lead + distance * tube.stretch);
+  return frame.layout.ToCanvas({p.x, p.y});
+}
+
+void ApothecaryArt::DrawBores(Canvas& canvas, const ArtFrame& frame) const {
+  const Level& level = *frame.level;
+  const Layout& layout = frame.layout;
+  const float s = frame.Scale();
+  auto on_canvas = [&](const art::Path& path, glm::vec2 shift) {
+    std::vector<glm::vec2> points;
+    for (const glm::vec2 p : path.points) points.push_back(layout.ToCanvas({p.x + shift.x, p.y + shift.y}));
+    return art::MakePath(std::move(points));
+  };
+  // Soft shadows on the wall, then the bores: dark, as an empty porthole shows them.
+  for (const Tube& tube : tubes_) {
+    const art::Path shadow = on_canvas(tube.whole.Part(tube.copper.x, tube.copper.y), {1.0f, 6.0f});
+    art::Ribbon(canvas, shadow, -(kPipeHalf + 1.5f) * s, (kPipeHalf + 1.5f) * s, Rgba{0.0f, 0.0f, 0.0f, 0.16f});
+    art::Ribbon(canvas, shadow, -(kPipeHalf - 1.5f) * s, (kPipeHalf - 1.5f) * s, Rgba{0.0f, 0.0f, 0.0f, 0.16f});
+  }
+  for (const Tube& tube : tubes_) {
+    const art::Path bore = on_canvas(tube.whole.Part(tube.copper.x, tube.copper.y), {0.0f, 0.0f});
+    art::Stroke(canvas, bore, 0.0f, 2.0f * kCopperHalf * s, kBore);
+  }
+  for (const Node& node : level.nodes) {
+    const glm::vec2 c = layout.ToCanvas(node.at);
+    if (node.kind == NodeKind::Cross || node.kind == NodeKind::Merge || node.kind == NodeKind::Fork)
+      canvas.Circle(c, (node.kind == NodeKind::Fork ? kForkBoss : kBoss) * s, kBore);
+    // The workshop's spouts, drains and cups (until their own art, step 3c).
+    if (node.kind == NodeKind::Spout) {
+      canvas.Circle(c, 26.0f * s, ui_color::kPipeEdge);
+      canvas.Circle(c, 22.0f * s, ui_color::kPipeInside);
+    }
+    if (node.kind == NodeKind::Drain) {
+      canvas.Circle(c, 17.0f * s, ui_color::kPipeEdge);
+      canvas.Circle(c, 14.0f * s, ui_color::kPipeInside);
+    }
+    if (node.kind == NodeKind::Cup) {
+      canvas.FillRect(
+          {layout.ToCanvas({node.at.x - 24.0f, node.at.y}), layout.ToCanvas({node.at.x + 24.0f, node.at.y + 62.0f})},
+          WithAlpha(ui_color::kPipeInside, 0.9f), 6.0f * s);
+    }
+  }
+}
+
+void ApothecaryArt::DrawCopper(Canvas& canvas, const ArtFrame& frame, const Tube& tube, float top, float bottom) const {
+  const Layout& layout = frame.layout;
+  const float s = frame.Scale();
+  auto on_canvas = [&](float from, float to) {
+    std::vector<glm::vec2> points;
+    for (const glm::vec2 p : tube.whole.Part(from, to).points) points.push_back(layout.ToCanvas({p.x, p.y}));
+    return points;
+  };
+  auto shown = [&](float from, float to) {
+    const float y0 = tube.whole.PointAt(from).y, y1 = tube.whole.PointAt(to).y;
+    return std::max(y0, y1) + kPipeHalf > top && std::min(y0, y1) - kPipeHalf < bottom;
+  };
+  // Outside the portholes' strip the copper runs whole: its dark edges, the metal, a shine on the side the
+  // light comes from and a shade on the other.
+  const art::Path run = art::MakePath(on_canvas(tube.copper.x, tube.copper.y));
+  for (const float side : {-1.0f, 1.0f}) {
+    art::Stroke(canvas, run, side * (kPipeHalf - 0.75f) * s, 1.5f * s, kCopperEdge);
+    art::Stroke(canvas, run, side * (kHole + kCopperHalf) * 0.5f * s, (kCopperHalf - kHole + 0.1f) * s, kCopper);
+  }
+  for (size_t i = 1; i < run.points.size(); ++i) {
+    const glm::vec2 a = run.points[i - 1], b = run.points[i];
+    const glm::vec2 n = Left(Unit(b - a));
+    const glm::vec2 lit = glm::dot(n, kLightFrom) >= 0.0f ? n : -n;
+    canvas.Line(a + lit * (3.5f * s), b + lit * (3.5f * s), 1.2f * s, kCopperShine);
+    canvas.Line(a - lit * (4.3f * s), b - lit * (4.3f * s), 1.0f * s, kCopperShade);
+  }
+  // The strip down the middle, between the portholes' windows.
+  float at = tube.copper.x;
+  auto piece = [&](float to) {
+    if (to > at + 0.05f && shown(at, to)) FlatBand(canvas, on_canvas(at, to), kHole * s, 0.6f * s, kCopper);
+  };
+  for (const float window : tube.windows) {
+    piece(window - kHole);
+    at = std::max(at, window + kHole);
+  }
+  piece(tube.copper.y);
+  // The portholes' rims.
+  for (const float d : tube.holes) {
+    if (d < 0.0f || !shown(d, d)) continue;
+    const glm::vec2 p = tube.whole.PointAt(d);
+    HoleRim(canvas, layout.ToCanvas({p.x, p.y}), kHole, s);
+  }
+}
+
+void ApothecaryArt::DrawGlints(Canvas& canvas, const ArtFrame& frame) const {
+  const Level& level = *frame.level;
+  const Board& board = *frame.board;
+  if (!board.Started()) return;
+  const float s = frame.Scale();
+  const float alpha = std::clamp(frame.alpha, 0.0f, 1.0f);
+  // A drop glints in the portholes it is between, brighter the nearer it is.
+  auto glint = [&](Vec2 at, const Rgba& color, float weight) {
+    if (weight <= 0.02f) return;
+    glow_.Draw(canvas, frame.layout.ToCanvas(at), 14.0f * s, WithAlpha(color, 0.8f * weight));
+  };
+  auto node_glint = [&](int n, const Rgba& color, float weight) {
+    const Node& node = level.nodes[static_cast<size_t>(n)];
+    if (NodeHole(node) > 0.0f) glint(node.at, color, weight);
+  };
+  // `cell` = where along the pipe, in cells (cell k's porthole at k): < 0 is still in the node it left,
+  // > cells - 1 already in the next.
+  auto along = [&](int p, float cell, const Rgba& color) {
+    const Pipe& pipe = level.pipes[static_cast<size_t>(p)];
+    const Tube& tube = tubes_[static_cast<size_t>(p)];
+    const int k0 = static_cast<int>(std::floor(cell));
+    const float t = cell - static_cast<float>(k0);
+    for (const int k : {k0, k0 + 1}) {
+      const float weight = k == k0 ? 1.0f - t : t;
+      if (k < 0) {
+        node_glint(pipe.from, color, weight);
+      } else if (k >= pipe.cells) {
+        node_glint(pipe.to, color, weight);
+      } else if (const float d = tube.holes[static_cast<size_t>(k)]; d >= 0.0f) {
+        const glm::vec2 q = tube.whole.PointAt(d);
+        glint({q.x, q.y}, color, weight);
+      }
+    }
+  };
+  for (const Drop& drop : board.Drops()) {
+    if (!drop.alive) continue;
+    const Rgba a = LiquidColor(*frame.palette, drop.bead.a);
+    const Rgba color = drop.bead.IsBlend() ? Mixed(a, LiquidColor(*frame.palette, drop.bead.b), 0.5f) : a;
+    const Loc& now = drop.loc;
+    const Loc& before = drop.prev;
+    if (now.kind == Loc::OnPipe) {
+      const float cell = before.kind == Loc::OnPipe && before.index == now.index
+                             ? static_cast<float>(before.cell) + static_cast<float>(now.cell - before.cell) * alpha
+                             : static_cast<float>(now.cell) - 1.0f + alpha;  // coming out of a node
+      along(now.index, cell, color);
+    } else if (now.kind == Loc::InNode) {
+      if (before.kind == Loc::OnPipe) {
+        along(before.index, static_cast<float>(before.cell) + alpha, color);  // going in
+      } else {
+        node_glint(now.index, color, 1.0f);
+      }
+    }
+  }
+}
+
+// ---- The machine (spouts, cups and machine parts are the workshop look's until step 3c) ----
+
+void ApothecaryArt::DrawFront(Canvas& canvas, const ArtFrame& frame) {
+  Prepare(frame);
+  const Level& level = *frame.level;
+  const Layout& layout = frame.layout;
+  const float s = frame.Scale();
+  // Only what's on screen (board units).
+  const float top = layout.ToBoard({0.0f, 0.0f}).y - kFitting;
+  const float bottom = layout.ToBoard(canvas.Size()).y + kFitting;
+  for (const Tube& tube : tubes_) {
+    if (tube.bottom > top && tube.top < bottom) DrawCopper(canvas, frame, tube, top, bottom);
+  }
+  // Brass fittings on the bends.
+  for (const Tube& tube : tubes_) {
+    for (const glm::vec2 bend : tube.bends) {
+      const glm::vec2 c = layout.ToCanvas({bend.x, bend.y});
+      const glm::vec2 h{kFitting * s};
+      canvas.FillRect({c - h + glm::vec2(0.0f, 1.5f * s), c + h + glm::vec2(0.0f, 1.5f * s)},
+                      Rgba{0.0f, 0.0f, 0.0f, 0.3f}, 4.0f * s);
+      canvas.FillRect({c - h, c + h}, art::brass::kDark, 4.0f * s);
+      canvas.FillRect({c - h, c + glm::vec2(h.x, h.y - 2.0f * s)}, art::brass::kMid, 4.0f * s);
+      canvas.FillRect({c - h + glm::vec2(2.5f * s, 1.0f * s), c + glm::vec2(h.x - 2.5f * s, -h.y + 3.0f * s)},
+                      WithAlpha(art::brass::kLight, 0.8f), 1.0f * s);
+      canvas.Circle(c + glm::vec2(0.0f, 1.0f * s), 2.2f * s, WithAlpha(art::brass::kShade, 0.8f));
+    }
+  }
+  // A copper boss on every junction, with a porthole into it; a pass socket's porthole on its pipe.
+  for (const Node& node : level.nodes) {
+    const float hole = NodeHole(node);
+    if (hole <= 0.0f) continue;
+    const glm::vec2 c = layout.ToCanvas(node.at);
+    if (c.y < -40.0f * s || c.y > canvas.Size().y + 40.0f * s) continue;
+    if (node.kind != NodeKind::Pass) {
+      const float r = node.kind == NodeKind::Fork ? kForkBoss : kBoss;
+      canvas.Circle(c + glm::vec2(0.0f, 2.0f * s), (r + 1.0f) * s, Rgba{0.0f, 0.0f, 0.0f, 0.3f});
+      canvas.Ring(c, (r + hole) * 0.5f * s, (r - hole) * s, kCopper);
+      canvas.Ring(c, (r - 0.7f) * s, 1.4f * s, kCopperEdge);
+      canvas.Arc(c, (r - 2.4f) * s, 1.6f * s, -kPi * 0.62f, kPi * 0.6f, kCopperShine);
+      canvas.Arc(c, (r - 2.2f) * s, 1.4f * s, kPi * 0.45f, kPi * 0.6f, kCopperShade);
+      for (int k = 0; k < 4; ++k) {
+        const float a = kPi * (0.25f + 0.5f * static_cast<float>(k));
+        canvas.Circle(c + glm::vec2(std::cos(a), std::sin(a)) * ((r + hole) * 0.5f * s), 0.9f * s, kCopperEdge);
+      }
+    }
+    HoleRim(canvas, c, hole, s);
+  }
+  DrawGlints(canvas, frame);
+  parts_.DrawFront(canvas, frame);
+}
 
 wlw::ui::Rect ApothecaryArt::CupPool(const ArtFrame& frame, int cup) const { return parts_.CupPool(frame, cup); }
 

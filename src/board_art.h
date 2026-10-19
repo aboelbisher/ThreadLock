@@ -48,9 +48,10 @@ struct ArtFrame {
   Layout layout;
   const Palette* palette = nullptr;
   const wlw::ui::Font* font = nullptr;
-  float time = 0.0f;  // 0 with reduced motion
-  float dt = 0.0f;    // seconds since the last frame
-  bool calm = false;  // reduced motion: nothing drifts or flickers
+  float time = 0.0f;   // 0 with reduced motion
+  float dt = 0.0f;     // seconds since the last frame
+  float alpha = 1.0f;  // how far the drops are between the last tick and the next (set with the liquid)
+  bool calm = false;   // reduced motion: nothing drifts or flickers
   bool editing = true;
   std::span<const NodeAnim> anims;
   std::span<const float> cup_fill;                  // per node: drops in it (animated)
@@ -85,6 +86,8 @@ class BoardArt {
   virtual glm::vec2 CupTop(const ArtFrame& frame, int cup) const = 0;
   // Mud in a junction, `age` seconds after it happened.
   virtual void DrawMud(wlw::ui::Canvas& canvas, glm::vec2 at, float age, float scale, float time) const = 0;
+  // A drop's size in the liquid (board units): it must stay inside the world's pipes.
+  virtual float DropSize() const { return 12.0f; }
   // How far out a free socket's ring is drawn (it goes round the part that holds the socket).
   virtual float SocketRadius(const Node&) const { return 19.0f; }
   // Free sockets, hints and highlights.

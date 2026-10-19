@@ -314,6 +314,7 @@ void BoardView::DrawBack(Canvas& picture) {
 }
 
 void BoardView::DrawLiquid(Liquid& liquid, float alpha) {
+  frame_.alpha = alpha;
   if (level_ && art_) art_->DrawLiquid(liquid, frame_, alpha);
 }
 

@@ -58,7 +58,7 @@ void BoardArt::DrawLiquid(Liquid& liquid, const ArtFrame& frame, float alpha) co
       }
       const Rgba front = LiquidColor(palette, drop.bead.a);
       const Rgba back = drop.bead.IsBlend() ? LiquidColor(palette, drop.bead.b) : front;
-      liquid.Blob(at, Normal(along), 12.0f * s, front, back, static_cast<uint32_t>(drop.id) + 1u);
+      liquid.Blob(at, Normal(along), DropSize() * s, front, back, static_cast<uint32_t>(drop.id) + 1u);
     }
   }
   for (size_t n = 0; n < level.nodes.size(); ++n) {
