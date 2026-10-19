@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 
+#include "apothecary_art.h"
 #include "board_art.h"
 #include "catalog.h"
 #include "city_art.h"
@@ -102,6 +103,7 @@ class ThreadlockApp : public wlw::app::System {
   Liquid liquid_;
   WorkshopArt workshop_art_;
   LanternArt lantern_art_;
+  ApothecaryArt apothecary_art_;
   CityArt city_art_;
   std::shared_ptr<wlw::rendering::ShaderMaterial> action_material_;
   std::shared_ptr<wlw::ui::Font> font_;

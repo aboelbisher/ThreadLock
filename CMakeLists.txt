@@ -15,6 +15,8 @@ set(THREADLOCK_RULES
   src/threadlock_rules.h
   src/level_io.cpp
   src/level_io.h
+  src/apothecary_look.cpp
+  src/apothecary_look.h
   src/solver.cpp
   src/solver.h
   src/generator.cpp
@@ -39,6 +41,8 @@ wlw_add_game(threadlock
     src/threadlock_app.h
     src/tile_pool.cpp
     src/tile_pool.h
+    src/apothecary_art.cpp
+    src/apothecary_art.h
     src/art_shapes.cpp
     src/art_shapes.h
     src/board_art.cpp

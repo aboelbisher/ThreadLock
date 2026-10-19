@@ -5,6 +5,7 @@
 #include <map>
 #include <tuple>
 
+#include "apothecary_look.h"
 #include "json.hpp"  // nlohmann::json (vendored in the engine's third_party/tinygltf)
 
 namespace threadlock {
@@ -583,6 +584,11 @@ std::vector<std::string> LookProblems(const Level& level) {
           break;
         }
       }
+    }
+    // The order slips hang on a cork board in the top right: nothing of the machine behind it.
+    const apothecary::Box cork = apothecary::CorkBoard(static_cast<int>(apothecary::Orders(level).size()));
+    for (const Node& node : level.nodes) {
+      if (cork.Contains(node.at)) problems.push_back("node " + node.id + " is under the cork board");
     }
   }
   return problems;

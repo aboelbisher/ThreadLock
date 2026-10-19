@@ -61,6 +61,7 @@ void ThreadlockApp::OnStart() {
   ApplySettings();
   liquid_.Create(App());
   lantern_art_.Create(App());
+  apothecary_art_.Create(App());
   city_art_.Create(App());
   action_material_ =
       wlw::rendering::ShaderMaterial::Create(wlw::rendering::Shader::FromFile("shaders/ui_gradient.shader"));
@@ -96,6 +97,7 @@ void ThreadlockApp::ApplySettings() {
 BoardArt& ThreadlockApp::ArtFor(int world) {
   switch (LookForWorld(world).art) {
     case ArtKind::Lantern: return lantern_art_;
+    case ArtKind::Apothecary: return apothecary_art_;
     case ArtKind::Workshop: break;
   }
   return workshop_art_;

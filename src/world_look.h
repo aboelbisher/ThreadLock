@@ -12,7 +12,7 @@
 // the daily puzzle and the Lab.
 namespace threadlock {
 
-enum class ArtKind : uint8_t { Workshop, Lantern };
+enum class ArtKind : uint8_t { Workshop, Lantern, Apothecary };
 
 struct WorldLook {
   ArtKind art = ArtKind::Workshop;
@@ -47,8 +47,8 @@ inline constexpr WorldLook kWorldLooks[] = {
     {ArtKind::Lantern, "The Lantern Works", Hex(0x080C15), Hex(0x0B1522, 0.86f), Hex(0xCFE6FF, 0.2f), Hex(0xF2F7FF),
      Hex(0xA9BED6), Hex(0xF6DA9A), Hex(0xFFE6A6), Hex(0xDFA74E), Hex(0x9A6A22), Hex(0x2A1A00),
      synth::SoundSet::Lantern},
-    // World 2, Fair Shares: an apothecary on market day (its art comes in step 3).
-    {ArtKind::Workshop, "The Apothecary", Hex(0x1A120C), Hex(0x2A1D14, 0.9f), Hex(0xF3E8CC, 0.2f), Hex(0xF3E8CC),
+    // World 2, Fair Shares: an apothecary on market day.
+    {ArtKind::Apothecary, "The Apothecary", Hex(0x1A120C), Hex(0x2A1D14, 0.9f), Hex(0xF3E8CC, 0.2f), Hex(0xF3E8CC),
      Hex(0xC9AE8C), Hex(0xFFB45C), Hex(0xFFD99A), Hex(0xEE9645), Hex(0x9A5418), Hex(0x2A1600),
      synth::SoundSet::Workshop},
     // World 3, Rush Hour: the canal city at night.

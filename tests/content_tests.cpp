@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "../src/apothecary_look.h"
 #include "../src/generator.h"
 #include "../src/level_io.h"
 #include "../src/solver.h"
@@ -155,6 +156,41 @@ TEST_SUITE("content") {
     CHECK(problems[0] == "pipe f -> a runs at a slant (segment 0)");
     level.look.shelves.clear();
     CHECK(LookProblems(level).empty());
+
+    // The orders hang on a cork board in the top right: nothing of the machine may sit behind it.
+    std::string hidden = shop;
+    hidden.replace(hidden.find("[60, 40]"), 8, "[300, 40]");
+    REQUIRE(ParseLevel(hidden, level, errors));
+    const std::vector<std::string> covered = LookProblems(level);
+    REQUIRE(covered.size() == 1);
+    CHECK(covered[0] == "node s is under the cork board");
+  }
+
+  TEST_CASE("a shop's look: slips on the cork board, the counter under the bottles") {
+    const std::string shop = R"({"id": "t-1", "name": "Shop", "shelves": [60],
+      "nodes": [{"id": "s", "kind": "spout", "at": [60, 40], "beads": "B*3", "beat": 4},
+                {"id": "f", "kind": "fork", "at": [180, 160], "socket": true},
+                {"id": "a", "kind": "cup", "at": [90, 480], "want": "B", "count": 2, "order": "Mrs Hale"},
+                {"id": "b", "kind": "cup", "at": [270, 450], "want": "B", "count": 1, "order": "Baker"}],
+      "pipes": [["s", "f", [[180, 40]]], ["f", "a", [[90, 160]]], ["f", "b", [[270, 160]]]],
+      "tray": [{"type": "overflow", "n": 2}]})";
+    Level level;
+    std::vector<std::string> errors;
+    REQUIRE(ParseLevel(shop, level, errors));
+    const std::vector<apothecary::Order> orders = apothecary::Orders(level);
+    REQUIRE(orders.size() == 2);
+    CHECK((orders[0].node == 2 && orders[0].slot == -1 && orders[0].name == "Mrs Hale" && orders[0].count == 2));
+    CHECK(orders[1].name == "Baker");
+    // Two slips: 42 apart, 38 wide, 5 of cork round them; pinned to the wall's top right.
+    const apothecary::Box board = apothecary::CorkBoard(2);
+    CHECK((board.min == Vec2{266.0f, 2.0f} && board.max == Vec2{356.0f, 74.0f}));
+    CHECK((apothecary::SlipPin(2, 0) == Vec2{290.0f, 8.0f} && apothecary::SlipPin(2, 1) == Vec2{332.0f, 8.0f}));
+    CHECK(apothecary::CorkBoard(0).Empty());
+    // More than four share a four-slip board.
+    CHECK(apothecary::CorkBoard(6).min.x == apothecary::CorkBoard(4).min.x);
+    CHECK(apothecary::SlipPin(6, 5).x == apothecary::SlipPin(4, 3).x);
+    // The counter's top: just above the lowest bottle's feet (the cup at 480: feet at 532).
+    CHECK(apothecary::CounterTop(level) == 480.0f + apothecary::kBottleBase - apothecary::kCounterLip);
   }
 
   TEST_CASE("every level's look is right: nodes on the board, shop walls straight") {
