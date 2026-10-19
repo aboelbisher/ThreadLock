@@ -629,11 +629,45 @@ std::vector<std::string> LookProblems(const Level& level) {
     }
     for (const Pipe& pipe : level.pipes) {
       const Node& to = level.nodes[static_cast<size_t>(pipe.to)];
-      if (to.kind != NodeKind::Cup) continue;
+      if (to.kind != NodeKind::Cup && to.kind != NodeKind::Rack) continue;
       const Vec2 last = pipe.via.empty() ? level.nodes[static_cast<size_t>(pipe.from)].at : pipe.via.back();
       if (last.x != to.at.x || last.y >= to.at.y)
         problems.push_back("pipe " + level.nodes[static_cast<size_t>(pipe.from)].id + " -> " + to.id +
-                           " doesn't come down into the bottle");
+                           (to.kind == NodeKind::Cup ? " doesn't come down into the bottle"
+                                                     : " doesn't come down into the rack's tap"));
+    }
+    // The racks: lazy susans of two to four bottles, each for an order, on the counter with room to turn
+    // (clear of the bottles, the sinks and each other), their clocks clear of the bottles' tags.
+    for (size_t r = 0; r < level.nodes.size(); ++r) {
+      const Node& rack = level.nodes[r];
+      if (rack.kind != NodeKind::Rack) continue;
+      const std::string name = "rack " + rack.id;
+      if (rack.slots.size() < 2 || rack.slots.size() > 4) problems.push_back(name + " needs 2 to 4 bottles");
+      for (size_t k = 0; k < rack.slots.size(); ++k) {
+        if (rack.slots[k].order.empty())
+          problems.push_back(name + "'s bottle " + std::to_string(k + 1) + " has no order");
+      }
+      const float top = rack.at.y + apothecary::kRackBase - apothecary::kRackLip;  // as the counter's top
+      if (top < counter - apothecary::kBottleLip || top > counter + apothecary::kCounterFace - apothecary::kBottleLip)
+        problems.push_back(name + " isn't on the counter");
+      const apothecary::Box table = apothecary::RackBox(rack);
+      if (off_board(table)) problems.push_back(name + "'s turntable is off the board");
+      const Vec2 clock = apothecary::ClockAt(rack);
+      const apothecary::Box dial{{clock.x - apothecary::kClockRadius, clock.y - apothecary::kClockRadius},
+                                 {clock.x + apothecary::kClockRadius, clock.y + apothecary::kClockRadius}};
+      for (size_t n = 0; n < level.nodes.size(); ++n) {
+        const Node& node = level.nodes[n];
+        apothecary::Box box;
+        if (node.kind == NodeKind::Cup) {
+          box = {{node.at.x - 14.0f, node.at.y}, {node.at.x + 14.0f, node.at.y + apothecary::kBottleBase}};
+          if (dial.Overlaps(apothecary::BottleTag(node, counter)))
+            problems.push_back(name + "'s clock is over bottle " + node.id + "'s tag");
+        }
+        if (node.kind == NodeKind::Drain)
+          box = {{node.at.x - 27.0f, node.at.y - 7.0f}, {node.at.x + 27.0f, node.at.y + 7.0f}};
+        if (node.kind == NodeKind::Rack && n > r) box = apothecary::RackBox(node);
+        if (table.Overlaps(box)) problems.push_back(name + "'s turntable runs into " + node.id);
+      }
     }
   }
   return problems;

@@ -85,6 +85,8 @@ class BoardArt {
   // A cup's liquid: a pool filling CupPool from the bottom. A world that draws what's in its cups
   // itself (over the liquid) leaves it out.
   virtual void CupLiquid(Liquid& liquid, const ArtFrame& frame, int cup) const;
+  // Where bottle `slot` of a rack is (board units): its markers ("dry", "spill") go over it.
+  virtual Vec2 BottleAt(const ArtFrame& frame, int rack, int slot) const;
   // Just above a cup: where "dry", "spill" and "wrong colour" go.
   virtual glm::vec2 CupTop(const ArtFrame& frame, int cup) const = 0;
   // Mud in a junction, `age` seconds after it happened.

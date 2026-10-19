@@ -22,7 +22,9 @@
 // changes, with the copper lines' dark bores in it. Over the liquid each frame: the copper, with a porthole
 // per cell where the drops show and glint, brass fittings at the bends and a copper boss with a porthole on
 // every junction; the bottles' tonic filling up behind their glass, the chalk tally of each jar's drops,
-// the shop bell. The turning rack, mills and gates are still the shared machine parts (v3 step 3c C3).
+// the shop bell. A rack is a lazy susan on the counter: its turntable on the bloomed picture, its bottles
+// (depth-sorted, each with a parchment tag on its neck), its tap, the drop falling from it and the clock
+// counting to its next turn over the liquid. Mills and gates are still the shared machine parts.
 namespace threadlock {
 
 class ApothecaryArt : public BoardArt {
@@ -38,6 +40,8 @@ class ApothecaryArt : public BoardArt {
   void SpoutLiquid(Liquid&, const ArtFrame&, int) const override {}
   void CupLiquid(Liquid&, const ArtFrame&, int) const override {}
   glm::vec2 CupTop(const ArtFrame& frame, int cup) const override;
+  // A rack bottle's mouth, wherever the turntable has turned it.
+  Vec2 BottleAt(const ArtFrame& frame, int rack, int slot) const override;
   void DrawMud(wlw::ui::Canvas& canvas, glm::vec2 at, float age, float scale, float time) const override;
   glm::vec2 PipePoint(const ArtFrame& frame, int pipe, float distance) const override;
   float DropSize() const override { return 8.0f; }
@@ -86,6 +90,11 @@ class ApothecaryArt : public BoardArt {
   void DrawBottle(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
   void DrawChalk(wlw::ui::Canvas& canvas, const ArtFrame& frame, int spout) const;
   void DrawBell(wlw::ui::Canvas& canvas, const ArtFrame& frame) const;
+  // A rack: the turntable (on the picture, behind the liquid), the clock's face (still), and over the liquid
+  // its bottles, their tags, the tap, the falling drop and the clock's hand.
+  void DrawTurntable(wlw::ui::Canvas& picture, const ArtFrame& frame, int rack) const;
+  void DrawClockFace(wlw::ui::Canvas& canvas, const ArtFrame& frame, int rack) const;
+  void DrawRack(wlw::ui::Canvas& canvas, const ArtFrame& frame, int rack) const;
 
   TilePool tiles_;
   std::vector<TileArt> tile_art_;  // per slot
@@ -94,9 +103,10 @@ class ApothecaryArt : public BoardArt {
   // This level's shop.
   const Level* level_ = nullptr;
   std::vector<Tube> tubes_;
-  std::vector<apothecary::Jar> jars_;   // per node (a spout's)
-  std::vector<int> cup_order_;          // per node: a cup's order (its slip's number - 1), -1 = none
-  std::vector<apothecary::Box> clear_;  // where the shop's own stock and herbs keep clear
+  std::vector<apothecary::Jar> jars_;         // per node (a spout's)
+  std::vector<int> cup_order_;                // per node: a cup's order (its slip's number - 1), -1 = none
+  std::vector<std::vector<int>> rack_order_;  // per node, per bottle: a rack bottle's order, -1 = none
+  std::vector<apothecary::Box> clear_;        // where the shop's own stock and herbs keep clear
   int slips_ = 0;
   float counter_ = 0.0f;  // the counter's top
   art::Glow glow_;

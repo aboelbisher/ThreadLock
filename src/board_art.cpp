@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "liquid.h"
+#include "workshop_art.h"
 
 namespace threadlock {
 namespace {
@@ -66,6 +67,10 @@ void BoardArt::DrawLiquid(Liquid& liquid, const ArtFrame& frame, float alpha) co
     if (node.kind == NodeKind::Spout) SpoutLiquid(liquid, frame, static_cast<int>(n));
     if (node.kind == NodeKind::Cup && frame.cup_fill[n] > 0.01f) CupLiquid(liquid, frame, static_cast<int>(n));
   }
+}
+
+Vec2 BoardArt::BottleAt(const ArtFrame& frame, int rack, int slot) const {
+  return threadlock::BottleAt(frame, rack, slot);
 }
 
 void BoardArt::CupLiquid(Liquid& liquid, const ArtFrame& frame, int cup) const {

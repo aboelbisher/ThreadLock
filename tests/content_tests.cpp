@@ -276,6 +276,81 @@ TEST_SUITE("content") {
     CHECK(apothecary::CounterTop(level) == 480.0f + apothecary::kBottleBase - apothecary::kBottleLip);
   }
 
+  TEST_CASE("a shop's rack: a lazy susan on the counter, its bottles round the ring, a clock under it") {
+    const std::string shop = R"({"id": "t-1", "name": "Rack", "shelves": [90, 226, 362],
+      "nodes": [{"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*8", "beat": 2},
+                {"id": "r", "kind": "rack", "at": [180, 388], "period": 4,
+                 "slots": [{"want": "B", "count": 4, "order": "Mrs Hale"}, {"want": "B", "count": 2, "order": "Baker"},
+                           {"want": "B", "count": 2, "order": "Dr Moss"}]}],
+      "pipes": [["s", "r", [[180, 80]]]]})";
+    Level good;
+    std::vector<std::string> errors;
+    REQUIRE(ParseLevel(shop, good, errors));
+    REQUIRE(LookProblems(good).empty());
+    const Node& rack = good.nodes[1];
+    CHECK(apothecary::CounterTop(good) == 467.0f);
+
+    // The mock's three: the front one under the tap, the others back at the sides, smaller.
+    const apothecary::RackSpot front = apothecary::RackBottle(rack, 0, 0.0f);
+    CHECK((front.mouth == Vec2{180.0f, 438.0f} && front.base == Vec2{180.0f, 490.0f}));
+    CHECK((front.scale == doctest::Approx(1.0f) && front.depth == doctest::Approx(1.0f)));
+    CHECK(front.base.y == rack.at.y + apothecary::kRackBase);
+    const apothecary::RackSpot left = apothecary::RackBottle(rack, 1, 0.0f);
+    const apothecary::RackSpot right = apothecary::RackBottle(rack, 2, 0.0f);
+    CHECK((left.base.x == doctest::Approx(123.708f) && right.base.x == doctest::Approx(236.292f)));
+    CHECK((left.scale == doctest::Approx(0.82f) && left.base.y == doctest::Approx(477.28f)));
+    CHECK((left.depth < front.depth && right.depth < front.depth));
+    // One step brings the next bottle to the front; half a step has the two either side of it.
+    const apothecary::RackSpot next = apothecary::RackBottle(rack, 1, 1.0f);
+    CHECK((next.mouth.x == doctest::Approx(front.mouth.x) && next.mouth.y == doctest::Approx(front.mouth.y)));
+    const apothecary::RackSpot going = apothecary::RackBottle(rack, 0, 0.5f),
+                               coming = apothecary::RackBottle(rack, 1, 0.5f);
+    CHECK((going.depth == doctest::Approx(coming.depth) && going.base.x > rack.at.x && coming.base.x < rack.at.x));
+    // Four: the one at the back, the smallest, right behind the front one.
+    Level four = good;
+    four.nodes[1].slots.push_back(four.nodes[1].slots[1]);
+    const apothecary::RackSpot back = apothecary::RackBottle(four.nodes[1], 2, 0.0f);
+    CHECK((back.base.x == doctest::Approx(180.0f) && back.scale == doctest::Approx(0.76f) && back.depth < -0.99f));
+    CHECK(LookProblems(four).empty());
+
+    const apothecary::Box table = apothecary::RackBox(rack);
+    CHECK((table.min == Vec2{84.0f, 428.0f} && table.max == Vec2{276.0f, 508.0f}));
+    CHECK(apothecary::ClockAt(rack) == Vec2{180.0f, 540.0f});
+
+    // What's wrong with a rack on a shop wall.
+    Level changed = good;
+    changed.nodes[1].slots.resize(5, changed.nodes[1].slots[1]);
+    CHECK(Has(LookProblems(changed), "rack r needs 2 to 4 bottles"));
+    changed = good;
+    changed.nodes[1].slots[1].order.clear();
+    CHECK(Has(LookProblems(changed), "rack r's bottle 2 has no order"));
+    changed = good;
+    changed.nodes[1].at.x = 60.0f;
+    CHECK(Has(LookProblems(changed), "rack r's turntable is off the board"));
+    changed = good;
+    changed.pipes[0].via = {{80.0f, 388.0f}};
+    CHECK(Has(LookProblems(changed), "pipe s -> r doesn't come down into the rack's tap"));
+    // A bottle on a lower counter, in the turntable's way, its tag behind the clock.
+    changed = good;
+    Node cup;
+    cup.id = "c";
+    cup.kind = NodeKind::Cup;
+    cup.at = {190.0f, 478.0f};
+    cup.order = "Baker";
+    changed.nodes.push_back(cup);
+    std::vector<std::string> problems = LookProblems(changed);
+    CHECK(Has(problems, "rack r isn't on the counter"));
+    CHECK(Has(problems, "rack r's turntable runs into c"));
+    CHECK(Has(problems, "rack r's clock is over bottle c's tag"));
+    Node sink;
+    sink.id = "d";
+    sink.kind = NodeKind::Drain;
+    sink.at = {250.0f, 470.0f};
+    changed = good;
+    changed.nodes.push_back(sink);
+    CHECK(Has(LookProblems(changed), "rack r's turntable runs into d"));
+  }
+
   TEST_CASE("every level's look is right: nodes on the board, shop walls straight") {
     for (const World& world : LoadAll()) {
       for (const Level& level : world.levels) {

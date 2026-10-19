@@ -74,6 +74,33 @@ float CounterTop(const Level& level) {
   return top >= 0.0f ? top : 467.0f;
 }
 
+RackSpot RackBottle(const Node& rack, int slot, float spin) {
+  constexpr float kPi = 3.14159265f;
+  const int k = std::max(1, static_cast<int>(rack.slots.size()));
+  const float a = kPi * 0.5f + 2.0f * kPi * (static_cast<float>(slot - rack.first) - spin) / static_cast<float>(k);
+  const float c = std::cos(a), s = std::sin(a);
+  // The mock's bottles: 65 out from the middle on a ring seen at a slant (8 deep), from 0.76 to full size.
+  RackSpot spot;
+  spot.scale = 0.88f + 0.12f * s;
+  spot.depth = s;
+  const Vec2 at{rack.at.x + 65.0f * c, rack.at.y + kRackTable + 8.0f * s};
+  spot.base = {at.x, at.y + 4.0f * spot.scale};
+  spot.mouth = {at.x, spot.base.y - kBottleBase * spot.scale};
+  return spot;
+}
+
+Box RackBox(const Node& rack) {
+  // The bottles' mouths at the back (40 below the tap) to the turntable's shadow (120), its rim 94 out.
+  return {{rack.at.x - 96.0f, rack.at.y + 40.0f}, {rack.at.x + 96.0f, rack.at.y + 120.0f}};
+}
+
+Vec2 ClockAt(const Node& rack) { return {rack.at.x, rack.at.y + 152.0f}; }
+
+Box BottleTag(const Node& cup, float counter) {
+  const float y = counter + kCounterFace + 9.0f;
+  return {{cup.at.x - 11.0f, y - 6.0f}, {cup.at.x + 11.0f, y + 6.0f}};
+}
+
 Vec2 SlateSize(int marks) {
   const int in_row = std::clamp(marks, 1, 10);
   const int last = in_row - 1, g = last / 5, j = last % 5;

@@ -50,6 +50,24 @@ Vec2 BellHang(int slips);
 // The top of the counter's surface: just above the feet of the lowest bottles.
 float CounterTop(const Level& level);
 
+// A rack is a lazy susan on the counter: its tap is the node, the turntable's centre kRackTable below it, its
+// bottles round a ring with the one under the tap at the front. `spin` = the steps it has turned (ticks /
+// period, animated): bottle first + spin is at the front. Seen from the front, a bottle further back stands
+// higher up and smaller.
+inline constexpr float kRackTable = 90.0f;
+struct RackSpot {
+  Vec2 mouth, base;    // where its mouth is, where it stands
+  float scale = 1.0f;  // its size (1 at the front)
+  float depth = 0.0f;  // -1 at the back .. +1 at the front: draw the smaller first
+};
+RackSpot RackBottle(const Node& rack, int slot, float spin);
+// The turntable with its bottles and its shadow; the clock on the counter's front under it.
+Box RackBox(const Node& rack);
+Vec2 ClockAt(const Node& rack);
+inline constexpr float kClockRadius = 17.0f;
+// A cup bottle's brass tag on the counter's front.
+Box BottleTag(const Node& cup, float counter);
+
 // A spout's jar. Its own origin `at` is the mock's node: the body spans x -40..+12 from it (the tap's side
 // positive), y -50..+16, lid and knob above to -64, the tap +10..+24 across. A spout whose first pipe runs
 // across sits inside its jar's tap side (at = the node); one whose pipe runs down has the jar beside it,

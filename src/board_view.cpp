@@ -319,8 +319,8 @@ void BoardView::DrawLiquid(Liquid& liquid, float alpha) {
 }
 
 glm::vec2 BoardView::MarkerCanvas(int node, int slot) const {
-  if (slot >= 0 && level_->nodes[static_cast<size_t>(node)].kind == NodeKind::Rack)
-    return layout_.ToCanvas(BottleAt(frame_, node, slot));
+  if (slot >= 0 && art_ && level_->nodes[static_cast<size_t>(node)].kind == NodeKind::Rack)
+    return layout_.ToCanvas(art_->BottleAt(frame_, node, slot));
   return NodeCanvas(node);
 }
 
