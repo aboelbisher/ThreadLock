@@ -297,6 +297,22 @@ TEST_SUITE("content") {
     CHECK(apothecary::BellAt(0.5f, false).wave > apothecary::BellAt(0.1f, false).wave);
   }
 
+  TEST_CASE("a shop's failures: a spill runs over and pools, a short order's ghost fills in") {
+    using apothecary::SpillAt;
+    CHECK((SpillAt(0.0f, false).stream == 0.0f && SpillAt(0.0f, false).puddle == 0.0f));
+    CHECK((SpillAt(0.45f, false).stream == doctest::Approx(0.5f) && SpillAt(0.3f, false).drip_b == 0.0f));
+    CHECK(SpillAt(0.25f, false).cork_off == doctest::Approx(0.5f));
+    const apothecary::SpillMoment done = SpillAt(apothecary::kSpillLength, false);
+    CHECK((done.stream == 1.0f && done.puddle == 1.0f && done.drip_a == 1.0f && done.drip_b == doctest::Approx(0.9f)));
+    CHECK(SpillAt(0.0f, true).puddle == 1.0f);
+
+    CHECK((apothecary::ShortAt(0.75f, false).ghost == doctest::Approx(0.5f) &&
+           apothecary::ShortAt(0.5f, false).pill == 1.0f));
+    CHECK(apothecary::ShortAt(0.0f, true).ghost == 1.0f);
+    CHECK((apothecary::UnpaidAt(0.0f, false) == 0.0f && apothecary::UnpaidAt(1.2f, false) == 1.0f));
+    CHECK(apothecary::UnpaidAt(0.0f, true) == 1.0f);
+  }
+
   TEST_CASE("a shop's rack: a lazy susan on the counter, its bottles round the ring, a clock under it") {
     const std::string shop = R"({"id": "t-1", "name": "Rack", "shelves": [90, 226, 362],
       "nodes": [{"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*8", "beat": 2},

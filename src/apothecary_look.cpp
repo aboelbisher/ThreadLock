@@ -139,6 +139,26 @@ BellRing BellAt(float since, bool calm) {
   return ring;
 }
 
+SpillMoment SpillAt(float age, bool calm) {
+  if (calm) return {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  const float t = std::clamp(age / kSpillLength, 0.0f, 1.0f);
+  SpillMoment spill;
+  spill.stream = std::clamp(age / 0.9f, 0.0f, 1.0f);
+  spill.puddle = EaseOut(t);
+  spill.drip_a = std::clamp(t * 1.4f - 0.3f, 0.0f, 1.0f);
+  spill.drip_b = std::clamp(t * 1.4f - 0.5f, 0.0f, 1.0f);
+  spill.cork_off = std::clamp(age / 0.5f, 0.0f, 1.0f);
+  spill.pill = std::clamp(age * 6.0f, 0.0f, 1.0f);
+  return spill;
+}
+
+ShortMoment ShortAt(float age, bool calm) {
+  if (calm) return {1.0f, 1.0f};
+  return {std::clamp(age / kShortLength, 0.0f, 1.0f), std::clamp(age * 6.0f, 0.0f, 1.0f)};
+}
+
+float UnpaidAt(float age, bool calm) { return calm ? 1.0f : EaseOut(std::clamp(age / 1.2f, 0.0f, 1.0f)); }
+
 Jar JarAt(const Level& level, int spout) {
   const Node& node = level.nodes[static_cast<size_t>(spout)];
   Vec2 next{node.at.x, node.at.y + 1.0f};

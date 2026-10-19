@@ -40,7 +40,7 @@ std::vector<Order> Orders(const Level& level);
 
 // The cork board for this many slips (empty for none): pinned to the wall's top right.
 Box CorkBoard(int slips);
-inline constexpr float kSlipWidth = 38.0f, kSlipHeight = 58.0f, kSlipStep = 42.0f;
+inline constexpr float kSlipWidth = 38.0f, kSlipHeight = 62.0f, kSlipStep = 42.0f;
 // Where slip k's pin is (its top middle).
 Vec2 SlipPin(int slips, int k);
 // The shop bell, on a bracket left of the cork board (empty with no orders), and the point it hangs from.
@@ -115,6 +115,29 @@ struct BellRing {
   float wave_alpha = 0.0f;
 };
 BellRing BellAt(float since, bool calm);
+// A bottle ran over: the liquid runs over its shoulder and down its side, pools at its foot and drips off the
+// counter's (or the turntable's) edge; a paid bottle's cork pops out. The run goes on: the moment stays.
+inline constexpr float kSpillLength = 1.2f;
+inline constexpr float kSpillSplash = 0.0f;  // the sound (3e)
+struct SpillMoment {
+  float stream = 0.0f;                 // 0..1: how far down the side
+  float puddle = 0.0f;                 // 0..1: how far it has spread
+  float drip_a = 0.0f, drip_b = 0.0f;  // 0..1: the two drips' lengths
+  float cork_off = 0.0f;               // 0..1: a cork flying out
+  float pill = 0.0f;                   // 0..1: the count's pill popping up
+};
+SpillMoment SpillAt(float age, bool calm);
+// An order short at the end: a dashed ghost of what's missing fills in, the count's pill pops up. On the
+// cork board an unpaid order's slip (short or spilled) droops on its pin, struck through, "unpaid".
+inline constexpr float kShortLength = 1.5f;
+inline constexpr float kShortDull = 0.0f;  // the sound (3e)
+struct ShortMoment {
+  float ghost = 0.0f;  // 0..1: the ghost fill's strength
+  float pill = 0.0f;
+};
+ShortMoment ShortAt(float age, bool calm);
+inline constexpr float kSlipDroop = 9.0f;  // degrees, about its pin
+float UnpaidAt(float age, bool calm);      // 0..1: the droop, the strike and the word
 // Ease out: fast, then settling (0..1 -> 0..1).
 float EaseOut(float t);
 

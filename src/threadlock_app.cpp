@@ -25,6 +25,7 @@ namespace {
 
 // Development shortcuts (adb: am start ... --es wlw "tl.open=1-6;tl.solve=1;tl.autoplay=2").
 wlw::CVar<std::string> cv_open{"tl.open", "", "Open this level at startup (dev)"};
+wlw::CVar<bool> cv_calm{"tl.calm", false, "Reduced motion, whatever the setting (dev)"};
 
 // Ads: Google's test units in every build until Threadlock has its own AdMob app (DESIGN.md §10;
 // the app id in AndroidManifest.xml is Google's sample one too). Real units go here, release only,
@@ -121,6 +122,8 @@ void ThreadlockApp::OnRenderUI(wlw::ui::UIContext& ui) {
 }
 
 bool ThreadlockApp::OnBack() { return false; }
+
+bool ThreadlockApp::Calm() const { return progress_->settings.reduced_motion || cv_calm.Get(); }
 
 void ThreadlockApp::OnAppPaused() { progress_->Save(); }
 

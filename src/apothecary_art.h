@@ -10,7 +10,6 @@
 #include "wlw/app/application.h"
 #include "wlw/rendering/shader_material.h"
 #include "wlw/ui/font.h"
-#include "workshop_art.h"
 
 // World 2, Fair Shares: The Apothecary (DESIGN.md §5), a shop on market day. Copper lines run along the
 // shelves of the back wall and straight down to the counter, where the bottles stand; the orders they fill
@@ -42,6 +41,7 @@ class ApothecaryArt : public BoardArt {
   glm::vec2 CupTop(const ArtFrame& frame, int cup) const override;
   // A rack bottle's mouth, wherever the turntable has turned it.
   Vec2 BottleAt(const ArtFrame& frame, int rack, int slot) const override;
+  // Brown sludge oozing out of a junction's copper boss and running down the wall.
   void DrawMud(wlw::ui::Canvas& canvas, glm::vec2 at, float age, float scale, float time) const override;
   // An order filled is shown in the shop itself: the cork and label on its bottle, the PAID stamp on its slip and
   // the bell (DrawFront).
@@ -104,8 +104,16 @@ class ApothecaryArt : public BoardArt {
   void DrawTurntable(wlw::ui::Canvas& picture, const ArtFrame& frame, int rack) const;
   void DrawClockFace(wlw::ui::Canvas& canvas, const ArtFrame& frame, int rack) const;
   void DrawRack(wlw::ui::Canvas& canvas, const ArtFrame& frame, int rack) const;
-  // A paid bottle's cork and label (mouth at `mouth`, board units, `scale` its size); `order` = its slip, -1 = none.
-  void DrawPaid(wlw::ui::Canvas& canvas, const ArtFrame& frame, Vec2 mouth, float scale, int order, float age) const;
+  // Where a cup's or a rack bottle's mouth is now, and its size.
+  apothecary::RackSpot Spot(const ArtFrame& frame, int node, int slot) const;
+  // A bottle's moments: behind it (`front` false) a spill's puddle and drips, over it the paid cork and label,
+  // a spill's stream, a short order's ghost fill.
+  void DrawMoments(wlw::ui::Canvas& canvas, const ArtFrame& frame, int node, int slot, const apothecary::RackSpot& spot,
+                   bool front) const;
+  // A paid bottle's cork and label (mouth at `mouth`, board units, `scale` its size); `order` = its slip, -1 =
+  // none; `popped` = how far its cork has flown out (a spill after).
+  void DrawPaid(wlw::ui::Canvas& canvas, const ArtFrame& frame, Vec2 mouth, float scale, int order, float age,
+                float popped) const;
 
   TilePool tiles_;
   std::vector<TileArt> tile_art_;  // per slot
@@ -122,7 +130,6 @@ class ApothecaryArt : public BoardArt {
   int slips_ = 0;
   float counter_ = 0.0f;  // the counter's top
   art::Glow glow_;
-  WorkshopArt parts_;  // mud, until its own art (step 3c D)
 };
 
 }  // namespace threadlock

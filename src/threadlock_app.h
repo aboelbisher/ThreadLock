@@ -63,7 +63,7 @@ class ThreadlockApp : public wlw::app::System {
   const Palette& GetPalette() const { return PaletteByKey(progress_->settings.palette); }
   wlw::app::Application& Services() { return App(); }
   float Time() const { return time_; }
-  bool Calm() const { return progress_->settings.reduced_motion; }  // the reduced-motion setting
+  bool Calm() const;  // the reduced-motion setting (or tl.calm)
   int Today() const;
   void ApplySettings();  // progress settings -> sound, haptics
 

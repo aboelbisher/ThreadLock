@@ -12,6 +12,7 @@
 
 #include "art_shapes.h"
 #include "wlw/rendering/shader.h"
+#include "workshop_art.h"
 
 namespace threadlock {
 namespace {
@@ -86,6 +87,7 @@ constexpr Rgba kStampInk = Hex(0xB23A2A);                               // PAID
 constexpr float kStampTurn = -14.0f;                                    // degrees, on top of its slip's tilt
 constexpr Rgba kCorkTop = Hex(0xCFA06A), kCorkSide = Hex(0xB98A55), kCorkEdge = Hex(0x6E4A1E);
 constexpr Rgba kBellWave = Hex(0xFFE6A6);
+constexpr Rgba kSludgeDark = Hex(0x3A2410), kSludge = Hex(0x6E4A26), kSludgeShine = Hex(0xA8804E);
 
 uint64_t Mix(uint64_t h, uint64_t v) {
   h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
@@ -593,12 +595,19 @@ void ApothecaryArt::DrawSlips(Canvas& canvas, const ArtFrame& frame) const {
   const float s = frame.Scale();
   const int n = slips_;
   // The slips: one per order, pinned at the top, a little askew; the number of its order, the name and
-  // how many drops it wants, in the liquid's colour. Once paid, the shop's red stamp comes down on it.
+  // how many drops it wants, in the liquid's colour. Once paid, the shop's red stamp comes down on it; unpaid
+  // (short at the end, or spilled), it droops on its pin, struck through.
   const wlw::ui::Font& hand = *hand_;
   for (int k = 0; k < n; ++k) {
     const apothecary::Order& order = orders_[static_cast<size_t>(k)];
     const glm::vec2 pin = layout.ToCanvas(apothecary::SlipPin(n, k));
-    const float tilt = kSlipTilt[static_cast<size_t>(k) % std::size(kSlipTilt)] * kPi / 180.0f;
+    float unpaid_age = -1.0f;
+    for (const Marker::Kind kind : {Marker::Spill, Marker::Dry, Marker::WrongCup}) {
+      if (const Marker* m = Moment(frame, kind, order.node, order.slot)) unpaid_age = std::max(unpaid_age, m->age);
+    }
+    const float unpaid = unpaid_age >= 0.0f ? apothecary::UnpaidAt(unpaid_age, frame.calm) : 0.0f;
+    const float droop = apothecary::kSlipDroop * unpaid * (k % 2 ? -1.0f : 1.0f);
+    const float tilt = (kSlipTilt[static_cast<size_t>(k) % std::size(kSlipTilt)] + droop) * kPi / 180.0f;
     const float c = std::cos(tilt), sn = std::sin(tilt);
     auto at = [&](float x, float y) { return pin + Turn(glm::vec2(x, y) * s, c, sn); };
     const float half = apothecary::kSlipWidth * 0.5f;
@@ -631,7 +640,7 @@ void ApothecaryArt::DrawSlips(Canvas& canvas, const ArtFrame& frame) const {
       if (st > 0.0f) {
         const float size = 1.0f + 0.8f * (1.0f - apothecary::EaseOut(st));
         const float turn = kStampTurn * kPi / 180.0f, tc = std::cos(turn), ts = std::sin(turn);
-        const glm::vec2 centre{0.0f, 40.0f};
+        const glm::vec2 centre{0.0f, 39.0f};
         auto stamp = [&](float x, float y) {
           const glm::vec2 p = centre + Turn(glm::vec2(x, y) * size, tc, ts);
           return at(p.x, p.y);
@@ -647,6 +656,13 @@ void ApothecaryArt::DrawSlips(Canvas& canvas, const ArtFrame& frame) const {
         ink.rotation = tilt + turn;
         canvas.Text(*frame.font, "PAID", stamp(0.0f, 0.5f), 11.0f * size * s, Align::Center, ink);
       }
+    }
+    if (unpaid > 0.0f) {
+      const Rgba red = WithAlpha(kStampInk, unpaid);
+      canvas.Line(at(-13.0f, 33.0f), at(13.0f, 44.0f), 1.8f * s, red);
+      TextStyle word{.color = red};
+      word.rotation = tilt - 8.0f * kPi / 180.0f;
+      canvas.Text(hand, "unpaid", at(0.0f, 52.0f), 12.0f * s, Align::Center, word);
     }
 
     canvas.Circle(pin + glm::vec2(0.6f, 1.2f) * s, 2.8f * s, Rgba{0.0f, 0.0f, 0.0f, 0.3f});
@@ -1042,10 +1058,11 @@ void ApothecaryArt::DrawBottle(Canvas& canvas, const ArtFrame& frame, int n) con
   const Vec2 mouth = node.at;
   auto at = [&](glm::vec2 p) { return frame.layout.ToCanvas({mouth.x + p.x, mouth.y + p.y}); };
   const CupState& cup = board.Started() ? board.Cup(n) : CupState{};
+  const apothecary::RackSpot spot{mouth, {mouth.x, mouth.y + kBottleGlass.base}};
+  DrawMoments(canvas, frame, n, -1, spot, false);
   BottleOver(canvas, frame, mouth, 1.0f, cup.impure ? kMud : LiquidColor(*frame.palette, node.want), node.count,
              cup.count, frame.cup_fill[static_cast<size_t>(n)], n);
-  if (const Marker* paid = Moment(frame, Marker::Paid, n, -1))
-    DrawPaid(canvas, frame, mouth, 1.0f, cup_order_[static_cast<size_t>(n)], paid->age);
+  DrawMoments(canvas, frame, n, -1, spot, true);
 
   // A brass nozzle on the end of each copper line into it.
   for (size_t p = 0; p < level.pipes.size(); ++p) {
@@ -1078,14 +1095,120 @@ void ApothecaryArt::DrawBottle(Canvas& canvas, const ArtFrame& frame, int n) con
   }
 }
 
-void ApothecaryArt::DrawPaid(Canvas& canvas, const ArtFrame& frame, Vec2 mouth, float scale, int order,
-                             float age) const {
+void ApothecaryArt::DrawMoments(Canvas& canvas, const ArtFrame& frame, int node, int slot,
+                                const apothecary::RackSpot& spot, bool front) const {
+  const Marker* paid = Moment(frame, Marker::Paid, node, slot);
+  const Marker* spill = Moment(frame, Marker::Spill, node, slot);
+  const Marker* dry = Moment(frame, Marker::Dry, node, slot);
+  if (!paid && !spill && !dry) return;
+  const Node& n = frame.level->nodes[static_cast<size_t>(node)];
+  const bool rack = slot >= 0;
+  const Slot* bottle_slot = rack ? &n.slots[static_cast<size_t>(slot)] : nullptr;
+  const Color want = rack ? bottle_slot->want : n.want;
+  const int wanted = std::max(1, rack ? bottle_slot->count : n.count);
+  const CupState state =
+      frame.board->Started() ? (rack ? frame.board->Bottle(node, slot) : frame.board->Cup(node)) : CupState{};
+  const Rgba color = state.impure ? kMud : LiquidColor(*frame.palette, want);
+  const float sc = spot.scale, s = frame.Scale() * sc;
+  const Vec2 mouth = spot.mouth;
+  auto at = [&](float x, float y) { return frame.layout.ToCanvas({mouth.x + x * sc, mouth.y + y * sc}); };
+
+  if (!front) {
+    // Behind the bottle: the puddle round its foot, and two drips off the edge it stands on.
+    if (!spill) return;
+    const apothecary::SpillMoment moment = apothecary::SpillAt(spill->age, frame.calm);
+    const glm::vec2 foot = at(2.0f, kBottleGlass.base + 1.0f);
+    if (moment.puddle > 0.0f) {
+      const glm::vec2 radii = glm::vec2(40.0f, 5.0f) * (s * moment.puddle);
+      art::FilledEllipse(canvas, foot + glm::vec2(0.0f, 1.0f * s), radii + glm::vec2(1.0f * s),
+                         WithAlpha(Mixed(color, Hex(0x000000), 0.45f), 0.7f));
+      art::FilledEllipse(canvas, foot, radii, WithAlpha(color, 0.85f));
+      art::FilledEllipse(canvas, foot + glm::vec2(-4.0f, -1.0f) * s, radii * glm::vec2(0.6f, 0.4f),
+                         WithAlpha(Mixed(color, Hex(0xFFFFFF), 0.4f), 0.5f));
+    }
+    // Where the drips fall from: the counter's front edge, or the turntable's rim (only a bottle near its front).
+    struct Drip {
+      float dx, length, grow;
+    };
+    for (const Drip& drip : {Drip{-20.0f, 30.0f, moment.drip_a}, Drip{17.0f, 20.0f, moment.drip_b}}) {
+      if (drip.grow <= 0.0f) continue;
+      const float dx = drip.dx;
+      const float x = mouth.x + dx * sc * moment.puddle;
+      float edge = counter_ + kCounterFace;
+      if (rack) {
+        if (spot.depth < -0.2f) continue;
+        const float across = std::clamp((x - n.at.x) / 94.0f, -1.0f, 1.0f);
+        edge = n.at.y + apothecary::kRackTable + 8.0f + 15.0f * std::sqrt(1.0f - across * across);
+      }
+      const glm::vec2 top = frame.layout.ToCanvas({x, edge - 2.0f});
+      const float width = (dx < 0.0f ? 3.4f : 2.7f) * frame.Scale();
+      const glm::vec2 bottom = top + glm::vec2(0.0f, drip.length * drip.grow * frame.Scale());
+      canvas.FillRect({top - glm::vec2(width * 0.5f, 0.0f), bottom + glm::vec2(width * 0.5f, 0.0f)},
+                      WithAlpha(color, 0.9f), width * 0.5f);
+      canvas.Circle(bottom, width * 0.75f, WithAlpha(color, 0.9f));
+    }
+    return;
+  }
+
+  // Over the bottle: its cork and label (popping out if it spilled after), the stream, the ghost fill.
+  if (paid) {
+    const int order = rack ? rack_order_[static_cast<size_t>(node)][static_cast<size_t>(slot)]
+                           : cup_order_[static_cast<size_t>(node)];
+    const float popped = spill && spill->age <= paid->age ? apothecary::SpillAt(spill->age, frame.calm).cork_off : 0.0f;
+    DrawPaid(canvas, frame, mouth, sc, order, paid->age, popped);
+  }
+  if (spill) {
+    // Over the shoulder and down the side, to the foot.
+    const apothecary::SpillMoment moment = apothecary::SpillAt(spill->age, frame.calm);
+    std::vector<glm::vec2> path;
+    for (int k = 0; k <= 8; ++k) {
+      const float t = static_cast<float>(k) / 8.0f, u = 1.0f - t;
+      const glm::vec2 p =
+          u * u * glm::vec2(6.0f, -1.0f) + 2.0f * u * t * glm::vec2(17.0f, 5.0f) + t * t * glm::vec2(15.5f, 20.0f);
+      path.push_back(at(p.x, p.y));
+    }
+    path.push_back(at(15.5f, kBottleGlass.base));
+    const art::Path stream = art::MakePath(std::move(path));
+    const art::Path run = stream.Part(0.0f, stream.Length() * moment.stream);
+    if (run.points.size() >= 2) {
+      art::Polyline(canvas, run.points, 3.2f * s, WithAlpha(Mixed(color, Hex(0x000000), 0.3f), 0.6f));
+      art::Polyline(canvas, run.points, 2.4f * s, WithAlpha(color, 0.95f));
+    }
+  }
+  if (dry && !spill) {
+    // A dashed ghost of what's missing: from its level up to the full line.
+    const float ghost = apothecary::ShortAt(dry->age, frame.calm).ghost;
+    const float fill = std::clamp(static_cast<float>(state.count) / static_cast<float>(wanted), 0.0f, 1.0f);
+    const float level = kBottleInside.base - fill * (kBottleInside.base - kBottleFull);
+    const Rgba dash = WithAlpha(Accent(), 0.9f * ghost);
+    const int dashes = std::max(1, static_cast<int>((level - kBottleFull) / 7.0f));
+    if (ghost > 0.0f && level > kBottleFull + 1.0f) {
+      for (const float x : {-10.5f, 10.5f})
+        art::DashedLine(canvas, at(x, level), at(x, kBottleFull + 1.0f), 1.3f * s, dash, dashes);
+      art::DashedLine(canvas, at(-9.5f, kBottleFull), at(9.5f, kBottleFull), 1.3f * s, dash, 3);
+    }
+  }
+}
+
+void ApothecaryArt::DrawPaid(Canvas& canvas, const ArtFrame& frame, Vec2 mouth, float scale, int order, float age,
+                             float popped) const {
   const apothecary::PaidMoment paid = apothecary::PaidAt(age, frame.calm);
   const float s = frame.Scale() * scale;
   auto at = [&](float x, float y) { return frame.layout.ToCanvas({mouth.x + x * scale, mouth.y + y * scale}); };
 
-  // The cork drops into the mouth (out of the nozzle's way: it comes down from just under it).
-  if (paid.cork > 0.0f) {
+  // A spill after it was paid: the cork flies out, turning, and is gone.
+  if (popped > 0.0f) {
+    if (popped < 1.0f) {
+      const glm::vec2 c = at(14.0f * popped, -30.0f * popped + 26.0f * popped * popped);
+      const float turn = 2.5f * popped, tc = std::cos(turn), ts = std::sin(turn);
+      std::vector<glm::vec2> cork;
+      for (const glm::vec2 q :
+           {glm::vec2(-5.0f, -4.5f), glm::vec2(5.0f, -4.5f), glm::vec2(5.0f, 4.5f), glm::vec2(-5.0f, 4.5f)})
+        cork.push_back(c + Turn(q * s, tc, ts));
+      art::FillConvex(canvas, cork, WithAlpha(kCorkSide, 1.0f - popped));
+    }
+  } else if (paid.cork > 0.0f) {
+    // The cork drops into the mouth (out of the nozzle's way: it comes down from just under it).
     const float drop = -12.0f * (1.0f - apothecary::EaseOut(paid.cork));
     const float alpha = std::min(1.0f, paid.cork * 2.0f);
     const Rect cork{at(-5.0f, -5.0f + drop), at(5.0f, 4.0f + drop)};
@@ -1114,22 +1237,56 @@ void ApothecaryArt::DrawPaid(Canvas& canvas, const ArtFrame& frame, Vec2 mouth, 
   }
 }
 
-bool ApothecaryArt::DrawMarker(Canvas&, const ArtFrame&, const Marker& marker) const {
-  return marker.kind == Marker::Paid;
+apothecary::RackSpot ApothecaryArt::Spot(const ArtFrame& frame, int node, int slot) const {
+  const Node& n = frame.level->nodes[static_cast<size_t>(node)];
+  if (n.kind == NodeKind::Rack && slot >= 0)
+    return apothecary::RackBottle(n, slot, frame.anims[static_cast<size_t>(node)].spin);
+  return {n.at, {n.at.x, n.at.y + kBottleGlass.base}};
+}
+
+bool ApothecaryArt::DrawMarker(Canvas& canvas, const ArtFrame& frame, const Marker& marker) const {
+  if (marker.kind == Marker::Paid) return true;  // in the shop: DrawFront
+  if (marker.kind != Marker::Spill && marker.kind != Marker::Dry) return false;
+  const Node& n = frame.level->nodes[static_cast<size_t>(marker.node)];
+  if (n.kind != NodeKind::Cup && n.kind != NodeKind::Rack) return false;
+  // The count's pill beside its shoulder (a rack bottle's over its mouth): what it has of what it wants ("3/2", "1/4").
+  const bool rack = marker.slot >= 0;
+  const int wanted = rack ? n.slots[static_cast<size_t>(marker.slot)].count : n.count;
+  const CupState state = frame.board->Started()
+                             ? (rack ? frame.board->Bottle(marker.node, marker.slot) : frame.board->Cup(marker.node))
+                             : CupState{};
+  const float pop = marker.kind == Marker::Spill ? apothecary::SpillAt(marker.age, frame.calm).pill
+                                                 : apothecary::ShortAt(marker.age, frame.calm).pill;
+  if (pop <= 0.0f) return true;
+  const apothecary::RackSpot spot = Spot(frame, marker.node, marker.slot);
+  const float s = frame.Scale() * spot.scale * (0.6f + 0.4f * apothecary::EaseOut(pop));
+  // A rack's bottles stand close together: over its mouth (under the tap), not beside it.
+  const glm::vec2 off = marker.slot >= 0 ? glm::vec2(0.0f, -15.0f) : glm::vec2(31.0f, 5.0f);
+  const glm::vec2 c = frame.layout.ToCanvas({spot.mouth.x + off.x * spot.scale, spot.mouth.y + off.y * spot.scale});
+  const glm::vec2 half = glm::vec2(15.0f, 7.5f) * s;
+  canvas.FillRect({c - half - glm::vec2(1.2f * s), c + half + glm::vec2(1.2f * s)}, WithAlpha(ui_color::kBad, pop),
+                  8.7f * s);
+  canvas.FillRect({c - half, c + half}, WithAlpha(Hex(0x1E140D), pop), 7.5f * s);
+  char text[24];
+  std::snprintf(text, sizeof(text), "%d/%d", state.count, wanted);
+  canvas.Text(*frame.font, text, c, 11.0f * s, Align::Center, TextStyle{.color = WithAlpha(ui_color::kBad, pop)});
+  return true;
 }
 
 float ApothecaryArt::MomentLength(const Marker& marker) const {
-  return marker.kind == Marker::Paid ? apothecary::kPaidLength : 0.0f;
+  switch (marker.kind) {
+    case Marker::Paid: return apothecary::kPaidLength;
+    case Marker::Spill: return apothecary::kSpillLength;
+    case Marker::Dry: return apothecary::kShortLength;
+    default: return 0.0f;
+  }
 }
 
 glm::vec2 ApothecaryArt::Spotlight(const ArtFrame& frame, int node, int slot) const {
-  const Node& n = frame.level->nodes[static_cast<size_t>(node)];
-  if (n.kind == NodeKind::Rack && slot >= 0) {
-    const apothecary::RackSpot spot = apothecary::RackBottle(n, slot, frame.anims[static_cast<size_t>(node)].spin);
-    return frame.layout.ToCanvas({spot.mouth.x, spot.mouth.y + 28.0f * spot.scale});
-  }
-  if (n.kind == NodeKind::Cup) return frame.layout.ToCanvas({n.at.x, n.at.y + 28.0f});
-  return frame.At(node);
+  const NodeKind kind = frame.level->nodes[static_cast<size_t>(node)].kind;
+  if (kind != NodeKind::Cup && kind != NodeKind::Rack) return frame.At(node);
+  const apothecary::RackSpot spot = Spot(frame, node, slot);
+  return frame.layout.ToCanvas({spot.mouth.x, spot.mouth.y + 28.0f * spot.scale});
 }
 
 void ApothecaryArt::DrawChalk(Canvas& canvas, const ArtFrame& frame, int spout) const {
@@ -1291,6 +1448,7 @@ void ApothecaryArt::DrawRack(Canvas& canvas, const ArtFrame& frame, int rack) co
     const apothecary::RackSpot spot = apothecary::RackBottle(node, k, spin);
     const float sc = spot.scale, ss = s * sc;
     auto at = [&](glm::vec2 p) { return layout.ToCanvas({spot.mouth.x + p.x * sc, spot.mouth.y + p.y * sc}); };
+    DrawMoments(canvas, frame, rack, k, spot, false);
     art::FilledEllipse(canvas, at({3.0f, kBottleGlass.base - 1.0f}), glm::vec2(17.0f, 3.5f) * ss,
                        Rgba{0.0f, 0.0f, 0.0f, 0.3f});
     std::vector<glm::vec2> body = BottleBody(kBottleGlass);
@@ -1325,9 +1483,7 @@ void ApothecaryArt::DrawRack(Canvas& canvas, const ArtFrame& frame, int rack) co
     const CupState& bottle = board.Started() ? board.Bottle(rack, k) : CupState{};
     BottleOver(canvas, frame, spot.mouth, sc, bottle_color(k), slot.count, bottle.count,
                frame.bottle_fill[static_cast<size_t>(rack)][static_cast<size_t>(k)], rack * 8 + k);
-    if (const Marker* paid = Moment(frame, Marker::Paid, rack, k))
-      DrawPaid(canvas, frame, spot.mouth, sc, rack_order_[static_cast<size_t>(rack)][static_cast<size_t>(k)],
-               paid->age);
+    DrawMoments(canvas, frame, rack, k, spot, true);
     if (sp >= 0.0f) tag(1.0f);
   }
   // The brass pointer on the turntable's front edge, under the tap.
@@ -1386,8 +1542,38 @@ glm::vec2 ApothecaryArt::CupTop(const ArtFrame& frame, int cup) const {
   return frame.layout.ToCanvas({at.x, at.y - kNozzle - 14.0f});
 }
 
-void ApothecaryArt::DrawMud(Canvas& canvas, glm::vec2 at, float age, float scale, float time) const {
-  parts_.DrawMud(canvas, at, age, scale, time);
+void ApothecaryArt::DrawMud(Canvas& canvas, glm::vec2 c, float age, float s, float time) const {
+  // It wells up over the boss in lumps, then runs down the wall in three drips, each ending in a bead.
+  const float ooze = apothecary::EaseOut(age / 0.5f);
+  struct Drip {
+    float x, length, delay, width;
+  };
+  constexpr Drip kDrips[] = {{-5.0f, 22.0f, 0.2f, 3.4f}, {1.5f, 38.0f, 0.35f, 2.8f}, {7.0f, 14.0f, 0.5f, 2.4f}};
+  for (const Drip& drip : kDrips) {
+    const float grow = apothecary::EaseOut((age - drip.delay) / 1.6f);
+    if (grow <= 0.0f) continue;
+    const glm::vec2 top = c + glm::vec2(drip.x, 6.0f) * s;
+    const glm::vec2 end = top + glm::vec2(0.0f, (6.0f + drip.length * grow) * s);
+    const float bead = (drip.width * 0.75f + 0.25f * std::sin(time * 3.0f + drip.x)) * s;
+    canvas.Line(top, end, (drip.width + 1.0f) * s, kSludgeDark);
+    canvas.Circle(end, bead + 0.6f * s, kSludgeDark);
+    canvas.Line(top, end, drip.width * s, kSludge);
+    canvas.Circle(end, bead, kSludge);
+    canvas.Circle(end - glm::vec2(bead * 0.35f, bead * 0.35f), bead * 0.3f, WithAlpha(kSludgeShine, 0.8f));
+  }
+  if (ooze <= 0.0f) return;
+  // Lumps round the boss: the dark under them, the sludge, a wet shine from the shop's light.
+  constexpr float kLump[] = {6.0f, 5.0f, 6.5f, 4.5f, 5.5f, 6.0f, 5.0f};
+  for (const bool edge : {true, false}) {
+    canvas.Circle(c, (9.0f + (edge ? 1.0f : 0.0f)) * ooze * s, edge ? kSludgeDark : kSludge);
+    for (size_t k = 0; k < std::size(kLump); ++k) {
+      const float a = 2.0f * kPi * static_cast<float>(k) / static_cast<float>(std::size(kLump)) + 0.4f;
+      const glm::vec2 p = c + glm::vec2(std::cos(a), std::sin(a)) * (8.0f * ooze * s);
+      canvas.Circle(p, (kLump[k] + (edge ? 1.0f : 0.0f)) * ooze * s, edge ? kSludgeDark : kSludge);
+    }
+  }
+  canvas.Arc(c, 9.0f * ooze * s, 1.6f * s, kPi * 1.1f, kPi * 0.45f, WithAlpha(kSludgeShine, 0.8f));
+  canvas.Circle(c + glm::vec2(-6.0f, -7.0f) * (ooze * s), 1.6f * s, WithAlpha(kSludgeShine, 0.9f));
 }
 
 }  // namespace threadlock
