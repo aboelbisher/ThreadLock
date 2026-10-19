@@ -39,7 +39,8 @@ static. Zachtronics games (SpaceChem, Opus Magnum) are the model for "integer si
 src/threadlock_rules.{h,cpp}  rules v3: liquids/beads, pieces + Role (piece x socket), the level graph (incl. racks,
                               mills, gates), Board (the simulation). No engine includes.
 src/level_io.{h,cpp}          level files (JSON) + the pars file; WriteLevel (tool: format, search)
-src/apothecary_look.{h,cpp}   World 2's shop in board units (tool + art): orders, the cork board and its slips, the counter
+src/apothecary_look.{h,cpp}   World 2's shop in board units (tool + art): orders, the cork board and its slips, the counter,
+                              jars + slates, the bell, rack bottles + clock, the moments' timing (paid, spill, short)
 src/solver.{h,cpp}            every placement where each piece acts, run each: pars (Lean/Swift), solutions, NextHint
 src/generator.{h,cpp}         daily puzzle + Lab: 4 templates (race, shares, mixer, shared pipe), solver-filtered
 src/catalog.{h,cpp}           loads assets/levels/world*.json + pars.json (platform::ReadFile)
@@ -67,7 +68,9 @@ src/lantern_art.{h,cpp}       World 1, The Lantern Works: rose window + wall (as
                               glass drawn once into offscreen viewports, one screen-sized tile per screen of board
                               (redrawn when the level, screen or the window's light changes; one light redraw a frame; tile_pool.h); glass tubes, coils, drip falls, globes, crucibles, lanterns
 src/apothecary_art.{h,cpp}    World 2, The Apothecary: still tiles (planked wall: assets/shaders/apothecary_wall.shader,
-                              shelves + stock, counter, cork board + Caveat slips); the machine is the workshop look until 3c
+                              shelves + stock, counter, cork board, jars, sink); overlay: copper lines with portholes, bottles,
+                              the lazy-susan rack + clock, slips (Caveat), bell, the moments (cork, label, PAID stamp,
+                              spill puddle, short ghost fill, unpaid) and the sludge mud
 src/workshop_art.{h,cpp}      the v2 look (worlds 3-4 until their art, the daily, the Lab) + shared machine parts
 src/art_shapes.{h,cpp}        drawing helpers: paths with round bends, Ribbon (seamless translucent bands), strokes,
                               glyphs, glows, brass (medallion, plate, bar)

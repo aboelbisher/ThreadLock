@@ -218,10 +218,10 @@ at most the last three levels animate, earlier news shows at once.
 - **Sound:** marimba, pizzicato strings, the shop bell. **Finale:** Market Day, the whole shop.
 - **Palette:** dark wood #3D2C1F, copper #C86E3A, parchment #F3E8CC, #8A6038; background #1A120C, accent
   #FFB45C, EDIT #FFD99A → #EE9645; slips in the Caveat font.
-- **Level shapes:** Morning Orders (halve, then halve again, for three customers; also drawn as 2-7 with
-  an overflow 5 to a tap over a 3-bottle rack and the rest to the sink, slips "I Mrs Hale 4", "II Baker
-  2", "III Dr Moss 2", "Three orders, one tap. The rack turns every 4 ticks.", ≤ 1 piece, ≤ 0:20; one
-  version is picked when W2 is built); The Lazy Susan (one tap, a turning rack: the timing picks the
+- **Level shapes:** Morning Orders (2-7, built: a jar of 11 drops on a beat of 2, an overflow 8 sends the
+  first eight to a tap over a 3-bottle rack that turns every 4 ticks, so the bottles take them in pairs,
+  and the rest to the sink; slips "I Mrs Hale 4", "II Baker 2", "III Dr Moss 2", "Three orders, one tap.
+  The rack turns every 4 ticks.", one solution: ≤ 1 piece, ≤ 0:11); The Lazy Susan (one tap, a turning rack: the timing picks the
   bottle); Inventory (the first few to the bottle, the rest down the sink); The Back Room (two jars on
   two shelves; their lines cross on the way down).
 
