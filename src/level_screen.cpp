@@ -380,9 +380,11 @@ void LevelScreen::Update(float dt) {
     dev_clock_ += dt;
     if (dev_clock_ >= cv_autoplay.Get()) StartRun();
   }
-  // World 1's ambience while the level is open, ducked while the machine runs (or replays for Show me).
-  app_.GetFeedback().SetAmbience(look_.sounds == synth::SoundSet::Lantern,
-                                 phase_ == Phase::Run || phase_ == Phase::ShowMe);
+  // The world's ambience while the level is open (World 1: the tower at dawn, World 2: the street outside the
+  // shop), ducked while the machine runs (or replays for Show me).
+  app_.GetFeedback().SetAmbience(look_.sounds != synth::SoundSet::Workshop,
+                                 phase_ == Phase::Run || phase_ == Phase::ShowMe,
+                                 look_.sounds == synth::SoundSet::Shop ? Ambience::Bed::Shop : Ambience::Bed::Lantern);
   // The player watches a run without touching, and a grand machine's run outlasts a 30 s screen timeout.
   wlw::platform::KeepScreenOn(phase_ == Phase::Run || phase_ == Phase::ShowMe);
   view_.Update(dt, board_);

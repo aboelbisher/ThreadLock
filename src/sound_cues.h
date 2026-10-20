@@ -11,8 +11,9 @@
 //
 // The world's sound set picks the voices (audio_synth.h). On World 1 (Lantern) each pane of the rose
 // window that lights rings a chime, climbing round the window as the run goes, and a drop reaching a
-// drip fall's funnel plinks. On a tall board the listener is the camera: events off the view are
-// softer, failures never.
+// drip fall's funnel plinks. On World 2 (Shop) the lazy susan clacks a notch each turn, a spill splashes
+// on the counter and an order short at the end knocks dully (one sound for the run). On a tall board
+// the listener is the camera: events off the view are softer, failures never.
 namespace threadlock {
 
 struct Listener {

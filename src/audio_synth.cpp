@@ -5,6 +5,8 @@
 #include <iterator>
 #include <numbers>
 
+#include "apothecary_look.h"
+
 namespace threadlock::synth {
 namespace {
 
@@ -190,6 +192,148 @@ struct Svf {
 // The heart's 12 chimes on a pentatonic climb, at the art's own timing.
 void HeartChimes(Buffer& out, float start, float base, float gain) {
   for (int j = 0; j < 12; ++j) PaneBell(out, base * ClimbPitch(j), start + HeartOnset(j), gain);
+}
+
+void Normalize(std::vector<float>& samples, float peak);
+
+// ---- The Shop set: wood and brass ----
+
+// One partial, amp sin(2 pi freq t) Decay(t, attack, time), added from sample `from`: a phasor turned by a
+// fixed step each sample (no sin or exp per sample), stopped once it's below hearing. For the long, many-partial
+// shop sounds (a bell is 6 partials, Market Day rings 7 of them twice).
+void Partial(Buffer& out, size_t from, float freq, float amp, float attack, float time) {
+  const double step = static_cast<double>(kTau) * freq / static_cast<double>(out.rate);
+  const double c = std::cos(step), s = std::sin(step);
+  const double fall = std::exp(-1.0 / (static_cast<double>(time) * out.rate));
+  const size_t rise = std::max<size_t>(1, static_cast<size_t>(attack * static_cast<float>(out.rate)));
+  double re = 1.0, im = 0.0, env = 1.0;  // (re, im) = e^(i step n)
+  for (size_t i = from, n = 0; i < out.samples.size(); ++i, ++n) {
+    double level = static_cast<double>(n) / static_cast<double>(rise);
+    if (n >= rise) {
+      level = env;
+      env *= fall;
+      if (env < 1e-5) break;
+    }
+    out.samples[i] += static_cast<float>(amp * level * im);
+    const double next = re * c - im * s;
+    im = re * s + im * c;
+    re = next;
+  }
+}
+
+// A rosewood marimba: a tuned bar's partials 1 : 4 : 10 (the high ones die first), a resonator tube
+// under it holding the fundamental a little longer, a soft mallet thump.
+void Marimba(Buffer& out, float freq, float start, float gain) {
+  const float ratio[] = {1.0f, 4.0f, 10.0f}, amp[] = {1.0f, 0.22f, 0.05f}, time[] = {0.55f, 0.1f, 0.025f};
+  const size_t from = out.At(start);
+  Partial(out, from, freq, gain * 0.35f, 0.012f, 0.8f);  // the resonator
+  for (int k = 0; k < 3; ++k) Partial(out, from, freq * ratio[k], gain * amp[k], 0.0015f, time[k]);
+  Noise noise;
+  float low = 0.0f;
+  for (size_t i = from; i < out.At(start + 0.012f); ++i) {  // the mallet: a short low-passed knock
+    low += 0.15f * (noise.Next() - low);
+    out.samples[i] += gain * 0.5f * low * Decay(out.T(i - from), 0.0005f, 0.003f);
+  }
+}
+
+// A pizzicato string: a finger's pluck (low-passed noise, softer than a pick) in a Karplus-Strong loop
+// that loses its top quickly, through the instrument's body (two wooden resonances).
+void Pizzicato(Buffer& out, float freq, float start, float gain) {
+  Noise noise;
+  const size_t period = std::max<size_t>(2, static_cast<size_t>(static_cast<float>(out.rate) / freq));
+  std::vector<float> line(period);
+  float soft = 0.0f;
+  for (float& s : line) s = soft += 0.5f * (noise.Next() - soft);
+  size_t pos = 0;
+  float last = 0.0f;
+  Svf body_low, body_high;
+  const size_t from = out.At(start);
+  for (size_t i = from; i < out.samples.size(); ++i) {
+    const float current = line[pos];
+    line[pos] = 0.5f * (current + last) * 0.992f;
+    last = current;
+    pos = (pos + 1) % period;
+    const float body =
+        0.6f * body_low.Band(current, 280.0f, 0.9f, out.rate) + 0.35f * body_high.Band(current, 950.0f, 1.1f, out.rate);
+    const float env = Decay(out.T(i - from), 0.001f, 0.3f);
+    if (i > from + 100 && env < 1e-5f) break;  // gone
+    out.samples[i] += gain * (0.7f * current + body) * env;
+  }
+}
+
+// The shop's door bell: a small brass bell (a minor-third bell's partials, the hum below), the clapper
+// striking twice as it swings.
+void ShopBell(Buffer& out, float freq, float start, float gain) {
+  const float ratio[] = {0.5f, 1.0f, 1.19f, 1.5f, 2.0f, 2.66f}, amp[] = {0.25f, 1.0f, 0.5f, 0.3f, 0.35f, 0.15f};
+  const float time[] = {0.9f, 0.6f, 0.45f, 0.3f, 0.2f, 0.1f};
+  for (int strike = 0; strike < 2; ++strike) {
+    const size_t from = out.At(start + 0.13f * static_cast<float>(strike));
+    const float g = gain * (strike == 0 ? 1.0f : 0.45f);
+    for (int k = 0; k < 6; ++k) Partial(out, from, freq * ratio[k], g * amp[k], 0.001f, time[k]);
+  }
+}
+
+// A knock on wood: a short low tone and a band of noise.
+void Knock(Buffer& out, float start, float freq, float gain) {
+  Sine(out, start, 0.12f, freq, freq * 0.85f, gain, 0.001f, 0.035f);
+  Noise noise;
+  Svf filter;
+  const size_t from = out.At(start);
+  for (size_t i = from; i < out.At(start + 0.04f); ++i) {
+    out.samples[i] +=
+        gain * 0.8f * filter.Band(noise.Next(), freq * 5.0f, 0.8f, out.rate) * Decay(out.T(i - from), 0.0005f, 0.008f);
+  }
+}
+
+// The PAID stamp: a rubber stamp thumps onto paper on the counter (a low thud, a papery slap).
+void Stamp(Buffer& out, float start, float gain) {
+  Sine(out, start, 0.25f, 150.0f, 65.0f, gain, 0.001f, 0.06f);
+  Noise noise;
+  float low = 0.0f;
+  const size_t from = out.At(start);
+  for (size_t i = from; i < out.At(start + 0.06f); ++i) {
+    low += 0.3f * (noise.Next() - low);
+    out.samples[i] += gain * 0.7f * low * Decay(out.T(i - from), 0.0005f, 0.012f);
+  }
+}
+
+// A cork pushed into a bottle's mouth: a short squeaky pop.
+void Cork(Buffer& out, float start, float gain) {
+  Sine(out, start, 0.06f, 700.0f, 330.0f, gain, 0.0008f, 0.018f);
+  Noise noise;
+  const size_t from = out.At(start);
+  for (size_t i = from; i < out.At(start + 0.003f); ++i) out.samples[i] += gain * 0.3f * noise.Next();
+}
+
+// A drop falling onto a hard surface (a bubble whose pitch rises), at `freq`.
+void Plink(Buffer& out, float start, float freq, float gain) {
+  float phase = 0.0f;
+  const size_t from = out.At(start), to = out.At(start + 0.1f);
+  for (size_t i = from; i < to; ++i) {
+    const float t = out.T(i - from);
+    phase += kTau * freq * (1.0f + 9.0f * t) / static_cast<float>(out.rate);
+    out.samples[i] += gain * std::sin(phase) * Decay(t, 0.0008f, 0.02f);
+  }
+}
+
+// An order filled, timed like its moment (apothecary_look.h): the cork, the colour's chord rolled
+// under it, the shop bell, the PAID stamp.
+std::vector<float> Paid(Color color, uint32_t rate) {
+  Buffer out(rate, apothecary::kPaidStamp + 1.1f);
+  Cork(out, apothecary::kPaidPop, 0.6f);
+  const float chord[] = {kC4, kC4 * 1.25f, kC4 * 1.5f, kC5};
+  for (int k = 0; k < 4; ++k) {
+    const float at = apothecary::kPaidPop + 0.06f + 0.045f * static_cast<float>(k);
+    if (color == Color::Amber) {
+      Pizzicato(out, chord[k], at, 0.5f);
+    } else {
+      Marimba(out, chord[k], at, 0.45f);
+    }
+  }
+  ShopBell(out, color == Color::Amber ? kC6 * 1.5f : kC6, apothecary::kPaidBell, 0.6f);
+  Stamp(out, apothecary::kPaidStamp, 0.9f);
+  Normalize(out.samples, 0.85f);
+  return out.samples;
 }
 
 void Normalize(std::vector<float>& samples, float peak) {
@@ -450,6 +594,114 @@ std::vector<float> Make(Sound sound, uint32_t rate) {
       Normalize(out.samples, 0.45f);
       return out.samples;
     }
+    case Sound::MarimbaNote: {
+      Buffer out(rate, 2.0f);
+      Marimba(out, kC4, 0.0f, 1.0f);
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::PizzNote: {
+      Buffer out(rate, 1.0f);
+      Pizzicato(out, kC4, 0.0f, 1.0f);
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::PaidBlue: return Paid(Color::Blue, rate);
+    case Sound::PaidAmber: return Paid(Color::Amber, rate);
+    case Sound::Sludge: {  // a thick bubble bursting low (its pitch wobbling down), then a knock on wood
+      Buffer out(rate, 0.7f);
+      float phase = 0.0f;
+      for (size_t i = 0; i < out.At(0.35f); ++i) {
+        const float t = out.T(i);
+        const float f = (95.0f - 45.0f * t / 0.35f) * (1.0f + 0.12f * std::sin(kTau * 18.0f * t));
+        phase += kTau * f / static_cast<float>(rate);
+        out.samples[i] += std::sin(phase) * Decay(t, 0.01f, 0.09f);
+      }
+      Knock(out, 0.07f, 170.0f, 0.7f);
+      Noise noise;
+      Svf filter;
+      for (size_t i = 0; i < out.samples.size(); ++i) {  // the wet part, low and slow
+        const float t = out.T(i);
+        out.samples[i] += 0.6f * Decay(t, 0.02f, 0.12f) * filter.Band(noise.Next(), 320.0f - 150.0f * t, 0.6f, rate);
+      }
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
+    case Sound::JarTap: {  // a short glug from the jar's tap: a low bubble and a little water
+      Buffer out(rate, 0.18f);
+      Plink(out, 0.0f, 260.0f, 1.0f);
+      Noise noise;
+      Svf filter;
+      for (size_t i = 0; i < out.samples.size(); ++i) {
+        const float t = out.T(i);
+        out.samples[i] += 0.4f * Decay(t, 0.008f, 0.03f) * filter.Band(noise.Next(), 600.0f + 900.0f * t, 0.4f, rate);
+      }
+      Normalize(out.samples, 0.35f);
+      return out.samples;
+    }
+    case Sound::SpillWood: {  // a splash on the counter, then drips off its edge onto the floor
+      Buffer out(rate, 1.2f);
+      Noise noise;
+      Svf filter;
+      for (size_t i = 0; i < out.At(0.45f); ++i) {
+        const float t = out.T(i);
+        out.samples[i] +=
+            Decay(t, 0.012f, 0.1f) * filter.Band(noise.Next(), 1200.0f * std::exp(-t * 6.0f) + 220.0f, 0.3f, rate);
+      }
+      Knock(out, 0.0f, 140.0f, 0.4f);
+      const float drips[] = {0.42f, 0.66f, 0.95f};
+      for (int k = 0; k < 3; ++k) Plink(out, drips[k], 900.0f - 120.0f * static_cast<float>(k), 0.35f);
+      Normalize(out.samples, 0.75f);
+      return out.samples;
+    }
+    case Sound::ShortDull: {  // a dull knock, then two pizzicato notes falling (E4, C4): not enough
+      Buffer out(rate, 1.1f);
+      Knock(out, 0.0f, 120.0f, 0.9f);
+      Pizzicato(out, kC4 * 1.25f, 0.16f, 0.6f);
+      Pizzicato(out, kC4, 0.38f, 0.6f);
+      Normalize(out.samples, 0.75f);
+      return out.samples;
+    }
+    case Sound::RackClack: {  // a turntable on its pin clacking a notch round: two quick wooden knocks
+      Buffer out(rate, 0.18f);
+      Knock(out, 0.0f, 420.0f, 1.0f);
+      Knock(out, 0.018f, 560.0f, 0.5f);
+      Normalize(out.samples, 0.4f);
+      return out.samples;
+    }
+    case Sound::Till:  // the last stamp comes down first (the moment's 1.3 s), then the till rings
+    case Sound::MarketDay: {
+      const bool grand = sound == Sound::MarketDay;
+      const float start = apothecary::kPaidStamp + 0.25f;
+      Buffer out(rate, start + (grand ? 4.2f : 2.4f));
+      const int run = grand ? 10 : 6;  // up the pentatonic from C4
+      for (int k = 0; k < run; ++k) Marimba(out, kC4 * ClimbPitch(k), start + 0.07f * static_cast<float>(k), 0.45f);
+      if (grand) {
+        for (int k = 0; k < 8; ++k)  // the strings answer from below
+          Pizzicato(out, kC4 * 0.5f * ClimbPitch(k), start + 0.35f + 0.07f * static_cast<float>(k), 0.4f);
+      }
+      const float ring = start + 0.07f * static_cast<float>(run) + 0.08f;
+      ShopBell(out, kC6, ring, 0.4f);
+      ShopBell(out, kC6 * 1.25f, ring + 0.05f, 0.25f);
+      // The coins: small bright pings, each a steel disc (1 : 2.3 : 3.9), dropping into the drawer.
+      Noise noise;
+      for (int c = 0; c < (grand ? 9 : 5); ++c) {
+        const float at = ring + 0.12f + 0.08f * static_cast<float>(c) + 0.03f * noise.Next();
+        const float f = 2600.0f + 500.0f * noise.Next();
+        for (float r : {1.0f, 2.3f, 3.9f}) Sine(out, at, 0.25f, f * r, f * r, 0.12f / r, 0.0005f, 0.05f);
+      }
+      if (grand) {  // the chord on both, the bells pealing over it
+        const float chord_at = ring + 0.7f;
+        for (float f : {kC4 * 0.5f, kC4, kC4 * 1.25f, kC4 * 1.5f, kC5}) {
+          Marimba(out, f, chord_at, 0.4f);
+          Pizzicato(out, f, chord_at + 0.02f, 0.35f);
+        }
+        const float peal[] = {kC6 * 1.5f, kC6 * 1.25f, kC6, kC6 * 1.5f, kC6 * 2.0f};
+        for (int k = 0; k < 5; ++k) ShopBell(out, peal[k], chord_at + 0.25f * static_cast<float>(k), 0.25f);
+      }
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
     case Sound::Tap:
     case Sound::Count: {
       Buffer out(rate, 0.06f);
@@ -464,6 +716,8 @@ std::vector<float> Make(Sound sound, uint32_t rate) {
 Sound NoteFor(SoundSet set, Color color) {
   if (set == SoundSet::Lantern && color == Color::Blue) return Sound::HarmonicaNote;
   if (set == SoundSet::Lantern && color == Color::Amber) return Sound::CelestaNote;
+  if (set == SoundSet::Shop && color == Color::Blue) return Sound::MarimbaNote;
+  if (set == SoundSet::Shop && color == Color::Amber) return Sound::PizzNote;
   switch (color) {
     case Color::Blue: return Sound::NoteBlue;
     case Color::Amber: return Sound::NoteAmber;
@@ -476,6 +730,8 @@ Sound NoteFor(SoundSet set, Color color) {
 Sound ChordFor(SoundSet set, Color color) {
   if (set == SoundSet::Lantern && color == Color::Blue) return Sound::LanternBlue;
   if (set == SoundSet::Lantern && color == Color::Amber) return Sound::LanternAmber;
+  if (set == SoundSet::Shop && color == Color::Blue) return Sound::PaidBlue;
+  if (set == SoundSet::Shop && color == Color::Amber) return Sound::PaidAmber;
   switch (color) {
     case Color::Blue: return Sound::ChordBlue;
     case Color::Amber: return Sound::ChordAmber;
@@ -487,20 +743,35 @@ Sound ChordFor(SoundSet set, Color color) {
 
 const char* SoundName(Sound sound) {
   static constexpr const char* kNames[] = {
-      "NoteBlue",      "NoteAmber",   "NoteGreen",    "NoteRose",     "NotePearl", "ChordBlue", "ChordAmber",
-      "ChordGreen",    "ChordRose",   "ChordPearl",   "Thud",         "Splash",    "Chime",     "Grind",
-      "Fanfare",       "Star",        "Pour",         "Click",        "Place",     "Lift",      "Tap",
-      "HarmonicaNote", "CelestaNote", "LanternBlue",  "LanternAmber", "PaneChime", "Heart",     "RoseWindow",
-      "Smoke",         "Drip",        "CruciblePour", "Ascent"};
+      "NoteBlue",      "NoteAmber",   "NoteGreen",    "NoteRose",     "NotePearl",   "ChordBlue", "ChordAmber",
+      "ChordGreen",    "ChordRose",   "ChordPearl",   "Thud",         "Splash",      "Chime",     "Grind",
+      "Fanfare",       "Star",        "Pour",         "Click",        "Place",       "Lift",      "Tap",
+      "HarmonicaNote", "CelestaNote", "LanternBlue",  "LanternAmber", "PaneChime",   "Heart",     "RoseWindow",
+      "Smoke",         "Drip",        "CruciblePour", "Ascent",       "MarimbaNote", "PizzNote",  "PaidBlue",
+      "PaidAmber",     "Sludge",      "JarTap",       "SpillWood",    "ShortDull",   "RackClack", "Till",
+      "MarketDay"};
   static_assert(std::size(kNames) == static_cast<size_t>(Sound::Count));
   return sound < Sound::Count ? kNames[static_cast<size_t>(sound)] : "?";
 }
 
-Sound MudFor(SoundSet set) { return set == SoundSet::Lantern ? Sound::Smoke : Sound::Thud; }
+Sound MudFor(SoundSet set) {
+  switch (set) {
+    case SoundSet::Lantern: return Sound::Smoke;
+    case SoundSet::Shop: return Sound::Sludge;
+    default: return Sound::Thud;
+  }
+}
 
-Sound PourFor(SoundSet set) { return set == SoundSet::Lantern ? Sound::CruciblePour : Sound::Pour; }
+Sound PourFor(SoundSet set) {
+  switch (set) {
+    case SoundSet::Lantern: return Sound::CruciblePour;
+    case SoundSet::Shop: return Sound::JarTap;
+    default: return Sound::Pour;
+  }
+}
 
 Sound SolvedFor(SoundSet set, bool grand) {
+  if (set == SoundSet::Shop) return grand ? Sound::MarketDay : Sound::Till;
   if (set != SoundSet::Lantern) return Sound::Fanfare;
   return grand ? Sound::RoseWindow : Sound::Heart;
 }

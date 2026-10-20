@@ -563,7 +563,34 @@ int Sounds(const std::string& dir) {
   play(synth::Sound::LanternAmber, 7.5f, 0.6f);
   play(synth::Sound::Heart, 9.5f, 0.9f);
   WriteWav(dir + "/demo_lantern_run.wav", run, kRate);
-  std::printf("wrote %s/*.wav (+ Ambience.wav, demo_lantern_run.wav)\n", dir.c_str());
+
+  // 30 s of the shop's bed (World 2), and 2-7 Morning Orders in miniature over it: the jar's beats, blue and
+  // amber drops climbing, the lazy susan clacking every 4 beats, an order paid, sludge, a spill, the till.
+  std::vector<float> shop_bed(kBedFrames * 2);
+  Ambience shop(kRate);
+  shop.SetBed(Ambience::Bed::Shop);
+  shop.SetTarget(1.0f, 2.0f);
+  for (size_t at = 0; at < kBedFrames; at += 512) {
+    shop.Render(shop_bed.data() + 2 * at, static_cast<uint32_t>(std::min<size_t>(512, kBedFrames - at)));
+  }
+  WriteWav(dir + "/AmbienceShop.wav", shop_bed, kRate);
+  run.assign(shop_bed.begin(), shop_bed.begin() + 16 * kRate * 2);
+  for (float& s : run) s *= 0.6f;
+  for (int beat = 0; beat < 12; ++beat) play(synth::Sound::JarTap, 0.5f + 0.5f * static_cast<float>(beat), 0.22f);
+  for (int beat = 0; beat < 3; ++beat) play(synth::Sound::RackClack, 1.0f + 2.0f * static_cast<float>(beat), 0.3f);
+  for (int k = 0; k < 4; ++k) {
+    const float t = 1.0f + static_cast<float>(k);
+    play(synth::Sound::MarimbaNote, t, 0.55f, synth::ClimbPitch(k));
+    play(synth::Sound::PizzNote, t + 0.5f, 0.55f, synth::ClimbPitch(k));
+  }
+  play(synth::Sound::PaidBlue, 5.0f, 0.6f);
+  play(synth::Sound::Sludge, 7.0f, 0.9f);
+  play(synth::Sound::SpillWood, 8.0f, 0.75f);
+  play(synth::Sound::PaidAmber, 9.5f, 0.6f);
+  play(synth::Sound::Till, 9.5f, 0.7f);  // the last order and the solved run start together
+  WriteWav(dir + "/demo_shop_run.wav", run, kRate);
+  std::printf("wrote %s/*.wav (+ Ambience.wav, AmbienceShop.wav, demo_lantern_run.wav, demo_shop_run.wav)\n",
+              dir.c_str());
   return 0;
 }
 

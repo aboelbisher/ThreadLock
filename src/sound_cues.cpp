@@ -30,7 +30,7 @@ float ListenerGain(const Listener& listener, float y) {
 Cues CuesFor(const std::vector<Event>& events, const Level& level, const Board& board, SoundSet set,
              const Listener& listener) {
   Cues cues;
-  const bool lantern = set == SoundSet::Lantern;
+  const bool lantern = set == SoundSet::Lantern, shop = set == SoundSet::Shop;
   auto node_at = [&](int node) { return level.nodes[static_cast<size_t>(node)].at; };
   // A sound at a node: panned by its x, softer when it's off the view (failures are always heard in full).
   auto play = [&](Sound sound, float volume, float pitch, int node, bool failure = false) {
@@ -74,7 +74,13 @@ Cues CuesFor(const std::vector<Event>& events, const Level& level, const Board& 
       }
       case EventType::CupFull: play(synth::ChordFor(set, want_of(e)), 0.6f, 1.0f, e.node); break;
       case EventType::Flip: play(Sound::Click, 0.55f, e.value ? 1.25f : 0.7f, e.node); break;
-      case EventType::Turn: play(Sound::Click, 0.3f, 0.6f, e.node); break;
+      case EventType::Turn:
+        if (shop) {
+          play(Sound::RackClack, 0.3f, 1.0f, e.node);  // the lazy susan's notch
+        } else {
+          play(Sound::Click, 0.3f, 0.6f, e.node);
+        }
+        break;
       case EventType::Leave:
         if (level.nodes[static_cast<size_t>(e.node)].kind == NodeKind::Mill)
           play(Sound::Click, 0.4f, 0.5f, e.node);  // the wheel turns a notch
@@ -84,7 +90,28 @@ Cues CuesFor(const std::vector<Event>& events, const Level& level, const Board& 
         cues.buzzes.push_back({35, 0.85f});
         break;
       case EventType::NearMiss: play(Sound::Chime, 0.5f, 1.0f, e.node); break;
-      case EventType::Spill: play(Sound::Splash, 0.7f, 0.8f, e.node, true); break;
+      case EventType::Spill:
+        if (shop) {
+          play(Sound::SpillWood, 0.75f, 1.0f, e.node, true);
+        } else {
+          play(Sound::Splash, 0.7f, 0.8f, e.node, true);
+        }
+        break;
+      case EventType::Finished: {
+        // The shop: an order still short at the end (the bottle's ghost fill, its slip unpaid) sounds dull.
+        if (!shop || e.value) break;
+        int short_at = -1;
+        for (size_t n = 0; n < level.nodes.size() && short_at < 0; ++n) {
+          const Node& node = level.nodes[n];
+          const int id = static_cast<int>(n);
+          if (node.kind == NodeKind::Cup && board.Cup(id).count < node.count) short_at = id;
+          for (size_t s = 0; node.kind == NodeKind::Rack && s < node.slots.size(); ++s) {
+            if (board.Bottle(id, static_cast<int>(s)).count < node.slots[s].count) short_at = id;
+          }
+        }
+        if (short_at >= 0) play(Sound::ShortDull, 0.8f, 1.0f, short_at, true);
+        break;
+      }
       case EventType::Jammed:
         play(Sound::Grind, 0.9f, 1.0f, -1, true);
         cues.buzzes.push_back({70, 1.0f});

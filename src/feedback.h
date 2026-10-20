@@ -12,7 +12,7 @@
 
 // What the player hears and feels (DESIGN.md §9): the synthesized sounds (audio_synth.h) played
 // for the board's events (sound_cues.h), short vibrations (a light tap for each drop landing, a
-// heavy one for mud and jams), and World 1's ambience on the Music bus. The settings switch each off.
+// heavy one for mud and jams), and the worlds' ambience on the Music bus. The settings switch each off.
 namespace threadlock {
 
 class Feedback {
@@ -32,7 +32,7 @@ class Feedback {
 
   // The ambience bed: on while a level that has one is open, ducked to 60% while a run plays. Applied
   // once a frame by Update, so leaving one level for the next doesn't stop and restart it.
-  void SetAmbience(bool on, bool running);
+  void SetAmbience(bool on, bool running, Ambience::Bed bed = Ambience::Bed::Lantern);
   void Update();  // ThreadlockApp::OnUpdate
 
   // The settings (ThreadlockApp::ApplySettings); music = the ambience (Bus::Music).
@@ -58,6 +58,7 @@ class Feedback {
   synth::SoundSet set_ = synth::SoundSet::Workshop;
   bool sound_on_ = true, haptics_on_ = true, music_on_ = true;
   std::unique_ptr<AmbienceStream> ambience_;  // never freed while the mixer may read it (lives with the app)
+  Ambience::Bed ambience_bed_ = Ambience::Bed::Lantern;
   bool ambience_wanted_ = false, ambience_running_ = false, ambience_playing_ = false, ambience_used_ = false;
 };
 

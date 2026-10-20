@@ -110,3 +110,47 @@ TEST_SUITE("sound cues") {
     CHECK(cues.buzzes.size() == 1);
   }
 }
+
+TEST_SUITE("sound cues") {
+  TEST_CASE("the Shop set: marimba, an order paid, jar taps") {
+    const std::vector<Cue> cues = RunCues(LanternLevel("B*4"), SoundSet::Shop);
+    CHECK(Count(cues, Sound::MarimbaNote) == 4);
+    CHECK(Count(cues, Sound::PaidBlue) == 1);  // one sound: cork, chord, bell, stamp
+    CHECK(Count(cues, Sound::JarTap) == 4);
+    CHECK(Count(cues, Sound::NoteBlue) == 0);
+    CHECK(Count(cues, Sound::PaneChime) == 0);
+    CHECK(Count(cues, Sound::ShortDull) == 0);  // solved: nothing short
+  }
+
+  TEST_CASE("the Shop set: sludge, a spill on wood, a short order") {
+    CHECK(Count(RunCues(LanternLevel("B*5"), SoundSet::Shop), Sound::SpillWood) == 1);
+    CHECK(Count(RunCues(LanternLevel("B*5"), SoundSet::Shop), Sound::Splash) == 0);
+    // Three of four: short at the end, one dull knock for the run, heard in full.
+    const std::vector<Cue> short_run = RunCues(LanternLevel("B*3"), SoundSet::Shop, {0.0f, 100.0f});
+    REQUIRE(Count(short_run, Sound::ShortDull) == 1);
+    for (const Cue& cue : short_run) {
+      if (cue.sound == Sound::ShortDull) CHECK(cue.volume == doctest::Approx(0.8f));
+    }
+    CHECK(Count(RunCues(LanternLevel("B*3"), SoundSet::Workshop), Sound::ShortDull) == 0);
+    const Level level = LanternLevel("B*4");
+    Board board(level);
+    board.Start();
+    const Cues mud = CuesFor({{.type = EventType::Collide, .node = NodeOf(level, "c")}}, level, board, SoundSet::Shop);
+    REQUIRE(mud.sounds.size() == 1);
+    CHECK(mud.sounds[0].sound == Sound::Sludge);
+  }
+
+  TEST_CASE("the shop's lazy susan clacks softly each turn") {
+    const Level level = MakeLevel(kRack);
+    const std::vector<Cue> cues = RunCues(level, SoundSet::Shop);
+    int clacks = 0;
+    for (const Cue& cue : cues) {
+      if (cue.sound != Sound::RackClack) continue;
+      ++clacks;
+      CHECK(cue.volume <= 0.3f);
+    }
+    CHECK(clacks > 0);
+    CHECK(Count(cues, Sound::Click) == 0);
+    CHECK(Count(RunCues(level, SoundSet::Workshop), Sound::RackClack) == 0);
+  }
+}

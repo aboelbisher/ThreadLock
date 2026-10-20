@@ -43,7 +43,8 @@ void Feedback::OnEvents(const std::vector<Event>& events, const Level& level, co
   for (const Buzz& buzz : cues.buzzes) Vibrate(buzz.milliseconds, buzz.strength);
 }
 
-void Feedback::SetAmbience(bool on, bool running) {
+void Feedback::SetAmbience(bool on, bool running, Ambience::Bed bed) {
+  ambience_bed_ = bed;
   ambience_wanted_ = on;
   ambience_running_ = running;
 }
@@ -59,7 +60,10 @@ void Feedback::Update() {
   if (!audio_ || !ambience_) return;
   // Muted = not rendered at all (no audio-thread work for nothing).
   const bool play = ambience_wanted_ && sound_on_ && music_on_;
-  if (play) ambience_->ambience.SetTarget(ambience_running_ ? 0.6f : 1.0f, 0.8f);
+  if (play) {
+    ambience_->ambience.SetBed(ambience_bed_);
+    ambience_->ambience.SetTarget(ambience_running_ ? 0.6f : 1.0f, 0.8f);
+  }
   if (play == ambience_playing_) return;
   ambience_playing_ = play;
   ambience_used_ = ambience_used_ || play;

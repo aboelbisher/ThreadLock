@@ -17,9 +17,12 @@
 // voice inside the set. World 1, the Lantern Works, is glass and bells: blue = a glass harmonica,
 // amber = a celesta, a full lantern rings tubular chimes, each window pane that lights a small
 // chime that climbs as the run goes, the solved window's heart a chord bloom and twelve chimes.
+// World 2, the Apothecary, is wood and brass: blue = a marimba, amber = a pizzicato string; a filled
+// order is one baked sound timed like its moment on screen (apothecary_look.h: the cork drops, the shop
+// bell rings, the PAID stamp thumps), mud a glop on wood, a spill a splash and drips off the counter.
 namespace threadlock::synth {
 
-enum class SoundSet : uint8_t { Workshop, Lantern };
+enum class SoundSet : uint8_t { Workshop, Lantern, Shop };
 
 enum class Sound : uint8_t {
   NoteBlue,
@@ -55,6 +58,18 @@ enum class Sound : uint8_t {
   Drip,           // a drop lands in a drip fall's funnel
   CruciblePour,   // a crucible's beat
   Ascent,         // a tall board's intro pan
+  // The Shop set (World 2).
+  MarimbaNote,  // blue: a rosewood marimba, C4
+  PizzNote,     // amber: a pizzicato string, C4
+  PaidBlue,     // an order filled: cork, a marimba chord, the shop bell, the PAID stamp (at the art's times)
+  PaidAmber,    // the same with a pizzicato chord, the bell a fifth up
+  Sludge,       // mud: a low glop and a knock on wood
+  JarTap,       // a jar's beat: a short glug
+  SpillWood,    // a bottle runs over: a splash on the counter, drips off its edge
+  ShortDull,    // an order short at the end: a dull knock, two falling pizzicato notes
+  RackClack,    // the lazy susan turns: a soft wooden clack
+  Till,         // solved: a marimba run, the till's bell, coins
+  MarketDay,    // 2-15 solved: longer, marimba and pizzicato runs, the shop's bells
   Count,
 };
 

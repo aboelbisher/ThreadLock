@@ -49,8 +49,7 @@ inline constexpr WorldLook kWorldLooks[] = {
      synth::SoundSet::Lantern},
     // World 2, Fair Shares: an apothecary on market day.
     {ArtKind::Apothecary, "The Apothecary", Hex(0x1A120C), Hex(0x2A1D14, 0.9f), Hex(0xF3E8CC, 0.2f), Hex(0xF3E8CC),
-     Hex(0xC9AE8C), Hex(0xFFB45C), Hex(0xFFD99A), Hex(0xEE9645), Hex(0x9A5418), Hex(0x2A1600),
-     synth::SoundSet::Workshop},
+     Hex(0xC9AE8C), Hex(0xFFB45C), Hex(0xFFD99A), Hex(0xEE9645), Hex(0x9A5418), Hex(0x2A1600), synth::SoundSet::Shop},
     // World 3, Rush Hour: the canal city at night.
     {ArtKind::Workshop, "The Canal City", Hex(0x0B111D), Hex(0x0E1A2A, 0.9f), Hex(0xA8F2EA, 0.18f), Hex(0xE6F2FF),
      Hex(0x9FB0D2), Hex(0x7FE3D8), Hex(0xA8F2EA), Hex(0x2FB5A8), Hex(0x14706A), Hex(0x06201E),

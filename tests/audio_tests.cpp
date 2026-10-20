@@ -2,9 +2,11 @@
 // (ambience.h): plain C++, so they're checked here without an audio device.
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <vector>
 
 #include "../src/ambience.h"
+#include "../src/apothecary_look.h"
 #include "../src/audio_synth.h"
 #include "../src/rose_window.h"
 #include "doctest.h"
@@ -27,7 +29,8 @@ TEST_SUITE("audio") {
   TEST_CASE("every sound is finite, under full scale and dies away") {
     for (int s = 0; s < static_cast<int>(synth::Sound::Count); ++s) {
       const auto sound = static_cast<synth::Sound>(s);
-      CAPTURE(synth::SoundName(sound));
+      const std::string name = synth::SoundName(sound);
+      CAPTURE(name);
       const std::vector<float> samples = synth::Make(sound, kRate);
       REQUIRE(samples.size() > 100);
       CHECK(std::all_of(samples.begin(), samples.end(), [](float v) { return std::isfinite(v); }));
@@ -125,5 +128,106 @@ TEST_SUITE("audio") {
     ambience.SetTarget(0.0f, 0.5f);
     for (int b = 0; b < 60; ++b) ambience.Render(block.data(), 512);
     CHECK(Peak(block) == 0.0f);
+  }
+}
+
+namespace {
+
+// The loudness (RMS) of `samples` between `from` and `to` seconds.
+float Rms(const std::vector<float>& samples, float from, float to) {
+  const size_t a = static_cast<size_t>(from * kRate), b = std::min(samples.size(), static_cast<size_t>(to * kRate));
+  double sum = 0.0;
+  for (size_t i = a; i < b; ++i) sum += static_cast<double>(samples[i]) * samples[i];
+  return b > a ? static_cast<float>(std::sqrt(sum / static_cast<double>(b - a))) : 0.0f;
+}
+
+// Renders `seconds` of `ambience` in the mixer's blocks: the peak, the largest step between samples, finite.
+struct Bed {
+  float peak = 0.0f, step = 0.0f;
+  bool finite = true;
+  std::vector<float> left;  // the left channel, for timing
+};
+Bed RenderBed(Ambience& ambience, float seconds) {
+  Bed bed;
+  std::vector<float> block(512 * 2);
+  float last[2] = {0.0f, 0.0f};
+  for (int b = 0; b < static_cast<int>(seconds * kRate) / 512; ++b) {
+    ambience.Render(block.data(), 512);
+    for (size_t i = 0; i < block.size(); ++i) {
+      bed.finite = bed.finite && std::isfinite(block[i]);
+      bed.peak = std::max(bed.peak, std::fabs(block[i]));
+      if (b > 0 || i >= 2) bed.step = std::max(bed.step, std::fabs(block[i] - last[i % 2]));  // not across renders
+      last[i % 2] = block[i];
+      if (i % 2 == 0) bed.left.push_back(block[i]);
+    }
+  }
+  return bed;
+}
+
+}  // namespace
+
+TEST_SUITE("audio") {
+  TEST_CASE("the Shop set's voices") {
+    using synth::Sound;
+    using synth::SoundSet;
+    CHECK(synth::NoteFor(SoundSet::Shop, Color::Blue) == Sound::MarimbaNote);
+    CHECK(synth::NoteFor(SoundSet::Shop, Color::Amber) == Sound::PizzNote);
+    CHECK(synth::NoteFor(SoundSet::Shop, Color::Rose) == Sound::NoteRose);  // no shop voice: the Workshop's
+    CHECK(synth::ChordFor(SoundSet::Shop, Color::Blue) == Sound::PaidBlue);
+    CHECK(synth::ChordFor(SoundSet::Shop, Color::Amber) == Sound::PaidAmber);
+    CHECK(synth::ChordFor(SoundSet::Shop, Color::Green) == Sound::ChordGreen);
+    CHECK(synth::MudFor(SoundSet::Shop) == Sound::Sludge);
+    CHECK(synth::PourFor(SoundSet::Shop) == Sound::JarTap);
+    CHECK(synth::SolvedFor(SoundSet::Shop, false) == Sound::Till);
+    CHECK(synth::SolvedFor(SoundSet::Shop, true) == Sound::MarketDay);
+  }
+
+  TEST_CASE("an order paid: the bell and the stamp sound when the art shows them") {
+    for (synth::Sound sound : {synth::Sound::PaidBlue, synth::Sound::PaidAmber}) {
+      const std::string name = synth::SoundName(sound);
+      CAPTURE(name);
+      const std::vector<float> paid = synth::Make(sound, kRate);
+      // Each strike is much louder just after its time than just before.
+      for (float at : {apothecary::kPaidBell, apothecary::kPaidStamp}) {
+        CAPTURE(at);
+        CHECK(Rms(paid, at + 0.002f, at + 0.04f) > 1.5f * Rms(paid, at - 0.05f, at - 0.005f));
+      }
+      CHECK(Rms(paid, 0.0f, 0.03f) > 0.05f);  // the cork, at once
+      CHECK(synth::Make(sound, kRate) == paid);
+    }
+    // The till waits for the last order's stamp.
+    const std::vector<float> till = synth::Make(synth::Sound::Till, kRate);
+    CHECK(Peak(std::vector<float>(till.begin(), till.begin() + static_cast<long>(apothecary::kPaidStamp * kRate))) ==
+          0.0f);
+    CHECK(synth::Make(synth::Sound::MarketDay, kRate).size() > till.size());
+  }
+
+  TEST_CASE("the shop's ambience: quiet, finite, click-free, a far bell") {
+    Ambience ambience(kRate);
+    ambience.SetBed(Ambience::Bed::Shop);
+    ambience.SetTarget(1.0f, 2.0f);
+    const Bed bed = RenderBed(ambience, 45.0f);
+    CHECK(bed.finite);
+    CHECK(bed.peak > 0.02f);
+    CHECK(bed.peak <= 0.3f);
+    CHECK(bed.step < 0.02f);
+    // The bell rings at 6 s and 26 s: louder just after than just before.
+    for (float at : {6.0f, 26.0f}) {
+      CAPTURE(at);
+      CHECK(Rms(bed.left, at + 0.01f, at + 0.3f) > 1.3f * Rms(bed.left, at - 0.6f, at - 0.05f));
+    }
+  }
+
+  TEST_CASE("switching beds fades through, without a click") {
+    Ambience ambience(kRate);
+    ambience.SetTarget(1.0f, 0.5f);
+    RenderBed(ambience, 4.0f);  // the Lantern bed, playing
+    ambience.SetBed(Ambience::Bed::Shop);
+    const Bed bed = RenderBed(ambience, 4.0f);
+    CHECK(bed.finite);
+    CHECK(bed.step < 0.02f);
+    // Near silence where one bed hands over to the other (0.4 s in).
+    const float handover = Rms(bed.left, Ambience::kSwitchSeconds - 0.01f, Ambience::kSwitchSeconds + 0.01f);
+    CHECK(handover < 0.25f * Rms(bed.left, 2.0f, 3.0f));
   }
 }
