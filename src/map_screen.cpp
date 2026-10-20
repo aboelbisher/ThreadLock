@@ -37,6 +37,8 @@ constexpr int kAnimated = 3;  // at most this many levels light one by one; earl
 
 constexpr Rgba kHudFill = Rgba{20.0f / 255.0f, 28.0f / 255.0f, 44.0f / 255.0f, 0.9f};
 constexpr Rgba kHudBorder = Rgba{207.0f / 255.0f, 230.0f / 255.0f, 1.0f, 0.2f};
+constexpr Rgba kShopHudFill = Hex(0x2A1D14, 0.9f);  // over the market (World 2's panel)
+constexpr Rgba kShopHudBorder = Hex(0xF3E8CC, 0.2f);
 constexpr Rgba kBrassLit = Hex(0xF6DA9A);
 constexpr float kText = 1.15f;  // CSS font sizes -> canvas line heights
 
@@ -143,11 +145,22 @@ void MapScreen::Start(float view) {
     if (dev == "seen:none") {
       seen = {};
     } else if (dev.rfind("seen:", 0) == 0) {
+      // Every level in map order (a world's main path, then its challenges) up to that one; its world's
+      // gate was seen opening.
       seen = {};
-      const city::WorldLevels& first = levels_.front();
-      for (const std::string& id : first.main) {
-        if (const auto it = now.find(id); it != now.end()) seen.stars[id] = it->second;
-        if (id == dev.substr(5)) break;
+      bool found = false;
+      for (const city::WorldLevels& w : levels_) {
+        for (const auto* list : {&w.main, &w.challenges}) {
+          for (const std::string& id : *list) {
+            if (found) break;
+            if (const auto it = now.find(id); it != now.end()) seen.stars[id] = it->second;
+            found = id == dev.substr(5);
+          }
+        }
+        if (found) {
+          seen.gates = w.world;
+          break;
+        }
       }
     } else if (dev.rfind("gate:", 0) == 0) {
       seen = city::SeeAll(levels_, now);
@@ -182,7 +195,7 @@ void MapScreen::Start(float view) {
   const Level* target = focus_ && !dev_stars_ ? focus_ : current;
   if (news.Empty()) {
     SnapTo(cv_scroll.Get() >= 0.0f ? city::ClampScroll(cv_scroll.Get(), view)
-                                    : LanternY(target) - view * (560.0f / city::kMockView));
+                                   : LanternY(target) - view * (560.0f / city::kMockView));
     return;
   }
 
@@ -236,6 +249,15 @@ void MapScreen::Start(float view) {
         t = LightLantern(r.index, r.fresh, t);
         if (!city::WindowInView(planned, view)) glide(city::WindowScroll(view), 0.9f, 0.15f);
         t = LightPanes(r.index, r.fresh, t) + 0.2f;
+      } else if (r.world == 2) {
+        // The lamp's stars, then up to the shop window (if it's off screen) for its bottle or show globe.
+        const float lamp = city::DistrictLamps(2)[static_cast<size_t>(r.index)].y;
+        if (lamp < planned + view * 0.15f || lamp > planned + view * 0.8f) glide(scroll_for(r), 0.8f, 0.2f);
+        t = LightLamp(2, r.index, r.fresh, t);
+        const int challenge = r.index - (city::kDistrictLamps - city::kLobes);
+        const float top = challenge >= 0 ? city::GlobeSpot(challenge).y - 24.0f : city::BottleSpot(r.index).y - 90.0f;
+        if (top < planned + view * 0.12f) glide(city::ShopScroll(view, challenge >= 0), 0.8f, 0.15f);
+        t = FillBottle(r.index, r.fresh, t);
       } else {
         glide(scroll_for(r), 0.8f, 0.2f);
         t = LightLamp(r.world, r.index, r.fresh, t);
@@ -342,7 +364,8 @@ float MapScreen::FillBottle(int lamp, int fresh, float start) {
     At(t, [this, i] { bottle_at_[i][0] = clock_; });
     for (int m = 0; m < 4; ++m) {
       const float pitch = Midi(std::array{60, 64, 67, 72}[static_cast<size_t>(m)]);
-      At(t + 0.18f * static_cast<float>(m), [&feedback, pitch] { feedback.Play(synth::Sound::MarimbaNote, 0.5f, pitch); });
+      At(t + 0.18f * static_cast<float>(m),
+         [&feedback, pitch] { feedback.Play(synth::Sound::MarimbaNote, 0.5f, pitch); });
     }
     t += 0.9f;
   }
@@ -398,13 +421,18 @@ float MapScreen::OpenGate(int world, float start) {
     };
   });
   t += 1.9f;
-  At(t, [this, d] {
+  At(t, [this, d, world] {
     wake_at_[d] = clock_;
     gate_shown_[d] = true;
     glide_ = {};
-    app_.GetFeedback().Play(synth::Sound::Chime, 0.7f, 1.0f);
+    if (world == 2) {  // the shop wakes: its sign lights, the mist lifts, the door bell rings
+      bell_at_ = clock_;
+      app_.GetFeedback().Play(synth::Sound::ShopBell, 0.7f);
+    } else {
+      app_.GetFeedback().Play(synth::Sound::Chime, 0.7f, 1.0f);
+    }
   });
-  return t + 0.9f;
+  return t + (world == 2 ? 1.6f : 0.9f);
 }
 
 void MapScreen::At(float delay, std::function<void()> run) { events_.push_back({clock_ + delay, std::move(run)}); }
@@ -505,7 +533,14 @@ void MapScreen::Update(float dt) {
   }
   const float moved = camera_.Y() - before;
   if (std::fabs(moved) > 0.01f) heading_ = moved;
+
+  // The sound and the top bar follow the district in view.
+  if (!started_) return;
+  shop_tint_ = std::clamp(shop_tint_ + (MarketInView() ? dt : -dt) * 2.5f, 0.0f, 1.0f);
+  app_.GetFeedback().SetAmbience(true, true, shop_tint_ > 0.5f ? Ambience::Bed::Shop : Ambience::Bed::Lantern);
 }
+
+bool MapScreen::MarketInView() const { return gate_shown_[0] && city::DistrictAt(camera_.Y() + view_ * 0.5f) == 2; }
 
 bool MapScreen::LockedShown(int lantern) const {
   // Locked as drawn: the lantern before it hasn't lit yet (so a solve unlocks the next one as it lights).
@@ -586,8 +621,7 @@ void MapScreen::Fill(CityFrame& frame, glm::vec2 screen, float scale) {
       city::Light& lamp = df.lamps[static_cast<size_t>(j)];
       lamp.locked = !df.open || lights[static_cast<size_t>(j)].locked || !lamps_[d][static_cast<size_t>(j)];
       lamp.bits = lamp_at_[d][static_cast<size_t>(j)][0] <= clock_ ? kSolveStar : 0;
-      if (lamps_[d][static_cast<size_t>(j)] == current && current && !solved(current) && !Busy())
-        df.current = j;
+      if (lamps_[d][static_cast<size_t>(j)] == current && current && !solved(current) && !Busy()) df.current = j;
     }
   }
 
@@ -700,6 +734,7 @@ void MapScreen::RenderUI(UIContext& ui) {
   if (!started_) {
     started_ = true;
     Start(view_);
+    shop_tint_ = MarketInView() ? 1.0f : 0.0f;
   }
 
   // The finger: a drag scrolls (and flings), a tap picks a lantern; any touch skips an animation.
@@ -751,29 +786,33 @@ void MapScreen::DrawHud(UIContext& ui) {
   const float width = canvas.Size().x;
 
   // The slim top bar: stars, hints; trophies and settings.
+  // Night blue over the tower, the shop's dark wood over the market.
   const float top = safe.min.y, bottom = top + kBar, mid = top + kBar * 0.5f;
+  const Rgba bar = Mixed(Hex(0x060910), Hex(0x140C07), shop_tint_);
+  const Rgba hud_fill = Mixed(kHudFill, kShopHudFill, shop_tint_);
+  const Rgba hud_border = Mixed(kHudBorder, kShopHudBorder, shop_tint_);
   for (int k = 0; k < 8; ++k) {
     const float y0 = bottom * static_cast<float>(k) / 8.0f, y1 = bottom * static_cast<float>(k + 1) / 8.0f;
-    canvas.FillRect({{0.0f, y0}, {width, y1}}, Hex(0x060910, 0.94f - 0.39f * static_cast<float>(k) / 7.0f));
+    canvas.FillRect({{0.0f, y0}, {width, y1}}, WithAlpha(bar, 0.94f - 0.39f * static_cast<float>(k) / 7.0f));
   }
   canvas.FillRect({{0.0f, bottom - 1.0f}, {width, bottom}}, WithAlpha(kBrassLit, 0.14f));
   const float size = 18.0f * kText;
   const std::string stars = std::to_string(progress.TotalStars()), hints = std::to_string(progress.Hints());
   float x = safe.min.x + 12.0f;
   const float stars_w = 12.0f + 18.0f + 6.0f + font.Measure(stars, size) + 12.0f;
-  Pill(canvas, {{x, mid - 17.0f}, {x + stars_w, mid + 17.0f}}, kHudFill, WithAlpha(kBrassLit, 0.3f));
+  Pill(canvas, {{x, mid - 17.0f}, {x + stars_w, mid + 17.0f}}, hud_fill, WithAlpha(kBrassLit, 0.3f));
   StarShape(canvas, {x + 21.0f, mid}, 9.5f, Hex(0xFFC53D));
   canvas.Text(font, stars, {x + 36.0f, mid}, size, Align::Left, {.color = Hex(0xF2F7FF)});
   x += stars_w + 8.0f;
   const float hints_w = 12.0f + 18.0f + 5.0f + font.Measure(hints, size) + 12.0f;
-  Pill(canvas, {{x, mid - 17.0f}, {x + hints_w, mid + 17.0f}}, kHudFill, kHudBorder);
+  Pill(canvas, {{x, mid - 17.0f}, {x + hints_w, mid + 17.0f}}, hud_fill, hud_border);
   wlw::ui::DrawIcon(canvas, Icon::Hint, {{x + 12.0f, mid - 9.0f}, {x + 30.0f, mid + 9.0f}}, Hex(0xE6F4FF));
   canvas.Text(font, hints, {x + 35.0f, mid}, size, Align::Left, {.color = Hex(0xF2F7FF)});
 
   const float right = safe.max.x - 12.0f;
   const Rect settings{{right - 44.0f, mid - 22.0f}, {right, mid + 22.0f}};
   const Rect trophies{{right - 96.0f, mid - 22.0f}, {right - 52.0f, mid + 22.0f}};
-  for (const Rect& r : {settings, trophies}) Pill(canvas, r, kHudFill, kHudBorder);
+  for (const Rect& r : {settings, trophies}) Pill(canvas, r, hud_fill, hud_border);
   wlw::ui::DrawIcon(canvas, Icon::Settings, {settings.min + glm::vec2(11.0f), settings.max - glm::vec2(11.0f)},
                     Hex(0xE6F4FF));
   wlw::ui::DrawIcon(canvas, Icon::Trophy, {trophies.min + glm::vec2(11.0f), trophies.max - glm::vec2(11.0f)},

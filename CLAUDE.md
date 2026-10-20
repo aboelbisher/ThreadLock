@@ -185,7 +185,7 @@ it) has Bluzzle with saves (never uninstall it). Ask before using an emulator. S
 (open a level, place its Lean solution, tap play after 1 s). Also `tl.place=separator@gp/0,turnstile@ga/1,tank8@pk`
 (place these pieces), `tl.timescale=0.2` (the level screen runs five times slower: catch a moment in a
 screenshot), `tl.calm=1` (reduced motion), `tl.scroll=600` (a tall level opens scrolled this far, no intro pan)
-and `tl.map=seen:1-3` / `seen:none` / `gate:2` (the map replays its news as if it last saw World 1 up to 1-3 /
+and `tl.map=seen:1-3` / `seen:none` / `gate:2` (the map replays its news as if it last saw every level up to 1-3, in map order, any world /
 nothing / everything but World 2's gate). The map's screen goes to sleep like any app: wake the phone before each screenshot.
 Ads: AdMob through the kit; **Google's sample app id and test units** until Threadlock has its own (manifest +
 MakeAdsConfig in threadlock_app.cpp). The debug build has the ImGui panel (Threadlock window: jump to any level,
