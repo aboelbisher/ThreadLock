@@ -24,6 +24,10 @@ using wlw::ui::UIContext;
 // last saw World 1 up to that level, "seen:none" = never (the first visit), "gate:<world>" = everything
 // but that world's gate opening. Used once, by the first map opened.
 wlw::CVar<std::string> cv_map{"tl.map", "", "Replay the map's animations: seen:<level>|seen:none|gate:<world> (dev)"};
+wlw::CVar<float> cv_scroll{"tl.mapscroll", -1.0f, "The map opens scrolled to this map y when it has no news (dev)"};
+// The map shows these stars instead of the saved ones (nothing is saved): "<level>:<bits>" or "<world>-*:<bits>"
+// for a whole world, comma separated; bits 1 = solve, 2 = lean, 4 = swift. E.g. "1-*:7,2-1:7,2-2:1,2-3:5".
+wlw::CVar<std::string> cv_stars{"tl.stars", "", "The map's stars instead of the saved ones: 1-*:7,2-1:3 (dev)"};
 
 constexpr float kBar = 58.0f;     // the top bar under the safe area's top
 constexpr float kRound = 64.0f;   // Daily, Lab
@@ -37,6 +41,8 @@ constexpr Rgba kBrassLit = Hex(0xF6DA9A);
 constexpr float kText = 1.15f;  // CSS font sizes -> canvas line heights
 
 float Clamp01(float v) { return std::clamp(v, 0.0f, 1.0f); }
+// A MIDI note as a playback pitch for the marimba (its sample is C4 = 60).
+float Midi(int note) { return std::exp2(static_cast<float>(note - 60) / 12.0f); }
 float EaseInOut(float k) { return k < 0.5f ? 2.0f * k * k : 1.0f - std::pow(-2.0f * k + 2.0f, 2.0f) / 2.0f; }
 bool Inside(const Rect& r, glm::vec2 p) { return p.x >= r.min.x && p.x <= r.max.x && p.y >= r.min.y && p.y <= r.max.y; }
 
@@ -88,6 +94,36 @@ void MapScreen::Build() {
   for (int i = 0; i < city::kLanterns; ++i) {
     if (lanterns_[static_cast<size_t>(i)]) frame_.colors[static_cast<size_t>(i)] = city::LanternColors(*lanterns_[i]);
   }
+  for (size_t j = 0; j < city::kDistrictLamps; ++j) {
+    if (lamps_[0][j]) frame_.market.colors[j] = city::LanternColors(*lamps_[0][j]);
+  }
+  frame_.hand = &app_.GetHand();
+  dev_stars_.reset();
+  if (const std::string dev = cv_stars.Get(); !dev.empty()) {
+    StarMap stars;
+    size_t at = 0;
+    while (at < dev.size()) {
+      const size_t comma = std::min(dev.find(',', at), dev.size());
+      const std::string item = dev.substr(at, comma - at);
+      at = comma + 1;
+      const size_t colon = item.find(':');
+      if (colon == std::string::npos) continue;
+      const std::string id = item.substr(0, colon);
+      const int bits = std::atoi(item.c_str() + colon + 1) & (kSolveStar | kLeanStar | kSwiftStar);
+      if (id.size() > 2 && id.substr(id.size() - 2) == "-*") {
+        for (const city::WorldLevels& w : levels_) {
+          if (std::to_string(w.world) != id.substr(0, id.size() - 2)) continue;
+          for (const auto* list : {&w.main, &w.challenges}) {
+            for (const std::string& level : *list) stars[level] = bits;
+          }
+        }
+      } else {
+        stars[id] = bits;
+      }
+    }
+    for (auto it = stars.begin(); it != stars.end();) it = it->second ? std::next(it) : stars.erase(it);
+    dev_stars_ = std::move(stars);
+  }
   if (const World* first = catalog.GetWorld(1)) frame_.tower = Upper(first->name);
   for (int w = 2; w <= 4; ++w) {
     CityFrame::District& d = frame_.districts[static_cast<size_t>(w - 2)];
@@ -100,8 +136,8 @@ void MapScreen::Build() {
 
 void MapScreen::Start(float view) {
   Progress& progress = app_.GetProgress();
-  const StarMap& now = progress.Stars();
-  city::Seen seen = progress.HasMapSeen() ? progress.MapSeen() : city::SeedSeen(levels_, now);
+  const StarMap& now = Stars();
+  city::Seen seen = progress.HasMapSeen() && !dev_stars_ ? progress.MapSeen() : city::SeedSeen(levels_, now);
   if (const std::string dev = cv_map.Get(); !dev.empty()) {
     cv_map.Set("");
     if (dev == "seen:none") {
@@ -119,27 +155,22 @@ void MapScreen::Start(float view) {
     }
   }
   city::News news = city::WhatsNew(levels_, seen, now);
-  progress.SetMapSeen(city::SeeAll(levels_, now));
+  if (!dev_stars_) progress.SetMapSeen(city::SeeAll(levels_, now));
 
   // What was seen is lit from the start.
   for (auto& lantern : lantern_at_) lantern.fill(kNever);
   for (auto& pane : pane_at_) pane.fill(kNever);
-  for (auto& lamps : lamp_at_) lamps.fill(kNever);
+  for (auto& lamps : lamp_at_) {
+    for (auto& lamp : lamps) lamp.fill(kNever);
+  }
+  for (auto& bottle : bottle_at_) bottle.fill(kNever);
   stars_shown_ = 0;
   for (const city::WorldLevels& w : levels_) {
     auto lit = [&](const std::string& id, int index) {
       const auto it = seen.stars.find(id);
       const int bits = it == seen.stars.end() ? 0 : it->second;
       stars_shown_ += StarsIn(bits);
-      for (int k = 0; k < 3; ++k) {
-        if (!(bits & (1 << k))) continue;
-        if (w.world == 1 && index < city::kLanterns) {
-          lantern_at_[static_cast<size_t>(index)][static_cast<size_t>(k)] = kLongAgo;
-          pane_at_[static_cast<size_t>(index)][static_cast<size_t>(k)] = kLongAgo;
-        } else if (w.world >= 2 && w.world <= 4 && index < city::kDistrictLamps && k == 0) {
-          lamp_at_[static_cast<size_t>(w.world - 2)][static_cast<size_t>(index)] = kLongAgo;
-        }
-      }
+      Show(w.world, index, bits, kLongAgo);
     };
     for (size_t i = 0; i < w.main.size(); ++i) lit(w.main[i], static_cast<int>(i));
     const int first_challenge = w.world == 1 ? city::kPetals : city::kDistrictLamps - city::kLobes;
@@ -147,10 +178,11 @@ void MapScreen::Start(float view) {
   }
   for (int w = 2; w <= 4; ++w) gate_shown_[static_cast<size_t>(w - 2)] = seen.gates >= w;
 
-  const Level* current = progress.Current(app_.GetCatalog());
-  const Level* target = focus_ ? focus_ : current;
+  const Level* current = CurrentLevel();
+  const Level* target = focus_ && !dev_stars_ ? focus_ : current;
   if (news.Empty()) {
-    SnapTo(LanternY(target) - view * (560.0f / city::kMockView));
+    SnapTo(cv_scroll.Get() >= 0.0f ? city::ClampScroll(cv_scroll.Get(), view)
+                                    : LanternY(target) - view * (560.0f / city::kMockView));
     return;
   }
 
@@ -159,16 +191,8 @@ void MapScreen::Start(float view) {
     const size_t quiet = news.reveals.size() - kAnimated;
     for (size_t r = 0; r < quiet; ++r) {
       const city::Reveal& reveal = news.reveals[r];
-      for (int k = 0; k < 3; ++k) {
-        if (!(reveal.fresh & (1 << k))) continue;
-        ++stars_shown_;
-        if (reveal.world == 1) {
-          lantern_at_[static_cast<size_t>(reveal.index)][static_cast<size_t>(k)] = kLongAgo;
-          pane_at_[static_cast<size_t>(reveal.index)][static_cast<size_t>(k)] = kLongAgo;
-        } else if (k == 0) {
-          lamp_at_[static_cast<size_t>(reveal.world - 2)][static_cast<size_t>(reveal.index)] = kLongAgo;
-        }
-      }
+      stars_shown_ += StarsIn(reveal.fresh);
+      Show(reveal.world, reveal.index, reveal.fresh, kLongAgo);
     }
     news.reveals.erase(news.reveals.begin(), news.reveals.begin() + static_cast<long>(quiet));
   }
@@ -214,26 +238,28 @@ void MapScreen::Start(float view) {
         t = LightPanes(r.index, r.fresh, t) + 0.2f;
       } else {
         glide(scroll_for(r), 0.8f, 0.2f);
-        t = LightLamp(r.world, r.index, t);
+        t = LightLamp(r.world, r.index, r.fresh, t);
       }
     }
   }
   // Then the next level to play.
   const float y = LanternY(current);
-  const int next = [&] {
-    for (int i = 0; i < city::kLanterns; ++i) {
-      if (lanterns_[static_cast<size_t>(i)] == current) return i;
-    }
-    return -1;
-  }();
+  int next = -1, next_world = 1;
+  for (int i = 0; i < city::kLanterns && current; ++i) {
+    if (lanterns_[static_cast<size_t>(i)] == current) next = i;
+  }
+  for (int j = 0; j < city::kDistrictLamps && current && next < 0; ++j) {
+    if (lamps_[0][static_cast<size_t>(j)] == current) next = j, next_world = 2;
+  }
   if (y >= 0.0f) {
     const float before = t;
     glide(y - view * (560.0f / city::kMockView), 0.9f, 0.05f);
     if (t == before) t += 0.3f;
   }
   if (next >= 0) {
-    At(t, [this, next] {
+    At(t, [this, next, next_world] {
       pulse_ = next;
+      pulse_world_ = next_world;
       pulse_until_ = clock_ + 1.8f;
     });
   }
@@ -278,15 +304,78 @@ float MapScreen::LightPanes(int lantern, int fresh, float start) {
   return t;
 }
 
-float MapScreen::LightLamp(int world, int lamp, float start) {
-  const Level* level = lamps_[static_cast<size_t>(world - 2)][static_cast<size_t>(lamp)];
-  const int stars = level ? app_.GetProgress().StarCount(level->id) : 1;
-  At(start, [this, world, lamp, stars] {
-    lamp_at_[static_cast<size_t>(world - 2)][static_cast<size_t>(lamp)] = clock_;
-    stars_shown_ += stars;
-    app_.GetFeedback().Play(synth::Sound::PaneChime, 0.55f, Chime());
+float MapScreen::LightLamp(int world, int lamp, int fresh, float start) {
+  if (world != 2) {
+    At(start, [this, world, lamp, fresh] {
+      Show(world, lamp, fresh, clock_);
+      stars_shown_ += StarsIn(fresh);
+      app_.GetFeedback().Play(synth::Sound::PaneChime, 0.55f, Chime());
+    });
+    return start + 0.7f;
+  }
+  // The market's lamp lights with its first star, then its stars pop, a marimba note each (its bottle
+  // waits for FillBottle).
+  float t = start;
+  int j = 0;
+  for (int k = 0; k < 3; ++k) {
+    if (!(fresh & (1 << k))) continue;
+    const float pitch = Midi(64 + 3 * j + (k == 0 ? 0 : 4));
+    At(t, [this, lamp, k, pitch] {
+      Show(2, lamp, 1 << k, clock_, false);
+      ++stars_shown_;
+      app_.GetFeedback().Play(synth::Sound::MarimbaNote, 0.6f, pitch);
+    });
+    t += 0.26f;
+    ++j;
+  }
+  return t + 0.4f;
+}
+
+// In the shop window: the bottle fills in the level's colours (a marimba run), Lean corks it, Swift labels
+// it, the three stars seal it in gold, the door bell rings. A challenge lights its show globe instead.
+float MapScreen::FillBottle(int lamp, int fresh, float start) {
+  const size_t i = static_cast<size_t>(lamp);
+  const bool globe = lamp >= city::kDistrictLamps - city::kLobes;
+  float t = start;
+  Feedback& feedback = app_.GetFeedback();
+  if (fresh & kSolveStar) {
+    At(t, [this, i] { bottle_at_[i][0] = clock_; });
+    for (int m = 0; m < 4; ++m) {
+      const float pitch = Midi(std::array{60, 64, 67, 72}[static_cast<size_t>(m)]);
+      At(t + 0.18f * static_cast<float>(m), [&feedback, pitch] { feedback.Play(synth::Sound::MarimbaNote, 0.5f, pitch); });
+    }
+    t += 0.9f;
+  }
+  if (!globe && (fresh & kLeanStar)) {
+    At(t, [this, i, &feedback] {
+      bottle_at_[i][1] = clock_;
+      feedback.Play(synth::Sound::CorkPop, 0.8f);
+    });
+    t += 0.35f;
+  }
+  if (!globe && (fresh & kSwiftStar)) {
+    At(t, [this, i, &feedback] {
+      bottle_at_[i][2] = clock_;
+      feedback.Play(synth::Sound::MarimbaNote, 0.5f, Midi(76));
+    });
+    t += 0.35f;
+  }
+  // Gold once all three are in (this visit's or earlier ones).
+  const Level* level = lamps_[0][i];
+  const auto it = level ? Stars().find(level->id) : Stars().end();
+  const int all = kSolveStar | kLeanStar | kSwiftStar;
+  if (!globe && it != Stars().end() && (it->second & all) == all) {
+    At(t, [this, i, &feedback] {
+      bottle_at_[i][3] = clock_;
+      feedback.Play(synth::Sound::MarimbaNote, 0.5f, Midi(79));
+    });
+    t += 0.3f;
+  }
+  At(t, [this, &feedback] {
+    bell_at_ = clock_;
+    feedback.Play(synth::Sound::ShopBell, 0.6f);
   });
-  return start + 0.7f;
+  return t + 1.2f;
 }
 
 // The valve turns, light pours down the pipe (the view rides with it), the first lamp wakes.
@@ -335,25 +424,14 @@ void MapScreen::Glide(float to, float seconds) {
 }
 
 void MapScreen::ShowAll() {
-  const StarMap& now = app_.GetProgress().Stars();
+  const StarMap& now = Stars();
   stars_shown_ = 0;
   for (const city::WorldLevels& w : levels_) {
     auto show = [&](const std::string& id, int index) {
       const auto it = now.find(id);
       const int bits = it == now.end() ? 0 : it->second;
       stars_shown_ += StarsIn(bits);
-      for (int k = 0; k < 3; ++k) {
-        if (!(bits & (1 << k))) continue;
-        if (w.world == 1 && index < city::kLanterns) {
-          float& lantern = lantern_at_[static_cast<size_t>(index)][static_cast<size_t>(k)];
-          float& pane = pane_at_[static_cast<size_t>(index)][static_cast<size_t>(k)];
-          lantern = std::min(lantern, kLongAgo);
-          pane = std::min(pane, kLongAgo);
-        } else if (w.world >= 2 && w.world <= 4 && index < city::kDistrictLamps && k == 0) {
-          float& lamp = lamp_at_[static_cast<size_t>(w.world - 2)][static_cast<size_t>(index)];
-          lamp = std::min(lamp, kLongAgo);
-        }
-      }
+      Show(w.world, index, bits, kLongAgo);
     };
     for (size_t i = 0; i < w.main.size(); ++i) show(w.main[i], static_cast<int>(i));
     const int first_challenge = w.world == 1 ? city::kPetals : city::kDistrictLamps - city::kLobes;
@@ -364,12 +442,33 @@ void MapScreen::ShowAll() {
     gate_shown_[static_cast<size_t>(w - 2)] = gate_shown_[static_cast<size_t>(w - 2)] || open >= w;
 }
 
+void MapScreen::Show(int world, int index, int bits, float when, bool window) {
+  const size_t i = static_cast<size_t>(index);
+  for (size_t k = 0; k < 3; ++k) {
+    if (!(bits & (1 << k))) continue;
+    if (world == 1 && index < city::kLanterns) {
+      lantern_at_[i][k] = std::min(lantern_at_[i][k], when);
+      pane_at_[i][k] = std::min(pane_at_[i][k], when);
+    } else if (world >= 2 && world <= 4 && index < city::kDistrictLamps) {
+      float& lamp = lamp_at_[static_cast<size_t>(world - 2)][i][k];
+      lamp = std::min(lamp, when);
+      if (world == 2 && window) bottle_at_[i][k] = std::min(bottle_at_[i][k], when);
+    }
+  }
+  // All three stars seal the bottle in gold, with the last of them.
+  if (world == 2 && window && index < city::kDistrictLamps) {
+    auto& bottle = bottle_at_[i];
+    const float last = std::max({bottle[0], bottle[1], bottle[2]});
+    if (last < kNever) bottle[3] = std::min(bottle[3], last);
+  }
+}
+
 void MapScreen::Skip() {
   events_.clear();
   busy_until_ = 0.0f;
   pulse_ = -1;
   ShowAll();
-  const Level* current = app_.GetProgress().Current(app_.GetCatalog());
+  const Level* current = CurrentLevel();
   SnapTo(LanternY(current) - view_ * (560.0f / city::kMockView));
 }
 
@@ -431,8 +530,11 @@ float MapScreen::LanternY(const Level* level) const {
 }
 
 void MapScreen::Fill(CityFrame& frame, glm::vec2 screen, float scale) {
-  const Progress& progress = app_.GetProgress();
-  const StarMap& now = progress.Stars();
+  const StarMap& now = Stars();
+  auto solved = [&](const Level* level) {
+    const auto it = level ? now.find(level->id) : now.end();
+    return it != now.end() && (it->second & kSolveStar);
+  };
   frame.scale = scale;
   frame.scroll = camera_.Y();
   frame.screen = screen;
@@ -458,7 +560,7 @@ void MapScreen::Fill(CityFrame& frame, glm::vec2 screen, float scale) {
       if (i < city::kPetals && lantern_at_[n][k] <= clock_) ++tower_stars;
     }
   }
-  const Level* current = progress.Current(app_.GetCatalog());
+  const Level* current = CurrentLevel();
   frame.breathe = -1;
   frame.pulse = false;
   if (pulse_ >= 0 && clock_ < pulse_until_) {
@@ -466,7 +568,7 @@ void MapScreen::Fill(CityFrame& frame, glm::vec2 screen, float scale) {
     frame.pulse = true;
   } else if (!Busy()) {
     for (int i = 0; i < city::kLanterns; ++i) {
-      if (lanterns_[static_cast<size_t>(i)] == current && !progress.Solved(current->id)) frame.breathe = i;
+      if (lanterns_[static_cast<size_t>(i)] == current && !solved(current)) frame.breathe = i;
     }
   }
   frame.tower_fill = city::PipeFill(tower_stars, Catalog::Gate(2));
@@ -483,11 +585,63 @@ void MapScreen::Fill(CityFrame& frame, glm::vec2 screen, float scale) {
     for (int j = 0; j < city::kDistrictLamps; ++j) {
       city::Light& lamp = df.lamps[static_cast<size_t>(j)];
       lamp.locked = !df.open || lights[static_cast<size_t>(j)].locked || !lamps_[d][static_cast<size_t>(j)];
-      lamp.bits = lamp_at_[d][static_cast<size_t>(j)] <= clock_ ? kSolveStar : 0;
-      if (lamps_[d][static_cast<size_t>(j)] == current && current && !progress.Solved(current->id) && !Busy())
+      lamp.bits = lamp_at_[d][static_cast<size_t>(j)][0] <= clock_ ? kSolveStar : 0;
+      if (lamps_[d][static_cast<size_t>(j)] == current && current && !solved(current) && !Busy())
         df.current = j;
     }
   }
+
+  // The market square: its lamps light like World 1's lanterns, its shop window with them.
+  CityFrame::Market& market = frame.market;
+  const CityFrame::District& square = frame.districts[0];
+  for (int j = 0; j < city::kDistrictLamps; ++j) {
+    const size_t n = static_cast<size_t>(j);
+    market.locked[n] = !square.open || !lamps_[0][n] || LampLockedShown(j);
+    float latest = -kNever;
+    for (size_t k = 0; k < 3; ++k) {
+      market.lamp[n][k] = alpha(lamp_at_[0][n][k]);
+      market.lamp_flash[n][k] = flash(lamp_at_[0][n][k]);
+    }
+    constexpr float kSeconds[4] = {0.9f, 0.38f, 0.38f, 0.5f};  // fill, cork, label, gold
+    for (size_t q = 0; q < 4; ++q) {
+      const float at = bottle_at_[n][q];
+      market.bottle[n][q] = Clamp01((clock_ - at) / kSeconds[q]);
+      if (at <= clock_) latest = std::max(latest, at);
+    }
+    market.bottle_flash[n] = flash(latest);
+  }
+  market.breathe = square.current;
+  market.pulse = false;
+  if (pulse_ >= 0 && pulse_world_ == 2 && clock_ < pulse_until_) {
+    market.breathe = pulse_;
+    market.pulse = true;
+  }
+  market.bell = clock_ - bell_at_;
+  market.awake = !square.open ? 0.0f : wake_at_[0] > 0.0f ? Clamp01((clock_ - wake_at_[0]) / 1.6f) : 1.0f;
+}
+
+bool MapScreen::LampLockedShown(int lamp) const {
+  auto shown = [&](int j) { return lamp_at_[0][static_cast<size_t>(j)][0] <= clock_; };
+  if (shown(lamp)) return false;
+  if (lamp < city::kDistrictLamps - city::kLobes) return lamp > 0 && !shown(lamp - 1);
+  return !shown(city::kDistrictLamps - city::kLobes - 1);
+}
+
+const StarMap& MapScreen::Stars() const { return dev_stars_ ? *dev_stars_ : app_.GetProgress().Stars(); }
+
+const Level* MapScreen::CurrentLevel() const {
+  if (!dev_stars_) return app_.GetProgress().Current(app_.GetCatalog());
+  // As Progress::Current, from tl.stars: the first unsolved level on an open world's main path.
+  const Level* last = nullptr;
+  for (const city::WorldLevels& w : levels_) {
+    if (!city::GateOpen(levels_, *dev_stars_, w.world)) break;
+    for (const std::string& id : w.main) {
+      last = app_.GetCatalog().Find(id);
+      const auto it = dev_stars_->find(id);
+      if (it == dev_stars_->end() || !(it->second & kSolveStar)) return last;
+    }
+  }
+  return last;
 }
 
 // ---- Input ----

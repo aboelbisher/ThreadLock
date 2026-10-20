@@ -55,6 +55,7 @@ wlw::app::AppConfig ThreadlockApp::MakeConfig() {
 
 void ThreadlockApp::OnStart() {
   font_ = wlw::ui::Font::Load("fonts/LilitaOne-Regular.ttf");
+  hand_ = wlw::ui::Font::Load("fonts/Caveat-Bold.ttf");
   progress_ = std::make_unique<Progress>(wlw::platform::GetSaveDirectory("Threadlock"));
   progress_->Load();
   if (!catalog_.Load()) WLW_LOG_ERROR("Some levels didn't load");
@@ -62,7 +63,7 @@ void ThreadlockApp::OnStart() {
   ApplySettings();
   liquid_.Create(App());
   lantern_art_.Create(App());
-  apothecary_art_.Create(App());
+  apothecary_art_.Create(App(), hand_);
   city_art_.Create(App());
   action_material_ =
       wlw::rendering::ShaderMaterial::Create(wlw::rendering::Shader::FromFile("shaders/ui_gradient.shader"));

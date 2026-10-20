@@ -22,7 +22,7 @@
 namespace threadlock::city {
 
 inline constexpr float kWidth = 390.0f;
-inline constexpr float kHeight = 5400.0f;
+inline constexpr float kHeight = 5684.0f;
 inline constexpr float kMockView = 844.0f;  // the view height the scroll targets were tuned on
 
 inline constexpr int kPetals = 15;  // World 1's main path
@@ -95,7 +95,9 @@ const std::array<District, kDistricts>& Districts();
 int DistrictAt(float y);  // the world whose stretch holds map y
 
 // Worlds 2-4 asleep in mist: their levels as lamps, 15 on a winding path then 3 challenge diamonds.
-// Until each world gets its own art they stay playable: an open district's lamps are buttons.
+// Until each world gets its own art they stay playable: an open district's lamps are buttons. World 2's
+// lamps stand in three rows of five across the market square (the second right to left), then the
+// challenges' diamonds, right to left.
 std::array<Vec2, kDistrictLamps> DistrictLamps(int world);
 inline constexpr float kLampHit = 30.0f;
 int HitLamp(int world, Vec2 at);  // the lamp a tap picks, -1 if none
@@ -105,12 +107,45 @@ struct Cubic {
   Vec2 At(float t) const;
   std::vector<Vec2> Points(int samples) const;  // samples + 1
 };
-Cubic GatePipe(int world);  // the valve down to the district's first lamp
-Cubic LinkPipe(int world);  // the district before it (its last lamp) down to this one's valve; world >= 3
+// The valve down to the district's first lamp (World 2: a short stub into its name plate).
+Cubic GatePipe(int world);
+// The district before it down to this one's valve (its last lamp; World 2's fountain); world >= 3.
+Cubic LinkPipe(int world);
 // The tower's pipe, from under the lantern path down to World 2's valve: it fills with stars toward the gate.
 inline constexpr Vec2 kTowerPipeTop{195.0f, 2050.0f};
 inline constexpr Vec2 kTowerPipeBottom{195.0f, 2392.0f};
 float PipeFill(int stars, int gate);  // 0..1
+
+// ---- The market square (World 2's district; the approved mock MarketSquare.dc.html, map y = mock y + 2262) ----
+// Under the plate, the apothecary's shop front: its window is World 2's progress picture, one bottle per
+// level on three shelves (a solve fills it in the level's colours, Lean corks it, Swift labels it, all
+// three seal it in gold foil), three show globes in the fanlight for the challenges, the door bell on its
+// bracket. Then the cobbled square with its stalls, the lamps, and the fountain the next pipe leaves from.
+struct Box {
+  float x0 = 0.0f, y0 = 0.0f, x1 = 0.0f, y1 = 0.0f;
+};
+inline constexpr Box kShopFront{20.0f, 2518.0f, 370.0f, 2962.0f};  // cornice to step
+inline constexpr Box kShopSign{72.0f, 2542.0f, 318.0f, 2580.0f};
+inline constexpr Box kShopWindow{60.0f, 2666.0f, 330.0f, 2938.0f};
+inline constexpr float kFanlightTop = 2590.0f;  // the arch over the window: a half ellipse 135 x 52 from y 2642
+inline constexpr float kShelves[3] = {2752.0f, 2842.0f, 2930.0f};
+inline constexpr Vec2 kBellPivot{350.0f, 2600.0f};
+inline constexpr Vec2 kFountain{195.0f, 3580.0f};  // the basin's middle
+inline constexpr float kMarketBottom = 3622.0f;    // the square's last cobbles
+Vec2 BottleSpot(int level);  // level 0..14: the bottle's bottom middle on its shelf
+Vec2 GlobeSpot(int challenge);
+// The scroll that shows the shop window (or its fanlight's globes) with the square's first lamps.
+float ShopScroll(float view, bool globes);
+// The door bell's swing `seconds` after it rang, degrees (0 once it has settled).
+float BellSwing(float seconds);
+
+// The dotted trail between World 2's lamps, one piece per pair (lit once the lamp it leaves from is):
+// along each row, round the ends, 2-15 down to C1, C1 -> C2 -> C3.
+struct LampTrail {
+  int from = 0;
+  Cubic curve;
+};
+const std::vector<LampTrail>& MarketTrail();
 
 // ---- The view ----
 // Scroll (map y at the top of a view `view` tall) that shows lantern i, the window, or the gate of a world.

@@ -28,7 +28,8 @@ namespace threadlock {
 
 class ApothecaryArt : public BoardArt {
  public:
-  void Create(wlw::app::Application& app);
+  // `hand` = the handwriting font for the slips (the app loads it: the map's bottle labels share it).
+  void Create(wlw::app::Application& app, std::shared_ptr<wlw::ui::Font> hand);
 
   void Invalidate() override;
   void Release() override;

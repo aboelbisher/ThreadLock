@@ -97,6 +97,10 @@ std::array<Light, N> WorldLights(const MapLevels& levels, const StarMap& stars, 
 // A pipe drops straight down out of its top end and straight into its bottom end.
 Cubic DownPipe(Vec2 from, Vec2 to) { return {from, {from.x, from.y + 110.0f}, {to.x, to.y - 120.0f}, to}; }
 
+Cubic Straight(Vec2 from, Vec2 to) {
+  return {from, Add(from, Scale(Sub(to, from), 1.0f / 3.0f)), Add(from, Scale(Sub(to, from), 2.0f / 3.0f)), to};
+}
+
 }  // namespace
 
 // ---- The rose window ----
@@ -226,9 +230,9 @@ std::vector<Vec2> TrailPoints(int piece, int samples) {
 const std::array<District, kDistricts>& Districts() {
   static const std::array<District, kDistricts> districts = {{
       {1, 0.0f, 2500.0f, "THE LANTERN WORKS", 0.0f, 262.0f, 0.0f, 0.0f, 0.0f},
-      {2, 2500.0f, 3480.0f, "THE MARKET SQUARE", 2412.0f, 2605.0f, 2700.0f, 3360.0f, 0.3f},
-      {3, 3480.0f, 4440.0f, "THE CANAL QUARTER", 3440.0f, 3590.0f, 3690.0f, 4330.0f, 1.4f},
-      {4, 4440.0f, kHeight, "THE SANCTUM", 4410.0f, 4560.0f, 4670.0f, 5320.0f, 2.6f},
+      {2, 2500.0f, 3764.0f, "THE MARKET SQUARE", 2412.0f, 2452.0f, 3062.0f, 3442.0f, 0.0f},
+      {3, 3764.0f, 4724.0f, "THE CANAL QUARTER", 3724.0f, 3874.0f, 3974.0f, 4614.0f, 1.4f},
+      {4, 4724.0f, kHeight, "THE SANCTUM", 4694.0f, 4844.0f, 4954.0f, 5604.0f, 2.6f},
   }};
   return districts;
 }
@@ -243,6 +247,15 @@ int DistrictAt(float y) {
 std::array<Vec2, kDistrictLamps> DistrictLamps(int world) {
   std::array<Vec2, kDistrictLamps> lamps{};
   if (world < 2 || world > kDistricts) return lamps;
+  if (world == 2) {
+    constexpr float kRows[3] = {3062.0f, 3192.0f, 3322.0f}, kColumns[5] = {60.0f, 128.0f, 195.0f, 262.0f, 330.0f};
+    for (int j = 0; j < 15; ++j) {
+      const int row = j / 5, column = j % 5;
+      lamps[j] = {kColumns[row == 1 ? 4 - column : column], kRows[row]};
+    }
+    for (int k = 0; k < kLobes; ++k) lamps[15 + k] = {kColumns[3 - k], 3442.0f};
+    return lamps;
+  }
   const District& d = Districts()[world - 1];
   for (int j = 0; j < kDistrictLamps; ++j) {
     const float f = static_cast<float>(j);
@@ -280,19 +293,70 @@ std::vector<Vec2> Cubic::Points(int samples) const {
 
 Cubic GatePipe(int world) {
   if (world < 2 || world > kDistricts) return {};
+  const District& d = Districts()[world - 1];
+  if (world == 2) return Straight({195.0f, d.valve + 22.0f}, {195.0f, d.plate - 4.0f});
   const Vec2 lamp = DistrictLamps(world)[0];
-  return DownPipe({195.0f, Districts()[world - 1].valve + 22.0f}, {lamp.x, lamp.y - 10.0f});
+  return DownPipe({195.0f, d.valve + 22.0f}, {lamp.x, lamp.y - 10.0f});
 }
 
 Cubic LinkPipe(int world) {
   if (world < 3 || world > kDistricts) return {};
+  const Vec2 to{195.0f, Districts()[world - 1].valve - 22.0f};
+  if (world == 3) return Straight({kFountain.x, kFountain.y + 18.0f}, to);
   const Vec2 lamp = DistrictLamps(world - 1)[kDistrictLamps - 1];
-  return DownPipe({lamp.x, lamp.y + 10.0f}, {195.0f, Districts()[world - 1].valve - 22.0f});
+  return DownPipe({lamp.x, lamp.y + 10.0f}, to);
 }
 
 float PipeFill(int stars, int gate) {
   if (gate <= 0) return 1.0f;
   return static_cast<float>(std::clamp(stars, 0, gate)) / static_cast<float>(gate);
+}
+
+// ---- The market square ----
+
+Vec2 BottleSpot(int level) {
+  level = std::clamp(level, 0, 14);
+  return {87.0f + 54.0f * static_cast<float>(level % 5), kShelves[level / 5]};
+}
+
+Vec2 GlobeSpot(int challenge) {
+  constexpr Vec2 kGlobes[kLobes] = {{118.0f, 2634.0f}, {195.0f, 2622.0f}, {272.0f, 2634.0f}};
+  return kGlobes[std::clamp(challenge, 0, kLobes - 1)];
+}
+
+float ShopScroll(float view, bool globes) {
+  // The mock's view (844 tall) stood at 2522 for the window, 2462 for the globes.
+  return ClampScroll((globes ? 2628.0f : 2740.0f) - view * ((globes ? 166.0f : 218.0f) / kMockView), view);
+}
+
+float BellSwing(float seconds) {
+  if (seconds < 0.0f || seconds > 2.4f) return 0.0f;
+  return 24.0f * std::exp(-seconds / 0.65f) * std::sin(seconds / 0.085f);
+}
+
+const std::vector<LampTrail>& MarketTrail() {
+  static const std::vector<LampTrail> trail = [] {
+    const auto lamps = DistrictLamps(2);
+    std::vector<LampTrail> out;
+    for (int j = 0; j + 1 < 15; ++j) {
+      const Vec2 a = lamps[j], b = lamps[j + 1];
+      if (a.y == b.y) {  // along a row, from ring to ring
+        const float dir = b.x > a.x ? 1.0f : -1.0f;
+        out.push_back({j, Straight({a.x + 26.0f * dir, a.y}, {b.x - 26.0f * dir, b.y})});
+      } else {  // round the row's end, bulging outwards
+        const float out_x = a.x > 195.0f ? 44.0f : -44.0f;
+        out.push_back({j,
+                       {{a.x, a.y + 22.0f}, {a.x + out_x, a.y + 40.0f}, {b.x + out_x, b.y - 40.0f}, {b.x, b.y - 22.0f}}});
+      }
+    }
+    out.push_back({14, {{330.0f, 3344.0f}, {330.0f, 3402.0f}, {300.0f, 3422.0f}, {288.0f, 3434.0f}}});
+    for (int k = 0; k + 1 < kLobes; ++k) {
+      const Vec2 a = lamps[15 + k], b = lamps[16 + k];
+      out.push_back({15 + k, Straight({a.x - 28.0f, a.y}, {b.x + 28.0f, b.y})});
+    }
+    return out;
+  }();
+  return trail;
 }
 
 // ---- The view ----

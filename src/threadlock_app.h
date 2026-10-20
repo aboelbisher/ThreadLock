@@ -60,6 +60,7 @@ class ThreadlockApp : public wlw::app::System {
   // How a world's boards are drawn (world 0 = the daily and the Lab).
   BoardArt& ArtFor(int world);
   const wlw::ui::Font& GetFont() const { return *font_; }
+  const wlw::ui::Font& GetHand() const { return *hand_; }  // handwriting (Caveat Bold): slips, bottle labels
   const Palette& GetPalette() const { return PaletteByKey(progress_->settings.palette); }
   wlw::app::Application& Services() { return App(); }
   float Time() const { return time_; }
@@ -106,7 +107,7 @@ class ThreadlockApp : public wlw::app::System {
   ApothecaryArt apothecary_art_;
   CityArt city_art_;
   std::shared_ptr<wlw::rendering::ShaderMaterial> action_material_;
-  std::shared_ptr<wlw::ui::Font> font_;
+  std::shared_ptr<wlw::ui::Font> font_, hand_;
   std::unique_ptr<wlw::kit::Ads> ads_;
   wlw::kit::AdPacing pacing_;
   std::deque<Level> kept_;  // generated levels (a deque: pointers stay valid as it grows)

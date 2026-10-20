@@ -344,9 +344,9 @@ void BottleOver(Canvas& canvas, const ArtFrame& frame, Vec2 mouth, float scale, 
 
 }  // namespace
 
-void ApothecaryArt::Create(wlw::app::Application& app) {
+void ApothecaryArt::Create(wlw::app::Application& app, std::shared_ptr<wlw::ui::Font> hand) {
   wall_shader_ = wlw::rendering::Shader::FromFile("shaders/apothecary_wall.shader");
-  hand_ = wlw::ui::Font::Load("fonts/Caveat-Bold.ttf");
+  hand_ = std::move(hand);
   tiles_.Create(app.Window(), "Apothecary", Hex(0x1A120C));
   AddTile();  // every board needs one: made up front, so the shader compiles in the warm-up
 }

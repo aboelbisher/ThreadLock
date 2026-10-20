@@ -681,6 +681,19 @@ std::vector<float> Make(Sound sound, uint32_t rate) {
       Normalize(out.samples, 0.85f);
       return out.samples;
     }
+    case Sound::CorkPop: {  // the moment's cork alone, with a hollow knock of the glass under it
+      Buffer out(rate, 0.35f);
+      Cork(out, 0.0f, 1.0f);
+      Knock(out, 0.01f, 520.0f, 0.25f);
+      Normalize(out.samples, 0.6f);
+      return out.samples;
+    }
+    case Sound::ShopBell: {  // the door bell alone, left to ring out
+      Buffer out(rate, 3.4f);
+      ShopBell(out, kC6, 0.0f, 1.0f);
+      Normalize(out.samples, 0.7f);
+      return out.samples;
+    }
     case Sound::Tap:
     case Sound::Count: {
       Buffer out(rate, 0.06f);
@@ -728,7 +741,7 @@ const char* SoundName(Sound sound) {
       "HarmonicaNote", "CelestaNote", "LanternBlue",  "LanternAmber", "PaneChime",   "Heart",     "RoseWindow",
       "Smoke",         "Drip",        "CruciblePour", "Ascent",       "MarimbaNote", "PizzNote",  "PaidBlue",
       "PaidAmber",     "Sludge",      "JarTap",       "SpillWood",    "ShortDull",   "RackClack", "Till",
-      "MarketDay"};
+      "MarketDay",     "CorkPop",     "ShopBell"};
   static_assert(std::size(kNames) == static_cast<size_t>(Sound::Count));
   return sound < Sound::Count ? kNames[static_cast<size_t>(sound)] : "?";
 }

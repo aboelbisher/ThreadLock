@@ -70,6 +70,9 @@ enum class Sound : uint8_t {
   RackClack,    // the lazy susan turns: a soft wooden clack
   Till,         // solved: a marimba run, the till's bell, coins
   MarketDay,    // 2-15 solved: longer, marimba and pizzicato runs, the shop's bells
+  // The city map's market square.
+  CorkPop,   // a bottle in the shop window corked (Lean)
+  ShopBell,  // the shop's door bell: a level's bottle done, the shop waking
   Count,
 };
 

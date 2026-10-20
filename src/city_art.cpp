@@ -1,9 +1,11 @@
 #include "city_art.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <string>
 
 #include "ui_parts.h"
 #include "wlw/rendering/shader.h"
@@ -19,6 +21,8 @@ using wlw::ui::Canvas;
 using wlw::ui::Rect;
 
 constexpr float kLow = 1400.0f;  // everything under the tower stands this much lower than in the first mock
+constexpr float kShop = 284.0f;  // World 2's shop front made the map this much taller (3f)
+constexpr float kDeep = kLow + kShop;  // the canal quarter and the sanctum: under the market
 constexpr int kTilePool = 3;
 constexpr float kText = 1.15f;  // the mock's CSS font sizes -> canvas line heights
 
@@ -49,6 +53,16 @@ constexpr Rgba kLeanLight = Hex(0xFFD27A);
 constexpr Rgba kSwiftLight = Hex(0x8FE3FF);
 constexpr Rgba kPipeIron = Hex(0x1C2638);
 constexpr Rgba kPipeShine = Hex(0x33415C);
+// The market square (World 2): wood, copper and the shop's light.
+constexpr Rgba kWood = Hex(0x2A1D13);
+constexpr Rgba kPlank = Hex(0x3D2C1F);
+constexpr Rgba kPlankLine = Hex(0x33241A);
+constexpr Rgba kCopper = Hex(0xC86E3A);
+constexpr Rgba kCopperDark = Hex(0x8A4A26);
+constexpr Rgba kShelf = Hex(0x8A6038);
+constexpr Rgba kParchment = Hex(0xF3E8CC);
+constexpr Rgba kAmberLit = Hex(0xFFB45C);
+constexpr Rgba kShopBrass = Hex(0xC9974E);
 
 uint64_t Mix(uint64_t h, uint64_t v) {
   h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
@@ -141,21 +155,36 @@ void Dots(Canvas& c, const std::vector<glm::vec2>& points, float spacing, float 
   }
 }
 
-// A convex polygon cut to the slab x0 <= x <= x1 (Sutherland-Hodgman, two planes).
-std::vector<glm::vec2> ClipSlab(const std::vector<glm::vec2>& polygon, float x0, float x1) {
-  auto clip = [](const std::vector<glm::vec2>& in, float edge, bool keep_above) {
+// A convex polygon cut to the slab x0 <= x <= x1 (Sutherland-Hodgman, two planes); axis 1 = a slab in y.
+std::vector<glm::vec2> ClipSlab(const std::vector<glm::vec2>& polygon, float x0, float x1, int axis = 0) {
+  auto clip = [axis](const std::vector<glm::vec2>& in, float edge, bool keep_above) {
     std::vector<glm::vec2> out;
     for (size_t i = 0; i < in.size(); ++i) {
       const glm::vec2 a = in[i], b = in[(i + 1) % in.size()];
-      const bool a_in = keep_above ? a.x >= edge : a.x <= edge;
-      const bool b_in = keep_above ? b.x >= edge : b.x <= edge;
+      const bool a_in = keep_above ? a[axis] >= edge : a[axis] <= edge;
+      const bool b_in = keep_above ? b[axis] >= edge : b[axis] <= edge;
       if (a_in) out.push_back(a);
-      if (a_in != b_in) out.push_back(a + (b - a) * ((edge - a.x) / (b.x - a.x)));
+      if (a_in != b_in) out.push_back(a + (b - a) * ((edge - a[axis]) / (b[axis] - a[axis])));
     }
     return out;
   };
   return clip(clip(polygon, x0, true), x1, false);
 }
+
+// A quadratic Bezier's points after `from` (steps of them, ending at `to`).
+void Quad(std::vector<glm::vec2>& out, glm::vec2 from, glm::vec2 control, glm::vec2 to, int steps = 4) {
+  for (int k = 1; k <= steps; ++k) {
+    const float t = static_cast<float>(k) / static_cast<float>(steps), u = 1.0f - t;
+    out.push_back(from * (u * u) + control * (2.0f * u * t) + to * (t * t));
+  }
+}
+
+std::string Upper(std::string text) {
+  for (char& ch : text) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+  return text;
+}
+
+float Ease(float k) { return k < 0.5f ? 2.0f * k * k : 1.0f - (2.0f - 2.0f * k) * (2.0f - 2.0f * k) / 2.0f; }
 
 std::vector<glm::vec2> CirclePoints(glm::vec2 c, float r, int n = 28) {
   std::vector<glm::vec2> points;
@@ -196,11 +225,11 @@ void CityArt::Release() { tiles_.Shrink(0); }
 
 void CityArt::Build() {
   built_ = true;
-  // Rooftops round the tower's foot, then the market square's and the canal quarter's houses, in the
-  // order the mock drew them (they share one sequence of random numbers).
+  // Rooftops round the tower's foot, then the canal quarter's houses, in the order the mock drew them
+  // (they share one sequence of random numbers: the market square's old houses still draw theirs, unkept).
   Rng r(11);
   auto houses = [&](float yb, float x0, float x1, float w_min, float w_span, float h_min, float h_span, Rgba fill,
-                    Rgba stroke, float width) {
+                    Rgba stroke, float width, bool keep = true) {
     float x = x0;
     while (x < x1) {
       const float w = w_min + r() * w_span;
@@ -213,16 +242,16 @@ void CityArt::Build() {
       shape.width = width;
       shape.top = yb - h - g;
       shape.bottom = yb;
-      shapes_.push_back(std::move(shape));
+      if (keep) shapes_.push_back(std::move(shape));
       x += w + 2.0f + r() * 6.0f;
     }
   };
   houses(930 + kLow, -12, 140, 34, 22, 40, 50, Hex(0x0F1624), Hex(0x26324A), 1.5f);
   houses(930 + kLow, 252, 400, 34, 22, 40, 50, Hex(0x0F1624), Hex(0x26324A), 1.5f);
   for (float yb : {1420.0f, 1640.0f, 1860.0f, 2060.0f})
-    houses(yb + kLow, -10, 400, 38, 26, 34, 40, Hex(0x0D1524), Hex(0x22314A), 1.2f);
+    houses(yb + kLow, -10, 400, 38, 26, 34, 40, Hex(0x0D1524), Hex(0x22314A), 1.2f, false);
   for (float yb : {2398.0f, 2728.0f, 3000.0f})
-    houses(yb + kLow, -10, 400, 24, 12, 50, 50, Hex(0x0D1422), Hex(0x22314A), 1.2f);
+    houses(yb + kDeep, -10, 400, 24, 12, 50, 50, Hex(0x0D1422), Hex(0x22314A), 1.2f);
 
   Rng stars(5);
   for (int k = 0; k < 30; ++k) {
@@ -234,8 +263,9 @@ void CityArt::Build() {
     sky_stars_.push_back(dot);
   }
 
-  for (int w = 2; w <= city::kDistricts; ++w) {
-    // The dotted path through a district's first 15 lamps: the same smooth curve as the lantern path.
+  for (int w = 3; w <= city::kDistricts; ++w) {
+    // The dotted path through a sleeping district's first 15 lamps: the same smooth curve as the lantern path
+    // (World 2's market has its own trail, city::MarketTrail).
     const auto lamps = city::DistrictLamps(w);
     std::vector<Vec2>& path = lamp_paths_[static_cast<size_t>(w - 1)];
     for (int j = 0; j + 1 < 15; ++j) {
@@ -292,6 +322,7 @@ void CityArt::Draw(Canvas& picture, Canvas& canvas, const CityFrame& frame, floa
 
   const Xf x{s, frame.scroll};
   DrawLights(picture, x, frame);
+  DrawMarket(picture, canvas, x, frame);
   DrawMist(picture, x, frame);
   DrawDistricts(picture, canvas, x, frame);
   DrawWindow(picture, x, frame);
@@ -402,9 +433,9 @@ void CityArt::DrawTower(Canvas& c, const Xf& x, float top, float bottom) {
 void CityArt::DrawTown(Canvas& c, const Xf& x, float top, float bottom) {
   const float s = x.s;
   // The districts' ground.
-  c.FillRect({x(0, 1100 + kLow), x(kWidth, 2080 + kLow)}, Hex(0x0B111D));
-  c.FillRect({x(0, 2080 + kLow), x(kWidth, 3040 + kLow)}, Hex(0x09101A));
-  c.FillRect({x(0, 3040 + kLow), x(kWidth, 4000 + kLow)}, Hex(0x0A0810));
+  DrawMarketStill(c, x, top, bottom);
+  c.FillRect({x(0, 2080 + kDeep), x(kWidth, 3040 + kDeep)}, Hex(0x09101A));
+  c.FillRect({x(0, 3040 + kDeep), x(kWidth, 4000 + kDeep)}, Hex(0x0A0810));
   // The square under the tower, cobbled.
   if (top < 1060 + kLow && bottom > 930 + kLow) {
     c.FillRect({x(0, 930 + kLow), x(kWidth, 1060 + kLow)}, Hex(0x0D1320));
@@ -413,7 +444,7 @@ void CityArt::DrawTown(Canvas& c, const Xf& x, float top, float bottom) {
   }
   // The canals and their bridges.
   for (float wy : {2400.0f, 2730.0f}) {
-    const float y = wy + kLow;
+    const float y = wy + kDeep;
     if (top > y + 80.0f || bottom < y - 10.0f) continue;
     const Rgba water = Hex(0x0A1C2A);
     c.FillRect({x(0, y), x(kWidth, y + 70)}, water);
@@ -438,8 +469,8 @@ void CityArt::DrawTown(Canvas& c, const Xf& x, float top, float bottom) {
     Outline(c, points, shape.width * s, shape.stroke);
   }
   // The sanctum, deep under the city: strata, a domed hall with its columns and spire.
-  if (bottom > 3070 + kLow) {
-    for (float y = 3070.0f + kLow; y < 4000.0f + kLow; y += 34.0f) {
+  if (bottom > 3070 + kDeep) {
+    for (float y = 3070.0f + kDeep; y < 4000.0f + kDeep; y += 34.0f) {
       if (y < top - 10.0f || y > bottom + 10.0f) continue;
       std::vector<glm::vec2> wave;
       for (int i = 0; i <= 20; ++i) {
@@ -448,7 +479,7 @@ void CityArt::DrawTown(Canvas& c, const Xf& x, float top, float bottom) {
       }
       art::Polyline(c, wave, 1.2f * s, Hex(0x16121F));
     }
-    const float yb = 3640.0f + kLow;
+    const float yb = 3640.0f + kDeep;
     const Rgba fill = Hex(0x120E1C), edge = Hex(0x2E2846);
     if (top < yb + 40.0f && bottom > yb - 250.0f) {
       c.Circle(x(195, yb - 70), 126.6f * s, edge);
@@ -524,12 +555,12 @@ void CityArt::DrawLights(Canvas& p, const Xf& x, const CityFrame& frame) {
       p.FillRect({x(w.x, w.y + kLow), x(w.x + 6, w.y + 8 + kLow)}, Hex(0xFFCF7A, k < on ? 0.85f : 0.08f));
     }
   }
-  if (visible(3300.0f + kLow, 3900.0f + kLow)) {
+  if (visible(3300.0f + kDeep, 3900.0f + kDeep)) {
     static constexpr Vec2 kCandles[] = {{60, 3500}, {330, 3480}, {120, 3720}, {270, 3740},
                                         {40, 3860}, {350, 3880}, {195, 3780}, {150, 3330}};
     for (int k = 0; k < 8; ++k) {
       const float f = frame.calm ? 0.75f : 0.75f + 0.25f * std::sin(t * 2.0f + static_cast<float>(k) * 1.7f);
-      p.Circle(x(kCandles[k].x, kCandles[k].y + kLow), 2.2f * s, Hex(0xE6CC88, 0.5f * f));
+      p.Circle(x(kCandles[k].x, kCandles[k].y + kDeep), 2.2f * s, Hex(0xE6CC88, 0.5f * f));
     }
   }
   // Light rising down the tower's pipe toward World 2's gate.
@@ -544,13 +575,15 @@ void CityArt::DrawLights(Canvas& p, const Xf& x, const CityFrame& frame) {
 }
 
 void CityArt::DrawMist(Canvas& p, const Xf& x, const CityFrame& frame) {
-  static constexpr float kBands[3][3] = {{1060, 1150, 1200}, {2010, 2110, 2150}, {2980, 3060, 3110}};
+  static constexpr float kBands[3][3] = {{1060, 1150, 1200}, {2010 + kShop, 2110 + kShop, 2150 + kShop},
+                                         {2980 + kShop, 3060 + kShop, 3110 + kShop}};
   const float view_bottom = frame.scroll + frame.ViewHeight();
   for (int m = 0; m < 3; ++m) {
     const float y = kBands[m][0] + kLow;
     if (y > view_bottom + 20.0f || y + 220.0f < frame.scroll - 20.0f) continue;
-    // Thinner over a district that has woken.
-    const float thick = frame.districts[static_cast<size_t>(m)].open ? 0.45f : 1.0f;
+    // Thinner over a district that has woken; the market's lifts as its shop wakes.
+    const float thick = m == 0 ? 1.0f - frame.market.awake : frame.districts[static_cast<size_t>(m)].open ? 0.45f : 1.0f;
+    if (thick <= 0.0f) continue;
     for (int k = 0; k < 22; ++k) {
       const float f = (static_cast<float>(k) + 0.5f) / 22.0f;
       const float a = 0.8f * (1.0f - std::fabs(f * 2.0f - 1.0f));
@@ -583,9 +616,9 @@ void CityArt::DrawDistricts(Canvas& p, Canvas& c, const Xf& x, const CityFrame& 
       art::Stroke(p, part, 0.0f, 5.0f * s, kLight);
       if (df.pour >= 1.0f) Dots(p, points, 15.0f * s, (frame.calm ? 0.0f : t * 33.0f) * s, 1.5f * s, kBead);
     }
-    // The lamps: asleep (dark), open (a ring and its number), lit (its level solved).
+    // The lamps: asleep (dark), open (a ring and its number), lit (its level solved). The market draws its own.
     const auto lamps = city::DistrictLamps(w);
-    for (int j = 0; j < city::kDistrictLamps; ++j) {
+    for (int j = 0; w != 2 && j < city::kDistrictLamps; ++j) {
       const city::Light& light = df.lamps[static_cast<size_t>(j)];
       const bool challenge = j >= 15;
       const glm::vec2 at = x(lamps[static_cast<size_t>(j)]);
@@ -641,6 +674,12 @@ void CityArt::DrawDistricts(Canvas& p, Canvas& c, const Xf& x, const CityFrame& 
     }
     // The district's name plate.
     const float py = d.plate;
+    if (w == 2) {  // the market's: wood and copper, the place's name large
+      RoundRect(c, {x(70, py), x(320, py + 50)}, 6.0f * s, kWood, kCopper, 1.5f * s);
+      Title(c, font, "2", Upper(df.name), x(195, py + 16), 11.0f * kText * s, kAmberLit);
+      c.Text(font, d.place, x(195, py + 35), 15.0f * kText * s, Align::Center, {.color = kParchment});
+      continue;
+    }
     RoundRect(c, {x(92, py), x(298, py + 54)}, 9.0f * s, Hex(0x0B111C), kBrassDim, 1.5f * s);
     Title(c, font, std::to_string(w), df.name, x(195, py + 18), 18.0f * kText * s, Hex(0xC9B48A));
     c.Text(font, d.place, x(195, py + 39), 12.5f * kText * s, Align::Center, {.color = Hex(0x7C8AA3)});
@@ -785,6 +824,314 @@ void CityArt::DrawLanterns(Canvas& p, Canvas& c, const Xf& x, const CityFrame& f
     const glm::vec2 at = x(l.at);
     const std::vector<glm::vec2> ring = l.diamond ? DiamondPoints(at, l.ring * s) : CirclePoints(at, l.ring * s, 36);
     Outline(p, ring, 3.5f * s, WithAlpha(kBrassLit, o));
+  }
+}
+
+// ---- The market square (World 2) ----
+
+void CityArt::DrawMarketStill(Canvas& c, const Xf& x, float top, float bottom) {
+  const float s = x.s;
+  constexpr float kGround = 2460.0f, kWarmest = 2794.0f, kEnd = 3764.0f;  // the market's ground, map y
+  if (bottom < kGround || top > kEnd) return;
+  // The ground: the night's blue under the gate warming to the shop's brown, darker again down the square.
+  constexpr float kStrip = 6.0f;
+  for (float y = kGround + std::max(0.0f, std::floor((top - kGround) / kStrip)) * kStrip; y < std::min(kEnd, bottom);
+       y += kStrip) {
+    const float mid = y + kStrip * 0.5f;
+    const Rgba ground = mid < kWarmest ? Mixed(Hex(0x0C121E), Hex(0x2A1C14), (mid - kGround) / (kWarmest - kGround))
+                                       : Mixed(Hex(0x2A1C14), Hex(0x1A120C), (mid - kWarmest) / (kEnd - kWarmest));
+    // Past the fountain it fades into the canal quarter's night.
+    const float night = Clamp01((mid - city::kMarketBottom) / (kEnd - city::kMarketBottom));
+    c.FillRect({x(0, y), x(kWidth, std::min(y + kStrip + 0.5f, kEnd))}, Mixed(ground, Hex(0x09101A), Smooth(night)));
+  }
+  // The cobbles, each row offset by half a stone.
+  int row = 0;
+  for (float y = 2974.0f; y < city::kMarketBottom; y += 15.0f, ++row) {
+    if (y < top - 2.0f || y > bottom + 2.0f) continue;
+    for (float sx = static_cast<float>(row % 2) * 13.0f - 13.0f; sx < kWidth; sx += 26.0f)
+      c.Line(x(sx + 2, y), x(sx + 22, y), 1.0f * s, kWood);
+  }
+  // Three stalls at the square's edges under striped awnings.
+  struct Stall {
+    float x, y;
+  };
+  for (const Stall st : {Stall{-4, 3002}, Stall{354, 3132}, Stall{-4, 3262}}) {
+    if (st.y + 40.0f < top || st.y - 20.0f > bottom) continue;
+    RoundRect(c, {x(st.x, st.y), x(st.x + 40, st.y + 32)}, 0.0f, kPlank, kWood, 1.0f * s);
+    const float ay = st.y - 16.0f;
+    for (int i = 0; i < 5; ++i) {
+      const float x0 = st.x + 9.0f * static_cast<float>(i);
+      std::vector<glm::vec2> scallop{x(x0, ay), x(x0 + 9, ay), x(x0 + 9, ay + 16)};
+      Quad(scallop, x(x0 + 9, ay + 16), x(x0 + 4.5f, ay + 21), x(x0, ay + 16));
+      FillShape(c, scallop, i % 2 ? WithAlpha(kParchment, 0.75f) : WithAlpha(kCopper, 0.85f));
+    }
+  }
+  // The fountain's basin (its water and jets light each frame).
+  if (top < 3600.0f && bottom > 3560.0f) {
+    art::FilledEllipse(c, x(city::kFountain), glm::vec2(63.0f, 17.0f) * s, kShelf);
+    art::FilledEllipse(c, x(city::kFountain), glm::vec2(61.0f, 15.0f) * s, kWood);
+  }
+  // The shop front: cornice, planked wall between pilasters, the sign board, the bell's bracket, the sill and
+  // step (the window, its fanlight and what's in them are drawn each frame).
+  const city::Box& front = city::kShopFront;
+  if (top > front.y1 || bottom < front.y0) return;
+  RoundRect(c, {x(front.x0, front.y0), x(front.x1, front.y0 + 16)}, 0.0f, kWood, kCopper, 1.2f * s);
+  c.FillRect({x(28, front.y0 + 16), x(362, 2952)}, kPlank);
+  for (float px = 64.0f; px < 338.0f; px += 22.0f) c.Line(x(px, 2582), x(px, 2952), 1.0f * s, kPlankLine);
+  RoundRect(c, {x(28, front.y0 + 16), x(52, 2952)}, 0.0f, kPlankLine, kWood, 1.0f * s);
+  RoundRect(c, {x(338, front.y0 + 16), x(362, 2952)}, 0.0f, kPlankLine, kWood, 1.0f * s);
+  const city::Box& sign = city::kShopSign;
+  RoundRect(c, {x(sign.x0, sign.y0), x(sign.x1, sign.y1)}, 4.0f * s, Hex(0x2B1E14), kCopper, 2.0f * s);
+  std::vector<glm::vec2> bracket;
+  for (Vec2 q : city::Cubic{{362, 2588}, {372, 2588}, {376, 2596}, {368, 2600}}.Points(8)) bracket.push_back(x(q));
+  bracket.push_back(x(352, 2600));
+  art::Polyline(c, bracket, 2.5f * s, kCopper);
+  c.FillRect({x(40, 2938), x(350, 2952)}, kShelf);
+  c.FillRect({x(32, 2952), x(358, front.y1)}, kWood);
+}
+
+void CityArt::DrawMarket(Canvas& p, Canvas& c, const Xf& x, const CityFrame& frame) {
+  const float s = x.s, t = frame.time, view_bottom = frame.scroll + frame.ViewHeight();
+  const city::District& d = city::Districts()[1];
+  if (frame.scroll > city::kMarketBottom + 80.0f || view_bottom < d.plate) return;
+  const CityFrame::Market& m = frame.market;
+  const Palette& palette = *frame.palette;
+  auto visible = [&](float y0, float y1) { return y1 > frame.scroll - 30.0f && y0 < view_bottom + 30.0f; };
+  // How full the window is: the glass warms, the light on the square and the fountain grow with it.
+  float full = 0.0f;
+  for (int i = 0; i < 15; ++i) full += Ease(Clamp01(m.bottle[static_cast<size_t>(i)][0]));
+  full /= 15.0f;
+
+  // The window's light spills onto the cobbles (the lower part of an ellipse under the sill).
+  if (visible(2962.0f, 3102.0f)) {
+    wlw::ui::ImageStyle style;
+    style.tint = WithAlpha(kAmberLit, 0.8f * (0.05f + 0.55f * full));
+    style.uv = {{0.0f, (2962.0f - 2882.0f) / 220.0f}, {1.0f, 1.0f}};
+    p.Image({x(-65, 2962), x(455, 3102)}, soft_, style);
+  }
+  if (visible(city::kShopFront.y0, city::kShopFront.y1)) {
+    // The sign lights as the shop wakes.
+    const city::Box& sign = city::kShopSign;
+    const glm::vec2 sign_mid = x((sign.x0 + sign.x1) * 0.5f, (sign.y0 + sign.y1) * 0.5f);
+    if (m.awake > 0.0f) glow_.Draw(p, sign_mid, glm::vec2(150.0f, 34.0f) * s, WithAlpha(kAmberLit, 0.22f * m.awake));
+    c.Text(*frame.font, "APOTHECARY", sign_mid, 19.0f * kText * s, Align::Center,
+           {.color = Mixed(Hex(0x5A4430), kParchment, m.awake)});
+
+    // The fanlight: dark glass under a copper arch, the muntins, the challenges' show globes.
+    const Rgba glass = Mixed(Hex(0x120C08), Hex(0x3A2614), full);
+    std::vector<glm::vec2> arch{x(60, 2666)};
+    for (int k = 0; k <= 24; ++k) {
+      const float a = kPi + kPi * static_cast<float>(k) / 24.0f;
+      arch.push_back(x(195.0f + 135.0f * std::cos(a), 2642.0f + 52.0f * std::sin(a)));
+    }
+    arch.push_back(x(330, 2666));
+    FillShape(p, arch, glass);
+    for (Vec2 to : {Vec2{195, 2590}, Vec2{118, 2602}, Vec2{272, 2602}}) p.Line(x(195, 2666), x(to), 2.0f * s, kCopperDark);
+    for (int k = 0; k < city::kLobes; ++k) {
+      const size_t i = static_cast<size_t>(15 + k);
+      const glm::vec2 g = x(city::GlobeSpot(k));
+      const float a = Clamp01(m.bottle[i][0]);
+      const Rgba color = m.colors[i].empty() ? kLight : LiquidColor(palette, m.colors[i][0]);
+      if (a > 0.0f) glow_.Draw(p, g, 30.0f * s, WithAlpha(color, 0.7f * a));
+      p.Line(g - glm::vec2(0.0f, 14.0f * s), g - glm::vec2(0.0f, 24.0f * s), 2.0f * s, kShopBrass);
+      p.Circle(g, 14.75f * s, kShopBrass);
+      p.Circle(g, 13.25f * s, Mixed(Hex(0x1C130C), color, a));
+      p.Circle(g + glm::vec2(-5.0f, -5.0f) * s, 3.5f * s, Hex(0xFFFFFF, 0.35f));
+      if (m.bottle_flash[i] > 0.0f) p.Ring(g, 20.0f * s, 3.0f * s, Hex(0xFFFFFF, m.bottle_flash[i]));
+    }
+    Outline(p, arch, 3.0f * s, kCopper);
+
+    // The window: one bottle per level on three shelves.
+    const city::Box& w = city::kShopWindow;
+    p.FillRect({x(w.x0, w.y0), x(w.x1, w.y1)}, glass);
+    p.Line(x(78, 2678), x(120, 2678), 2.0f * s, Hex(0xFFFFFF, 0.06f));
+    p.Line(x(86, 2686), x(104, 2686), 2.0f * s, Hex(0xFFFFFF, 0.06f));
+    for (float y : city::kShelves) {
+      p.FillRect({x(w.x0 + 2, y), x(w.x1 - 2, y + 6)}, kShelf);
+      p.FillRect({x(w.x0 + 2, y + 6), x(w.x1 - 2, y + 9)}, kWood);
+    }
+    for (int i = 0; i < 15; ++i) DrawBottle(p, c, x, frame, i);
+    Outline(p, {x(w.x0, w.y0), x(w.x1, w.y0), x(w.x1, w.y1), x(w.x0, w.y1)}, 4.0f * s, kCopper);
+
+    // The door bell swings when it rings.
+    const float swing = m.bell >= 0.0f ? city::BellSwing(m.bell) * kPi / 180.0f : 0.0f;
+    const glm::vec2 pivot = x(city::kBellPivot);
+    auto bell = [&](float bx, float by) {
+      const float cs = std::cos(swing), sn = std::sin(swing);
+      return pivot + glm::vec2(bx * cs - by * sn, bx * sn + by * cs) * s;
+    };
+    std::vector<glm::vec2> dome{bell(-9, 24)};
+    Quad(dome, bell(-9, 24), bell(-9, 8), bell(0, 6));
+    Quad(dome, bell(0, 6), bell(9, 8), bell(9, 24));
+    p.Line(bell(0, 0), bell(0, 6), 2.0f * s, kCopper);
+    FillShape(p, dome, kShopBrass);
+    FillShape(p, {bell(-9, 23.5f), bell(9, 23.5f), bell(12, 28), bell(-12, 28)}, Hex(0xA87A3E));
+    p.Line(bell(-4, 11), bell(-6, 22), 1.5f * s, Hex(0xF0C27A, 0.8f));
+    p.Circle(bell(0, 31), 3.0f * s, kShopBrass);
+    if (m.bell >= 0.0f && m.bell < 1.5f)
+      glow_.Draw(p, bell(0, 18), 22.0f * s, Hex(0xFFC27A, 0.8f * (1.0f - m.bell / 1.5f)));
+  }
+
+  // The trail between the lamps: each piece lights once the lamp it leaves from has.
+  for (const city::LampTrail& piece : city::MarketTrail()) {
+    if (!visible(piece.curve.a.y - 40.0f, piece.curve.d.y + 40.0f)) continue;
+    std::vector<glm::vec2> points;
+    for (Vec2 q : piece.curve.Points(12)) points.push_back(x(q));
+    const bool lit = m.lamp[static_cast<size_t>(piece.from)][0] > 0.0f;
+    Dots(p, points, 11.0f * s, 3.0f * s, 1.6f * s, lit ? kAmberLit : Hex(0x4A3424));
+  }
+
+  // The fountain: its water and jets glow with the window.
+  const float fountain = 0.1f + 0.8f * full;
+  if (visible(3490.0f, 3600.0f)) {
+    glow_.Draw(p, x(195, 3562), 70.0f * s, WithAlpha(kAmberLit, 0.8f * fountain));
+    art::FilledEllipse(p, x(195, 3576), glm::vec2(52.0f, 11.0f) * s, WithAlpha(kAmberLit, fountain));
+    RoundRect(p, {x(189, 3534), x(201, 3576)}, 0.0f, kPlank, kShelf, 1.5f * s);
+    const float flicker = frame.calm ? 0.85f : 0.78f + 0.14f * std::sin(t * 1.9f) + 0.08f * std::sin(t * 4.7f);
+    for (float side : {-1.0f, 1.0f}) {
+      std::vector<glm::vec2> jet;
+      const city::Cubic curve{{195, 3534}, {195 + 10 * side, 3518}, {195 + 19 * side, 3524}, {195 + 23 * side, 3552}};
+      for (Vec2 q : curve.Points(10)) jet.push_back(x(q));
+      art::Polyline(p, jet, 3.0f * s, Hex(0xFFD08A, fountain * flicker));
+    }
+  }
+
+  DrawMarketLamps(p, c, x, frame);
+
+  // Asleep behind its gate: the market lies under a thick mist that lifts as the shop wakes.
+  if (m.awake < 1.0f) p.FillRect({x(0, d.top), x(kWidth, d.bottom)}, Hex(0x0B111D, 0.62f * (1.0f - m.awake)));
+}
+
+void CityArt::DrawBottle(Canvas& p, Canvas& c, const Xf& x, const CityFrame& frame, int level) {
+  const float s = x.s;
+  const size_t i = static_cast<size_t>(level);
+  const Vec2 b = city::BottleSpot(level);
+  auto at = [&](float dx, float dy) { return x(b.x + dx, b.y + dy); };
+  const auto& state = frame.market.bottle[i];
+  const float fill = Ease(Clamp01(state[0])), cork = Ease(Clamp01(state[1])), label = Ease(Clamp01(state[2]));
+  const float gold = Clamp01(state[3]);
+  const std::vector<Color>& colors = frame.market.colors[i];
+  const Palette& palette = *frame.palette;
+  // The body up to the neck (convex: the liquid is cut from it), then the outline with the neck and lip.
+  std::vector<glm::vec2> body{at(-15, -4)};
+  Quad(body, at(-15, -4), at(-15, 0), at(-11, 0));
+  body.push_back(at(11, 0));
+  Quad(body, at(11, 0), at(15, 0), at(15, -4));
+  body.push_back(at(15, -36));
+  Quad(body, at(15, -36), at(15, -45), at(5.5f, -47));
+  std::vector<glm::vec2> edge = body;
+  for (glm::vec2 q : {at(5.5f, -56), at(6.5f, -56), at(6.5f, -60), at(-6.5f, -60), at(-6.5f, -56), at(-5.5f, -56)})
+    edge.push_back(q);
+  body.push_back(at(-5.5f, -47));
+  edge.push_back(at(-5.5f, -47));
+  Quad(body, at(-5.5f, -47), at(-15, -45), at(-15, -36));
+  Quad(edge, at(-5.5f, -47), at(-15, -45), at(-15, -36));
+
+  if (fill > 0.0f && !colors.empty())
+    glow_.Draw(p, at(0, -26), 26.0f * s, WithAlpha(LiquidColor(palette, colors[0]), 0.35f * fill));
+  FillShape(p, body, Hex(0xFFFFFF, 0.04f));
+  p.FillRect({at(-5.5f, -56), at(5.5f, -47)}, Hex(0xFFFFFF, 0.04f));
+  // The level's colours in bands from the bottom up.
+  if (fill > 0.0f && !colors.empty()) {
+    const float each = 47.0f * fill / static_cast<float>(colors.size());
+    for (size_t k = 0; k < colors.size(); ++k) {
+      const float y0 = at(0, -each * static_cast<float>(k + 1)).y - 0.3f * s;
+      const float y1 = at(0, -each * static_cast<float>(k)).y + 0.3f * s;
+      const std::vector<glm::vec2> band = ClipSlab(body, y0, y1, 1);
+      if (band.size() >= 3) FillShape(p, band, LiquidColor(palette, colors[k]));
+    }
+  }
+  p.FillRect({at(-11, -40), at(-8, -10)}, Hex(0xFFFFFF, 0.25f));
+  Outline(p, edge, 1.4f * s, fill > 0.0f ? Hex(0xE8C9A0) : Hex(0x6E5038));
+  // Lean corks it (the cork drops in), Swift labels it (the label slides on), all three seal it in gold.
+  if (cork > 0.0f) {
+    const float y = -66.0f - 18.0f * (1.0f - cork);
+    RoundRect(p, {at(-5, y), at(5, y + 9)}, 2.0f * s, Hex(0xB98A55, cork), Hex(0x6E4A1E, cork), 0.8f * s);
+  }
+  if (gold > 0.0f) {
+    const std::vector<glm::vec2> foil{at(-6.5f, -67), at(6.5f, -67), at(7.5f, -54), at(-7.5f, -54)};
+    FillShape(p, foil, Hex(0xF0C060, gold));
+    Outline(p, foil, 0.8f * s, Hex(0x9A6A2E, gold));
+  }
+  if (label > 0.0f) {
+    const float dx = -14.0f * (1.0f - label);
+    RoundRect(c, {at(dx - 11, -30), at(dx + 11, -17)}, 1.5f * s, WithAlpha(kParchment, label),
+              WithAlpha(gold > 0.0f ? Hex(0xE0B040) : kShelf, label), 1.0f * s);
+    if (frame.hand)
+      c.Text(*frame.hand, std::to_string(level + 1), at(dx, -23.5f), 10.0f * kText * s, Align::Center,
+             {.color = Hex(0x3A2A1A, label)});
+  }
+  if (frame.market.bottle_flash[i] > 0.0f)
+    p.Ring(at(0, -26), 22.0f * s, 3.0f * s, Hex(0xFFFFFF, frame.market.bottle_flash[i]));
+}
+
+void CityArt::DrawMarketLamps(Canvas& p, Canvas& c, const Xf& x, const CityFrame& frame) {
+  const float s = x.s, t = frame.time, view_bottom = frame.scroll + frame.ViewHeight();
+  const CityFrame::Market& m = frame.market;
+  const bool shut = !frame.districts[0].open;
+  const wlw::ui::Font& font = *frame.font;
+  const auto lamps = city::DistrictLamps(2);
+  for (int j = 0; j < city::kDistrictLamps; ++j) {
+    const size_t n = static_cast<size_t>(j);
+    const Vec2 l = lamps[n];
+    if (l.y + 70.0f < frame.scroll || l.y - 70.0f > view_bottom) continue;
+    const bool diamond = j >= 15, locked = m.locked[n];
+    const auto& a = m.lamp[n];
+    const bool perfect = a[0] >= 1.0f && a[1] >= 1.0f && a[2] >= 1.0f;
+    const Rgba ring = locked ? Hex(0x3A2A1C) : perfect ? Hex(0xFFE6A6) : a[0] > 0.0f ? kCopper : kShelf;
+    const glm::vec2 at = x(l);
+    if (a[0] > 0.0f) glow_.Draw(p, at, 40.0f * s, Hex(0xFFC27A, 0.5f * Clamp01(a[0])));
+    const float cap = diamond ? 30.0f : 27.0f;
+    RoundRect(p, {x(l.x - 7, l.y - cap), x(l.x + 7, l.y - cap + 7)}, 2.0f * s, kPlank, ring, 1.2f * s);
+    const std::vector<glm::vec2> body = diamond ? DiamondPoints(at, 22.0f * s) : CirclePoints(at, 20.0f * s);
+    FillShape(p, body, locked ? Hex(0x150F0A) : Hex(0x24180F));
+    // Lit: the level's colours, a sliver per cup.
+    const std::vector<Color>& colors = m.colors[n];
+    if (a[0] > 0.0f && !colors.empty()) {
+      const float count = static_cast<float>(colors.size());
+      for (size_t k = 0; k < colors.size(); ++k) {
+        const float x0 = at.x + (-22.0f + 44.0f * static_cast<float>(k) / count) * s;
+        const float x1 = at.x + (-22.0f + 44.0f * static_cast<float>(k + 1) / count) * s;
+        const std::vector<glm::vec2> sliver = ClipSlab(body, x0, x1);
+        if (sliver.size() >= 3)
+          FillShape(p, sliver, WithAlpha(LiquidColor(*frame.palette, colors[k]), Clamp01(a[0])));
+      }
+    }
+    Outline(p, body, (perfect ? 3.5f : 2.5f) * s, ring);
+    if (m.lamp_flash[n][0] > 0.0f) Outline(p, body, 5.0f * s, Hex(0xFFFFFF, m.lamp_flash[n][0]));
+
+    // The number (none while the gate is shut), and its stars under it (not while locked).
+    if (shut) continue;
+    const std::string number = diamond ? "C" + std::to_string(j - 14) : std::to_string(j + 1);
+    const float size = (diamond ? 15.0f : 19.0f) * kText * s;
+    if (locked) {
+      c.Text(font, number, at, size, Align::Center, {.color = Hex(0xF3E8CC, 0.22f)});
+    } else if (a[0] > 0.0f) {
+      c.Text(font, number, at, size, Align::Center, Outlined(Hex(0xFFFFFF)));
+    } else {
+      c.Text(font, number, at, size, Align::Center, {.color = kParchment});
+    }
+    if (locked) continue;
+    for (int k = 0; k < 3; ++k) {
+      const glm::vec2 star = x(l.x + static_cast<float>(k - 1) * city::kStarSpacing, l.y + (diamond ? 38.0f : 34.0f));
+      StarShape(c, star, (city::kStarRadius + 1.0f) * s, Hex(0x6E5038));
+      StarShape(c, star, city::kStarRadius * s, Hex(0x3A281A));
+      const float lit = Clamp01(a[static_cast<size_t>(k)]);
+      if (lit > 0.0f) {
+        const float pop = lit < 1.0f ? 1.0f + 0.7f * std::sin(lit * kPi) : 1.0f;
+        StarShape(c, star, (city::kStarRadius + 1.0f) * pop * s, Hex(0xFFE08A, lit));
+        StarShape(c, star, city::kStarRadius * pop * s, Hex(0xFFC53D, lit));
+      }
+    }
+  }
+  // The next level to play breathes.
+  if (m.breathe >= 0 && m.breathe < city::kDistrictLamps) {
+    const glm::vec2 at = x(lamps[static_cast<size_t>(m.breathe)]);
+    const float period = m.pulse ? 0.7f : 2.4f;
+    const float o = frame.calm ? 0.8f : 0.6f - 0.4f * std::cos(t * 2.0f * kPi / period);
+    const std::vector<glm::vec2> ring =
+        m.breathe >= 15 ? DiamondPoints(at, 28.0f * s) : CirclePoints(at, 26.0f * s, 36);
+    Outline(p, ring, 3.0f * s, Hex(0xFFE6A6, o));
   }
 }
 

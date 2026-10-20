@@ -3,6 +3,7 @@
 #include <array>
 #include <functional>
 #include <limits>
+#include <optional>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -45,14 +46,20 @@ class MapScreen : public wlw::app::Screen {
   void At(float delay, std::function<void()> run);  // from now
   float LightLantern(int lantern, int fresh, float start);
   float LightPanes(int lantern, int fresh, float start);
-  float LightLamp(int world, int lamp, float start);
+  float LightLamp(int world, int lamp, int fresh, float start);
+  float FillBottle(int lamp, int fresh, float start);  // World 2's shop window: fill, cork, label, gold, the bell
   float OpenGate(int world, float start);
   void Skip();  // a tap during an animation: everything as it ends
   void ShowAll();
+  // A level's stars `bits` shown from `when` on (its lantern and panes, or its lamp and, in the market, its bottle).
+  void Show(int world, int index, int bits, float when, bool window = true);  // window: World 2's bottle too
   bool Busy() const { return clock_ < busy_until_; }
   float Chime();  // the next note up the scale (a pitch)
 
   bool LockedShown(int lantern) const;
+  bool LampLockedShown(int lamp) const;  // World 2's, the same way
+  const StarMap& Stars() const;          // the saved stars, or tl.stars' (dev)
+  const Level* CurrentLevel() const;     // the next level to play, by Stars()
   float LanternY(const Level* level) const;  // map y of a level's lantern or lamp, < 0 if none
   void Tap(glm::vec2 map);
   void Fill(CityFrame& frame, glm::vec2 screen, float scale);
@@ -61,6 +68,7 @@ class MapScreen : public wlw::app::Screen {
 
   ThreadlockApp& app_;
   const Level* focus_;
+  std::optional<StarMap> dev_stars_;  // tl.stars
   city::MapLevels levels_;
   std::array<const Level*, city::kLanterns> lanterns_{};
   std::array<std::array<const Level*, city::kDistrictLamps>, 3> lamps_{};  // worlds 2-4
@@ -85,11 +93,15 @@ class MapScreen : public wlw::app::Screen {
   std::vector<Event> events_;
   float busy_until_ = 0.0f;
   std::array<std::array<float, 3>, city::kLanterns> lantern_at_{}, pane_at_{};
-  std::array<std::array<float, city::kDistrictLamps>, 3> lamp_at_{};
+  std::array<std::array<std::array<float, 3>, city::kDistrictLamps>, 3> lamp_at_{};  // worlds 2-4, per star
+  // The market's shop window: per level its bottle filled, corked, labelled, sealed in gold (a challenge: its globe).
+  std::array<std::array<float, 4>, city::kDistrictLamps> bottle_at_{};
+  float bell_at_ = kLongAgo;
   std::array<bool, 3> gate_shown_{};
+  float shop_tint_ = 0.0f;  // the top bar and the ambience follow the district in view: 1 = the market's
   std::array<float, 3> valve_at_{}, pour_at_{}, wake_at_{};
   int stars_shown_ = 0;
-  int pulse_ = -1;
+  int pulse_ = -1, pulse_world_ = 1;
   float pulse_until_ = 0.0f;
   int note_ = 0;
 

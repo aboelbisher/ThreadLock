@@ -170,10 +170,15 @@ TEST_SUITE("city map") {
       CHECK(d.plate < lamps[0].y);
       const Cubic gate = GatePipe(w);
       CHECK(gate.a.y == doctest::Approx(d.valve + 22.0f));
-      CHECK(Distance(gate.d, {lamps[0].x, lamps[0].y - 10.0f}) < 0.01f);
+      if (w == 2) {
+        CHECK(gate.d.y == doctest::Approx(d.plate - 4.0f));  // into the market's name plate
+      } else {
+        CHECK(Distance(gate.d, {lamps[0].x, lamps[0].y - 10.0f}) < 0.01f);
+      }
       if (w >= 3) {
         const Cubic link = LinkPipe(w);
         CHECK(link.a.y > DistrictLamps(w - 1)[kDistrictLamps - 1].y);
+        CHECK(link.a.y > Districts()[w - 2].top);
         CHECK(link.d.y == doctest::Approx(d.valve - 22.0f));
       }
     }
@@ -184,6 +189,50 @@ TEST_SUITE("city map") {
     CHECK(PipeFill(0, 20) == 0.0f);
     CHECK(PipeFill(10, 20) == doctest::Approx(0.5f));
     CHECK(PipeFill(33, 20) == 1.0f);
+  }
+
+  TEST_CASE("the market square: the shop window's bottles and globes, lamps in rows, the trail, the fountain") {
+    const District& d = Districts()[1];
+    CHECK(d.plate + 50.0f < kShopFront.y0);
+    CHECK(kShopFront.y1 < DistrictLamps(2)[0].y - 40.0f);
+    // Fifteen bottles on three shelves inside the window, apart; the globes in the fanlight above it.
+    for (int i = 0; i < 15; ++i) {
+      const Vec2 b = BottleSpot(i);
+      CHECK(b.x - 15.0f > kShopWindow.x0);
+      CHECK(b.x + 15.0f < kShopWindow.x1);
+      CHECK(b.y - 66.0f > (i < 5 ? kShopWindow.y0 : kShelves[i / 5 - 1]));  // the cork clears the shelf above
+      CHECK(b.y <= kShopWindow.y1);
+      if (i % 5) CHECK(b.x - BottleSpot(i - 1).x > 30.0f);
+    }
+    for (int k = 0; k < kLobes; ++k) {
+      CHECK(GlobeSpot(k).y < kShopWindow.y0);
+      CHECK(GlobeSpot(k).y > kFanlightTop);
+    }
+    // The lamps: rows of five, the middle one right to left, under the shop; the diamonds under them.
+    const auto lamps = DistrictLamps(2);
+    CHECK(lamps[4].x > lamps[0].x);
+    CHECK(lamps[5].x == lamps[4].x);
+    CHECK(lamps[9].x == lamps[0].x);
+    CHECK(lamps[15].y > lamps[14].y);
+    CHECK(lamps[17].y < kFountain.y - 60.0f);
+    // The trail: one piece per pair, each from near its lamp to near the next.
+    const auto& trail = MarketTrail();
+    REQUIRE(trail.size() == kDistrictLamps - 1);
+    for (size_t p = 0; p < trail.size(); ++p) {
+      const int from = trail[p].from;
+      CHECK(from == static_cast<int>(p));
+      CHECK(Distance(trail[p].curve.a, lamps[from]) < 30.0f);
+      CHECK(Distance(trail[p].curve.d, lamps[from + 1]) < 30.0f);
+    }
+    // The fountain feeds the canal quarter's gate; the market ends above its valve.
+    CHECK(LinkPipe(3).a.y > kFountain.y);
+    CHECK(kMarketBottom < Districts()[2].valve - 22.0f);
+    // The bell settles.
+    CHECK(BellSwing(0.0f) == 0.0f);
+    CHECK(std::fabs(BellSwing(0.13f)) > 10.0f);
+    CHECK(BellSwing(3.0f) == 0.0f);
+    CHECK(ShopScroll(kMockView, false) == doctest::Approx(2522.0f));
+    CHECK(ShopScroll(kMockView, true) == doctest::Approx(2462.0f));
   }
 
   TEST_CASE("scroll targets: a lantern two thirds down, the window, a gate") {
