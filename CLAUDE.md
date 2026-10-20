@@ -50,10 +50,13 @@ src/threadlock_app.{h,cpp}    the one System: services (catalog, progress, feedb
                               debug panel (WLW_DEBUG_UI)
 src/level_screen.{h,cpp}      the level screen: drag/tap/long-press, run loop (1x/2x/4x), result card, Show me, hints
 src/map_screen.{h,cpp}        the city map (level select): input, camera, HUD (stars, hints, trophies, settings; Daily +
-                              Lab round buttons), the news since the last visit as animations (glides, lights, gates)
+                              Lab round buttons), the news since the last visit as animations (glides, lights, gates,
+                              World 2's bottles), the top bar + ambience following the district in view
 src/city_map.{h,cpp}          the map in plain C++ (tested): every position (lantern path, window panes, districts, lamps,
-                              pipes), hit tests, scroll targets, lights from progress, the seen record and WhatsNew
-src/city_art.{h,cpp}          the map's look: still art in pooled tiles, lit panes / lanterns / lamps / mist each frame
+                              pipes, the market square's bottles, globes and bell), hit tests, scroll targets, lights
+                              from progress, the seen record and WhatsNew
+src/city_art.{h,cpp}          the map's look: still art in pooled tiles, lit panes / lanterns / lamps / mist each frame;
+                              the market square (shop front, window bottles, globes, bell, cobbles, stalls, fountain)
 src/tile_pool.{h,cpp}         a tall still picture as a pool of screen-sized offscreen tiles (LanternArt, CityArt)
 src/stars.h                   StarBits + StarMap (level id -> bits)
 src/menus.{h,cpp}             overlays: settings (palettes), achievements, daily (streak, archive), Lab
@@ -200,5 +203,5 @@ open everything, hints, wipe, ads).
 - Research competitors before pitching new game ideas.
 
 ## Next steps
-DESIGN.md §11 is the build order (World 1 is done, city map included). Next: §11 step 3, worlds 2, 3 and 4
-one at a time (each its own art, sounds, and its district on the map), then the World 1 playtest and launch.
+DESIGN.md §11 is the build order (worlds 1 and 2 are done, each with its district on the map). Next: World 3,
+the same steps as World 2 (mock, format, art, levels, sounds, district, docs), then World 4, the playtest and launch.

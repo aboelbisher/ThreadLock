@@ -167,7 +167,7 @@ piece learnt in World 1 reads the same in World 4.
 quarter, the sanctum). Solving a level lights its corner of its district, so progress shows as the city
 waking up.
 
-**The map as built (the level select).** One tall picture read top to bottom, ~6.5 screens, drawn from the
+**The map as built (the level select).** One tall picture read top to bottom, ~6.7 screens, drawn from the
 approved mock (390 map units wide, scaled to the screen; `city_map.h` has every position): the tower at
 dawn (the sky brightens with your stars, 0-45), the great rose window, then a path of numbered lanterns
 winding down the tower face, one per level, 1-1 under the window and 1-15 at the bottom, with the three
@@ -176,14 +176,28 @@ level's colours (its cups, left to right) once solved, its 1-3 stars under it; l
 number; the next level to play breathes. **The window is not a button, it's the progress picture:** petal n
 lights when level n is solved, its big pane in that level's colours, its two small panes for Lean and
 Swift, gold leading at 3 stars; the heart's three lobes light with the challenges. Its light spills onto
-the roofs at the tower's foot. Below, a pipe fills with stars toward World 2's brass valve ("20 ★"), and
-worlds 2-4 sleep in mist, each with a name plate and its levels as 18 small lamps (playable once the gate
-is open, until each world gets its own art). **What's new since the last visit plays as an animation**
+the roofs at the tower's foot. Below, a pipe fills with stars toward World 2's brass valve ("20 ★"), then
+the market square (World 2, below); worlds 3-4 sleep in mist, each with a name plate and its levels as 18
+small lamps (playable once the gate is open, until each world gets its own art). **What's new since the last visit plays as an animation**
 (the "seen" record in device.json): the view glides to the lantern, it lights and its stars pop with
 chimes, then glides up while the petal's panes light, and back down to the next lantern, which pulses; a
 gate's valve turns, light pours down the pipe (the view rides with it) and the district wakes. A tap
 skips it. The first visit (after 1-3) lights 1-1 to 1-3 and their petals; a restored save doesn't replay;
 at most the last three levels animate, earlier news shows at once.
+
+**The market square (World 2's district, built 20 October from the approved mock).** Under its name plate,
+the apothecary's shop front: the APOTHECARY sign, a fanlight with three show globes (the challenges), the
+door bell on its bracket, and the shop window, World 2's progress picture: one bottle per level on three
+shelves of five. A solve fills the bottle in the level's colours (bands, bottom up), Lean corks it, Swift
+labels it with its number (Caveat), three stars seal the cork in gold foil; the glass warms and the
+window's light spills further over the cobbles as the bottles fill. Below, the cobbled square with
+stalls: the 15 levels as lamps in three rows of five (the middle row right to left), the challenges as
+three diamonds, then the fountain the pipe to World 3 leaves from. News: the lamp's stars pop (a marimba
+note each), the view glides up to the window only if the bottle is off screen, the bottle fills (a
+four-note run), corks (a pop), labels, gilds, and the bell rings; a challenge lights its globe. The gate:
+the valve turns, light pours into the plate and the shop wakes (the sign lights, the mist lifts, the bell
+rings). While the open market fills the view, the top bar turns from night blue to the shop's dark wood
+and the ambience crossfades to the shop's.
 
 ### World 1 · First Light · The Lantern Works
 - **Place:** the glassworks at the top of the tower, at dawn.
@@ -218,12 +232,31 @@ at most the last three levels animate, earlier news shows at once.
 - **Sound:** marimba, pizzicato strings, the shop bell. **Finale:** Market Day, the whole shop.
 - **Palette:** dark wood #3D2C1F, copper #C86E3A, parchment #F3E8CC, #8A6038; background #1A120C, accent
   #FFB45C, EDIT #FFD99A → #EE9645; slips in the Caveat font.
-- **Level shapes:** Morning Orders (2-7, built: a jar of 11 drops on a beat of 2, an overflow 8 sends the
-  first eight to a tap over a 3-bottle rack that turns every 4 ticks, so the bottles take them in pairs,
-  and the rest to the sink; slips "I Mrs Hale 4", "II Baker 2", "III Dr Moss 2", "Three orders, one tap.
-  The rack turns every 4 ticks.", one solution: ≤ 1 piece, ≤ 0:11); The Lazy Susan (one tap, a turning rack: the timing picks the
-  bottle); Inventory (the first few to the bottle, the rest down the sink); The Back Room (two jars on
-  two shelves; their lines cross on the way down).
+- **Board grammar:** `"shelves"` (the wall's shelf heights; lines run straight across or down), jars with
+  a chalk tally of the drops left, bottles on the counter each with an `"order"` (its slip on the cork
+  board, top right), the sink, the lazy-susan rack with its clock. Liquid shows only at the portholes.
+  Moments: paid = cork, label, bell, PAID stamp on the slip; spill = a stream and a puddle on the
+  counter; short = a dashed ghost fill to the order, n/m and "unpaid".
+- **Levels (built 20 October):** the idea is sharing out counts, not sorting colours.
+  2-1 Opening Time (a flipper shares six drops 3 + 3; the empty board spills); 2-2 The Odd Drop (five
+  drops, 3 + 2: which side the flipper starts on); 2-3 Inventory (an overflow sends the first three to the
+  order, the rest down the sink); 2-4 Three Sisters (halving can't make thirds: an overflow, then a
+  flipper; a spare piece from here on); 2-5 The Back Room (blue and amber jars on two shelves, their lines
+  cross: mud is back, with counts; tank or turnstile); 2-6 The Handle (a handle turns a fork's flap by
+  hand); 2-7 Morning Orders (a jar of 11 on a beat of 2, an overflow 8 sends the first eight to a tap
+  over a 3-bottle rack turning every 4 ticks, so the bottles take them in pairs, the rest to the sink;
+  slips Mrs Hale 4, Baker 2, Dr Moss 2; one solution, ≤ 1 piece, ≤ 0:11); 2-8 The Bottling Line (twelve
+  drops along all three shelves, three flippers, four bottles); 2-9 The Lazy Susan (a flipper halves the
+  rate so the rack gets one drop a turn: a round-robin; two answers); 2-10 Every Other (an alternating
+  jar and no separator: the flipper sorts it); 2-11 The Shop Boy (a repair); 2-12 Crossed Lines (a
+  flipper on a crossing shares both lines); 2-13 Rush Order (two colours merge into a 4-bottle rack:
+  tanks and a turnstile time them; one answer); 2-14 Doctor's Orders (a blend jar: separate it, then
+  share both colours). **Finale 2-15 Market Day**, two screens: the stockroom (blue and amber jars cross,
+  then merge into the rack for Mrs Hale, Baker and Dr Moss; a blend jar crosses the merged line) and, on
+  screen 2, the counter with the rack, a separator for Miss Lark and the sink; the cork board sits at the
+  top of screen 2. One solution, Lean 4. Challenges: 2-C1 Exact Change (overflows only: 1, 3, 4 and the
+  sink), 2-C2 Closing Time (a 4-bottle rack every 3 ticks, tanks only), 2-C3 The Ledger (two jars cross
+  twice, routers on the crossings, orders 1/2/3/4).
 
 ### World 3 · Rush Hour · The Canal City
 - **Place:** the city's canals at night, seen from above.
@@ -336,7 +369,11 @@ committed after the owner's OK, in small commits:
    its 15 levels + 3 challenges, redesigned as named machines in the cascade grammar; The Rose Window
    finale (two screens, scroll + a camera that rides down with the liquid); its sounds; the city map with
    the tower district. **Done (18 October).**
-3. Worlds 2, 3 and 4, one at a time, the same way.
+3. Worlds 2, 3 and 4, one at a time, the same way: a mock on the canvas, the level format's extras, the
+   board art, the levels, the sounds, the district on the map, these docs. **World 2 done (20 October):**
+   the Apothecary (shelves grammar, copper lines with portholes, rack + clock, the paid / spill / short
+   moments), 14 levels + 3 challenges + Market Day, its marimba / pizzicato / bell sounds and shop
+   ambience, the market square district. Next: World 3.
 4. Playtest World 1 with 5–10 people; adjust levels with the tool.
 5. Launch: Threadlock's own AdMob app and units, analytics, store page, closed test. Then worlds 5–8 as
    live updates.
