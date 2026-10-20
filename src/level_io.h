@@ -23,12 +23,14 @@
 // Machine parts (DESIGN.md §4):
 //   {"id": "r", "kind": "rack", "at": [180, 470], "period": 4, "first": 0,
 //    "slots": [{"want": "B", "count": 4, "order": "Mrs Hale"}, {"want": "B", "count": 2}]}
-//   {"id": "m", "kind": "mill", "at": [90, 300], "gears": ["g"]}
+//   {"id": "m", "kind": "mill", "at": [90, 300], "gears": ["g"]}   (or [["g", [[270, 300]]]]: the rod's bends, look
+//   only)
 //   {"id": "g", "kind": "gate", "at": [270, 200], "open": false}
 // Look only (the rules ignore them): "height": 1200 = a grand machine taller than one screen (board units,
 // at least 600 = one screen; it scrolls), "payoff": [180, 870] = where the payoff happens (World 1's rose
 // window), "shelves": [150, 330] = World 2's shop wall (its pipes then run straight across or down), and a
-// cup's or bottle's "order": "Mrs Hale" (the slip it fills).
+// cup's or bottle's "order": "Mrs Hale" (the slip it fills); World 3's canal map: a harbour's (cup's)
+// "district": "Lantern Row" (the district it serves; its canals then run straight with round bends).
 // Sockets ("socket": true; pass nodes are sockets unless false) go on forks, passes, crossings and
 // merges; any piece goes in any socket. A pipe leaving a fork is its side 0 or 1 in the order the
 // pipes are listed.
@@ -62,7 +64,9 @@ std::string WriteLevel(const Level& level);
 // What's wrong with a level's look (the rules don't care, the art does): a node off its board; on a shop
 // wall (World 2, a level with shelves) a pipe that isn't straight across or straight down, a node behind the
 // cork board, the bell, a jar or its slate, a jar or slate off the board or on another, a bottle off the
-// counter, without an order or not filled from above. Empty = good.
+// counter, without an order or not filled from above; on a canal map (World 3, a harbour with a district) a
+// canal at a slant and canal::Problems (bends, locks, canals through nodes, alongside or across each other,
+// rods). Empty = good.
 std::vector<std::string> LookProblems(const Level& level);
 
 }  // namespace threadlock

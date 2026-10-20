@@ -41,6 +41,8 @@ src/threadlock_rules.{h,cpp}  rules v3: liquids/beads, pieces + Role (piece x so
 src/level_io.{h,cpp}          level files (JSON) + the pars file; WriteLevel (tool: format, search)
 src/apothecary_look.{h,cpp}   World 2's shop in board units (tool + art): orders, the cork board and its slips, the counter,
                               jars + slates, the bell, rack bottles + clock, the moments' timing (paid, spill, short)
+src/canal_look.{h,cpp}        World 3's canal city in board units (tool + art): districts (harbours), canal width + round bends,
+                              the canal map's look checks (canal::Problems: bends, locks on straight stretches, crossings, rods)
 src/solver.{h,cpp}            every placement where each piece acts, run each: pars (Lean/Swift), solutions, NextHint
 src/generator.{h,cpp}         daily puzzle + Lab: 4 templates (race, shares, mixer, shared pipe), solver-filtered
 src/catalog.{h,cpp}           loads assets/levels/world*.json + pars.json (platform::ReadFile)
@@ -141,7 +143,9 @@ Pipe shapes: an object after the bends, `["s", "c", [[x, y], ...], {"coil": [seg
 units, >= 600 = one screen; nodes must lie within it) and `"payoff": [x, y]` (where the view goes when it's
 solved: W1's rose window centre). W2 adds `"shelves": [y, ...]` (the shop wall; its pipes must then run straight
 across or down: `LookProblems`, checked by `check` and the tests) and a cup's or rack bottle's `"order": "Mrs Hale"`
-(its slip). A coil winds its segment round its middle (`CoilPoints`: a turn is
+(its slip). W3 adds a cup's `"district": "Lantern Row"` (a harbour; any district makes the level a canal map:
+straight canals with round bends, `canal::Problems` in `LookProblems`) and a mill's rod bends, `"gears": [["g", [[250, 360]]]]`
+(look only: `RodPoints`; plain `"g"` = a straight rod). A coil winds its segment round its middle (`CoilPoints`: a turn is
 ~70 long, ~5 cells more than straight, so it changes the timing and the pars); a drip is look only (drops fall
 through the air: nozzle, funnel).
 
@@ -150,7 +154,7 @@ PC tests and the tool without CMake/vcpkg, from a VS developer shell (repo root)
 ```
 cl /nologo /std:c++20 /EHsc /W4 /WX /O2 /external:W0 /external:I external\WLWengine\third_party\tinygltf ^
    /external:I external\WLWengine\third_party\doctest /Fe:build\pc\threadlock_tests.exe ^
-   tests\*.cpp src\threadlock_rules.cpp src\level_io.cpp src\apothecary_look.cpp src\solver.cpp ^
+   tests\*.cpp src\threadlock_rules.cpp src\level_io.cpp src\apothecary_look.cpp src\canal_look.cpp src\solver.cpp ^
    src\generator.cpp src\board_camera.cpp ^
    src\audio_synth.cpp src\ambience.cpp src\sound_cues.cpp src\city_map.cpp
 (the tool: tools\threadlock_tool.cpp + the same sources but board_camera, sound_cues and city_map, plus /external:I ...\third_party\stb)
@@ -166,7 +170,7 @@ The same tests on a phone (ARM64, the NDK's clang), from Git Bash with `MSYS_NO_
 ```
 $NDK/toolchains/llvm/prebuilt/windows-x86_64/bin/clang++.exe --target=aarch64-linux-android24 -std=c++20 -O2 \
   -static-libstdc++ -isystem external/WLWengine/third_party/tinygltf -isystem external/WLWengine/third_party/doctest \
-  tests/*.cpp src/threadlock_rules.cpp src/level_io.cpp src/apothecary_look.cpp src/solver.cpp src/generator.cpp src/board_camera.cpp \
+  tests/*.cpp src/threadlock_rules.cpp src/level_io.cpp src/apothecary_look.cpp src/canal_look.cpp src/solver.cpp src/generator.cpp src/board_camera.cpp \
   src/audio_synth.cpp src/ambience.cpp src/sound_cues.cpp src/city_map.cpp \
   -o build/android-tests/threadlock_tests
 adb -s <serial> push build/android-tests/threadlock_tests /data/local/tmp/tl/   (+ assets/levels/*.json to /data/local/tmp/tl/assets/levels/)

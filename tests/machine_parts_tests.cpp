@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "../src/solver.h"
 #include "doctest.h"
 #include "test_levels.h"
 
@@ -136,8 +137,48 @@ TEST_SUITE("machine parts") {
     }
   }
 
+  TEST_CASE("The Mill Gate (3-6): murk with nothing, THREADLOCKED with a lock alone, one answer") {
+    const Level level = MakeLevel(kMillGateCanals);
+    const int x = NodeOf(level, "x"), g = NodeOf(level, "g"), pa = NodeOf(level, "pa");
+    {
+      // Amber and blue meet in the crossing.
+      Board board(level);
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.failure == Failure::Mud);
+      CHECK(run.outcome.fail_node == x);
+      CHECK(run.outcome.fail_tick == 45);
+    }
+    {
+      // A lock on the crossing: blue queues from the shut gate back into it and holds the lock, so amber
+      // never reaches the mill that would open the gate.
+      Board board(level);
+      REQUIRE(board.Place(PieceOf(board, PieceType::Turnstile), x));
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.jammed);
+      CHECK(run.outcome.fail_tick == 79);
+      const JamReport jam = board.Jam();
+      CHECK(std::count(jam.cycle.begin(), jam.cycle.end(), g) == 1);
+      CHECK(std::count(jam.cycle.begin(), jam.cycle.end(), x) == 1);
+    }
+    {
+      // The one answer: the lock (arrow 0) and a short tank holding amber back at its lock.
+      Board board(level);
+      const int lock = PieceOf(board, PieceType::Turnstile);
+      REQUIRE(board.Place(lock, x));
+      board.SetSetting(lock, 0);
+      REQUIRE(board.Place(PieceOf(board, PieceType::TankShort), pa));
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.solved);
+      CHECK(run.outcome.ticks == 115);
+    }
+    const SolveReport report = Solve(level);
+    CHECK(report.solutions == 1);
+    CHECK(report.pars.pieces == 2);
+    CHECK(report.pars.ticks == 115);
+  }
+
   TEST_CASE("racks, mills and gates in level files") {
-    for (const std::string& json : {kRack, kMillGate, TwoMills(true)}) {
+    for (const std::string& json : {kRack, kMillGate, TwoMills(true), kMillGateCanals}) {
       const Level level = MakeLevel(json);
       Level copy;
       std::vector<std::string> errors;
@@ -148,7 +189,7 @@ TEST_SUITE("machine parts") {
         const Node& a = level.nodes[n];
         const Node& b = copy.nodes[n];
         CHECK((a.kind == b.kind && a.slots == b.slots && a.period == b.period && a.first == b.first));
-        CHECK((a.gears == b.gears && a.open == b.open));
+        CHECK((a.gears == b.gears && a.rods == b.rods && a.open == b.open && a.district == b.district));
       }
     }
     const Level rack = MakeLevel(kRack);

@@ -375,6 +375,7 @@ std::vector<std::string> Level::Finalize() {
     }
     if (!node.gears.empty() && node.kind != NodeKind::Mill)
       problem("node '" + node.id + "' has gears but isn't a mill");
+    if (node.rods.size() > node.gears.size()) problem("mill '" + node.id + "' has more rods than gears");
     if (node.twin >= 0) {
       if (static_cast<size_t>(node.twin) >= nodes.size() || node.kind != NodeKind::Pass ||
           nodes[static_cast<size_t>(node.twin)].kind != NodeKind::Pass ||
@@ -527,6 +528,17 @@ Vec2 PointAlong(const std::vector<Vec2>& points, float distance) {
     distance -= segment;
   }
   return points.back();
+}
+
+std::vector<Vec2> RodPoints(const Level& level, int mill, int k) {
+  const Node& node = level.nodes[static_cast<size_t>(mill)];
+  std::vector<Vec2> points{node.at};
+  if (static_cast<size_t>(k) < node.rods.size()) {
+    const std::vector<Vec2>& bends = node.rods[static_cast<size_t>(k)];
+    points.insert(points.end(), bends.begin(), bends.end());
+  }
+  points.push_back(level.nodes[static_cast<size_t>(node.gears[static_cast<size_t>(k)])].at);
+  return points;
 }
 
 Vec2 DropPoint(const Level& level, const Drop& drop, const Loc& loc) {

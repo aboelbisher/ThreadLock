@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "apothecary_look.h"
+#include "canal_look.h"
 #include "json.hpp"  // nlohmann::json (vendored in the engine's third_party/tinygltf)
 
 namespace threadlock {
@@ -151,6 +152,7 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
       reader.Color(item, "want", node.want);
       node.count = reader.Int(item, "count", 0);
       node.order = reader.String(item, "order");
+      node.district = reader.String(item, "district");
     }
     if (node.kind == NodeKind::Rack) {
       node.period = reader.Int(item, "period", 4);
@@ -176,7 +178,22 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
     if (item.contains("gears")) {
       if (!item["gears"].is_array()) reader.Error("node '" + node.id + "': 'gears' should be a list of gates");
       for (const Json& value : item["gears"]) {
-        if (value.is_string()) geared.push_back(value.get<std::string>());
+        // "g", or ["g", [[x, y], ...]]: the gate and the bends of its rod
+        if (value.is_string()) {
+          geared.push_back(value.get<std::string>());
+          node.rods.emplace_back();
+          continue;
+        }
+        if (!value.is_array() || value.size() != 2 || !value[0].is_string() || !value[1].is_array()) {
+          reader.Error("node '" + node.id + "': a gear should be \"gate\" or [\"gate\", [bends]]");
+          continue;
+        }
+        geared.push_back(value[0].get<std::string>());
+        std::vector<Vec2>& rod = node.rods.emplace_back();
+        for (const Json& point : value[1]) {
+          Vec2 p;
+          if (reader.Point(point, p)) rod.push_back(p);
+        }
       }
     }
     gears.push_back(std::move(geared));
@@ -472,6 +489,7 @@ std::string WriteLevel(const Level& level) {
     if (n.kind == NodeKind::Cup) {
       out += std::string(", \"want\": \"") + ColorLetter(n.want) + "\", \"count\": " + std::to_string(n.count);
       if (!n.order.empty()) out += ", \"order\": " + text(n.order);
+      if (!n.district.empty()) out += ", \"district\": " + text(n.district);
     }
     if (n.kind == NodeKind::Rack) {
       out += ", \"period\": " + std::to_string(n.period);
@@ -487,8 +505,16 @@ std::string WriteLevel(const Level& level) {
     }
     if (!n.gears.empty()) {
       out += ", \"gears\": [";
-      for (size_t g = 0; g < n.gears.size(); ++g)
-        out += (g ? ", " : "") + text(level.nodes[static_cast<size_t>(n.gears[g])].id);
+      for (size_t g = 0; g < n.gears.size(); ++g) {
+        const std::string gate = text(level.nodes[static_cast<size_t>(n.gears[g])].id);
+        if (g >= n.rods.size() || n.rods[g].empty()) {
+          out += (g ? ", " : "") + gate;
+          continue;
+        }
+        out += std::string(g ? ", " : "") + "[" + gate + ", [";
+        for (size_t k = 0; k < n.rods[g].size(); ++k) out += (k ? ", " : "") + point(n.rods[g][k]);
+        out += "]]";
+      }
       out += "]";
     }
     if (n.kind == NodeKind::Gate && !n.open) out += ", \"open\": false";
@@ -572,12 +598,12 @@ std::vector<std::string> LookProblems(const Level& level) {
     if (node.at.x < 0 || node.at.x > 360 || node.at.y < 0 || node.at.y > level.look.height)
       problems.push_back("node " + node.id + " is off the board");
   }
-  if (!level.look.shelves.empty()) {
-    // The copper lines of a shop wall: every stretch from node to bend to node runs across or down.
+  const bool canals = canal::IsCanalMap(level);
+  if (!level.look.shelves.empty() || canals) {
+    // The copper lines of a shop wall and the canals of the canal city: every stretch from node to bend to
+    // node runs across, or down (a canal also up).
     for (const Pipe& pipe : level.pipes) {
-      std::vector<Vec2> points{level.nodes[static_cast<size_t>(pipe.from)].at};
-      points.insert(points.end(), pipe.via.begin(), pipe.via.end());
-      points.push_back(level.nodes[static_cast<size_t>(pipe.to)].at);
+      const std::vector<Vec2> points = canal::CanalPoints(level, pipe);
       for (size_t k = 0; k + 1 < points.size(); ++k) {
         if (points[k].x != points[k + 1].x && points[k].y != points[k + 1].y) {
           problems.push_back("pipe " + level.nodes[static_cast<size_t>(pipe.from)].id + " -> " +
@@ -587,6 +613,12 @@ std::vector<std::string> LookProblems(const Level& level) {
         }
       }
     }
+  }
+  if (canals) {
+    const std::vector<std::string> more = canal::Problems(level);
+    problems.insert(problems.end(), more.begin(), more.end());
+  }
+  if (!level.look.shelves.empty()) {
     // The order slips hang on a cork board in the top right, the bell beside it: nothing of the machine
     // behind them.
     const int slips = static_cast<int>(apothecary::Orders(level).size());

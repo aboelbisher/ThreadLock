@@ -8,10 +8,12 @@
 #include <vector>
 
 #include "../src/apothecary_look.h"
+#include "../src/canal_look.h"
 #include "../src/generator.h"
 #include "../src/level_io.h"
 #include "../src/solver.h"
 #include "doctest.h"
+#include "test_levels.h"
 
 #ifndef THREADLOCK_ASSETS
 #define THREADLOCK_ASSETS "assets"
@@ -98,9 +100,9 @@ TEST_SUITE("content") {
           CHECK((a.id == b.id && a.kind == b.kind && a.at.x == b.at.x && a.at.y == b.at.y && a.socket == b.socket));
           CHECK((a.beads == b.beads && a.beat == b.beat && a.start == b.start));
           CHECK((a.flap == b.flap && a.flap_tappable == b.flap_tappable && a.want == b.want && a.count == b.count &&
-                 a.order == b.order && a.twin == b.twin));
+                 a.order == b.order && a.district == b.district && a.twin == b.twin));
           CHECK((a.slots == b.slots && a.period == b.period && a.first == b.first && a.gears == b.gears &&
-                 a.open == b.open));
+                 a.rods == b.rods && a.open == b.open));
         }
         REQUIRE(copy.pipes.size() == level.pipes.size());
         for (size_t p = 0; p < level.pipes.size(); ++p) {
@@ -401,6 +403,63 @@ TEST_SUITE("content") {
     changed = good;
     changed.nodes.push_back(sink);
     CHECK(Has(LookProblems(changed), "rack r's turntable runs into d"));
+  }
+
+  TEST_CASE("a canal map: harbours for districts, canals straight with round bends, rods along the streets") {
+    // World 3's grammar, on 3-6 The Mill Gate.
+    const Level level = MakeLevel(kMillGateCanals);
+    REQUIRE(canal::IsCanalMap(level));
+    const std::vector<canal::District> districts = canal::Districts(level);
+    REQUIRE(districts.size() == 2);
+    CHECK((districts[0].node == NodeOf(level, "ca") && districts[0].name == "Lantern Row"));
+    CHECK(districts[1].name == "Old Quay");
+    const int m = NodeOf(level, "m");
+    CHECK(RodPoints(level, m, 0) == std::vector<Vec2>{{180, 360}, {250, 360}, {250, 270}});
+    CHECK(LookProblems(level).empty());
+    Level copy;
+    std::vector<std::string> errors;
+    REQUIRE(ParseLevel(WriteLevel(level), copy, errors));
+    CHECK(copy.nodes[static_cast<size_t>(NodeOf(level, "cb"))].district == "Old Quay");
+    CHECK(copy.nodes[static_cast<size_t>(m)].rods == level.nodes[static_cast<size_t>(m)].rods);
+
+    // Each broken variant is its one problem.
+    auto problems = [](const std::string& from, const std::string& to) {
+      std::string json = kMillGateCanals;
+      REQUIRE(json.find(from) != std::string::npos);
+      json.replace(json.find(from), from.size(), to);
+      return LookProblems(MakeLevel(json));
+    };
+    using List = std::vector<std::string>;
+    CHECK(problems(R"(, "district": "Old Quay")", "") == List{"harbour cb has no district"});
+    CHECK(problems("Old Quay", "Lantern Row") == List{"harbours ca and cb both serve Lantern Row"});
+    CHECK(problems("[60, 420]]", "[70, 420]]") == List{"pipe m -> ca runs at a slant (segment 2)"});
+    CHECK(problems("[[180, 420], [60, 420]]", "[[180, 380], [60, 380]]") ==
+          List{"canal m -> ca has no room to bend (segment 0)"});
+    CHECK(problems(R"(["pb", "x", [[60, 270]]])", R"(["pb", "x", [[100, 150], [100, 270]]])") ==
+          List{"node pb isn't on a straight stretch"});
+    {
+      std::string json = kMillGateCanals;  // Lantern Row's harbour beside Old Quay's canal
+      json.replace(json.find(R"("at": [60, 520])"), 15, R"("at": [280, 520])");
+      json.replace(json.find("[60, 420]]"), 10, "[280, 420]]");
+      CHECK(LookProblems(MakeLevel(json)) == List{"canal g -> cb runs along canal m -> ca"});
+    }
+    CHECK(problems("[[180, 420], [60, 420]]", "[[180, 420], [330, 420], [330, 560], [60, 560]]") ==
+          List{"canal g -> cb crosses canal m -> ca outside a crossing"});
+    CHECK(problems(R"([["g", [[250, 360]]]])", R"(["g"])") == List{"the rod m -> g runs at a slant (segment 0)"});
+    CHECK(problems("[[250, 360]]", "[[365, 360], [365, 300], [250, 300]]") == List{"the rod m -> g is off the board"});
+    CHECK(problems("[[250, 360]]", "[[180, 400], [250, 400]]") == List{"the rod m -> g runs along canal m -> ca"});
+    // These break more than one rule at once.
+    CHECK(Has(problems("[[180, 120]]", "[[240, 270]]"), "canal pa -> x runs through node g"));
+    CHECK(Has(problems("[[300, 120]]", "[[300, 120], [340, 120]]"), "canal sa -> pa doubles back (segment 2)"));
+
+    // Without districts it's no canal map: none of this is checked.
+    std::string plain = kMillGateCanals;
+    for (const std::string district : {R"(, "district": "Lantern Row")", R"(, "district": "Old Quay")"})
+      plain.replace(plain.find(district), district.size(), "");
+    plain.replace(plain.find(R"([["g", [[250, 360]]]])"), 21, R"(["g"])");
+    const Level old = MakeLevel(plain);
+    CHECK(!canal::IsCanalMap(old));
+    CHECK(LookProblems(old).empty());
   }
 
   TEST_CASE("every level's look is right: nodes on the board, shop walls straight") {

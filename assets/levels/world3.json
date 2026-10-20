@@ -71,18 +71,20 @@
       "tray": ["tank4", "tank8", "turnstile"]
     },
     {
-      "id": "3-6", "name": "Polyrhythm", "intro": "Six and nine meet every eighteen.",
+      "id": "3-6", "name": "The Mill Gate", "intro": "Each amber barge turns the mill. The mill flips the blue gate.",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [90, 40], "beads": "B*9", "beat": 6},
-        {"id": "sa", "kind": "spout", "at": [270, 40], "beads": "A*6", "beat": 9, "start": 4},
-        {"id": "pb", "kind": "pass", "at": [90, 130]},
-        {"id": "pa", "kind": "pass", "at": [270, 130]},
-        {"id": "x", "kind": "cross", "at": [180, 290]},
-        {"id": "cb", "kind": "cup", "at": [270, 500], "want": "B", "count": 9},
-        {"id": "ca", "kind": "cup", "at": [90, 500], "want": "A", "count": 6}
+        {"id": "sb", "kind": "spout", "at": [60, 30], "beads": "B*6", "beat": 3, "start": 12},
+        {"id": "sa", "kind": "spout", "at": [300, 30], "beads": "A*6", "beat": 6},
+        {"id": "pb", "kind": "pass", "at": [60, 150]},
+        {"id": "pa", "kind": "pass", "at": [240, 120]},
+        {"id": "x", "kind": "cross", "at": [180, 270], "socket": true},
+        {"id": "g", "kind": "gate", "at": [250, 270], "open": false},
+        {"id": "m", "kind": "mill", "at": [180, 360], "gears": [["g", [[250, 360]]]]},
+        {"id": "ca", "kind": "cup", "at": [60, 520], "want": "A", "count": 6, "district": "Lantern Row"},
+        {"id": "cb", "kind": "cup", "at": [300, 520], "want": "B", "count": 6, "district": "Old Quay"}
       ],
-      "pipes": [["sb", "pb"], ["pb", "x", [[90, 200]]], ["sa", "pa"], ["pa", "x", [[270, 200]]], ["x", "cb", [[270, 400]]], ["x", "ca", [[90, 400]]]],
-      "tray": ["tank4", "tank8"]
+      "pipes": [["sb", "pb"], ["pb", "x", [[60, 270]]], ["sa", "pa", [[300, 120]]], ["pa", "x", [[180, 120]]], ["x", "g"], ["g", "cb", [[300, 270]]], ["x", "m"], ["m", "ca", [[180, 420], [60, 420]]]],
+      "tray": ["turnstile", "tank4"]
     },
     {
       "id": "3-7", "name": "Fast Lane", "intro": "Locks are safe, but traffic piles up behind them.",

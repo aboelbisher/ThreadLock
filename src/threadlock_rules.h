@@ -144,7 +144,8 @@ struct Node {
   // Cup
   Color want = Color::Blue;
   int count = 0;
-  std::string order;  // the order it fills (look only: World 2's bottles, named on a slip)
+  std::string order;     // the order it fills (look only: World 2's bottles, named on a slip)
+  std::string district;  // the district it serves (look only: World 3's harbours, e.g. "Lantern Row")
   // Pass: the other half of a twin pair (-1 = none)
   int twin = -1;
   // Rack: a drop arriving at tick t lands in slot (first + t / period) % slots.size()
@@ -153,6 +154,7 @@ struct Node {
   int first = 0;
   // Mill: the gates (nodes) each drop leaving it flips
   std::vector<int> gears;
+  std::vector<std::vector<Vec2>> rods;  // per gear: the bends of its rod to the gate (look only; may be shorter)
   // Gate: open at the start
   bool open = true;
 
@@ -363,6 +365,8 @@ Vec2 PointAlong(const std::vector<Vec2>& points, float distance);
 // Where a drop at `loc` is drawn: the middle of its cell on a pipe, or along its lane through a
 // node (in from its pipe's end, through the node's centre, out to the next pipe's start).
 Vec2 DropPoint(const Level& level, const Drop& drop, const Loc& loc);
+// The rod from mill `mill` to its k-th gate as drawn: the mill's centre, the rod's bends, the gate's centre.
+std::vector<Vec2> RodPoints(const Level& level, int mill, int k);
 
 class Board {
  public:

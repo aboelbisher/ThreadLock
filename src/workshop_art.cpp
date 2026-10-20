@@ -75,10 +75,16 @@ void DrawMachinePart(Canvas& canvas, const ArtFrame& frame, int n) {
       break;
     }
     case NodeKind::Mill: {
-      // A wheel that turns a notch per drop; dashed gears run to the gates it flips.
+      // A wheel that turns a notch per drop; dashed gears run to the gates it flips, through their rods' bends.
       const NodeAnim& anim = frame.anims[static_cast<size_t>(n)];
-      for (int gate : node.gears)
-        art::DashedLine(canvas, c, frame.At(gate), 1.5f * s, WithAlpha(ui_color::kStar, 0.3f + 0.5f * anim.flash), 12);
+      for (size_t g = 0; g < node.gears.size(); ++g) {
+        const std::vector<Vec2> rod = RodPoints(level, n, static_cast<int>(g));
+        for (size_t k = 0; k + 1 < rod.size(); ++k) {
+          const glm::vec2 a = frame.layout.ToCanvas(rod[k]), b = frame.layout.ToCanvas(rod[k + 1]);
+          const int dashes = std::max(2, static_cast<int>(glm::length(b - a) / (12.0f * s)));
+          art::DashedLine(canvas, a, b, 1.5f * s, WithAlpha(ui_color::kStar, 0.3f + 0.5f * anim.flash), dashes);
+        }
+      }
       canvas.Circle(c, 16.0f * s, WithAlpha(ui_color::kPanel, 0.8f));
       canvas.Ring(c, 16.0f * s, 2.5f * s, ink);
       for (int spoke = 0; spoke < 6; ++spoke) {

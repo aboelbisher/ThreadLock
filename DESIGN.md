@@ -274,6 +274,13 @@ and the ambience crossfades to the shop's.
   first?); Harbour Mouth (three canals funnel into one harbour). Drawn: 3-6 The Mill Gate, "Each amber
   barge turns the mill. The mill flips the blue gate.", districts Lantern Row and Old Quay, ≤ 2 pieces,
   ≤ 0:30.
+- **Board grammar** (format built 21 October; the art comes next): each harbour (cup) names its
+  `"district"`, which makes the level a canal map: canals run straight across or up and down with round
+  bends (28 wide, bends of 16), locks, mills and gates sit on straight stretches, canals never run
+  through a node, alongside each other or across one another except at a crossing (an aqueduct = a
+  crossing with a locked bridge); a mill's rods run along the streets to its gates, with optional bends
+  (`"gears": [["g", [[250, 360]]]]`). 3-6 The Mill Gate is in: one solution (a lock on the crossing + a short
+  tank on amber's lock), Lean 2, 0:14; nothing = murk, a lock alone = gridlock.
 
 ### World 4 · The Mixing Hall · The Sanctum
 - **Place:** the alchemists' sanctum, an obsidian table lit by candles.

@@ -153,13 +153,15 @@ const char* FailureTitle(const Outcome& outcome) {
 
 std::string FailureText(const Level& level, const Board& board, const Outcome& outcome) {
   const Node* node = outcome.fail_node >= 0 ? &level.nodes[static_cast<size_t>(outcome.fail_node)] : nullptr;
-  // A rack's bottle, or a cup with an order (World 2), is named after its order.
+  // A rack's bottle, or a cup with an order (World 2), is named after its order; a harbour after its district.
   std::string bottle;
   if (node && node->kind == NodeKind::Rack && outcome.fail_slot >= 0) {
     const std::string& order = node->slots[static_cast<size_t>(outcome.fail_slot)].order;
     bottle = order.empty() ? "A bottle" : "The bottle for " + order;
   } else if (node && node->kind == NodeKind::Cup && !node->order.empty()) {
     bottle = "The bottle for " + node->order;
+  } else if (node && node->kind == NodeKind::Cup && !node->district.empty()) {
+    bottle = node->district + "'s harbour";  // World 3
   }
   switch (outcome.failure) {
     case Failure::Mud:

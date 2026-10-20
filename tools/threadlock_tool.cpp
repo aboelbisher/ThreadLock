@@ -385,6 +385,8 @@ int Render(const Level& level, const std::string& out, const Placement& placemen
                         {node.at.x + 26, node.at.y}},
                        3.0f, c);
         image.Text({node.at.x - 8, node.at.y + 40}, std::to_string(node.count), ink);
+        if (!node.district.empty())  // World 3: the district this harbour serves, under it
+          image.Text({node.at.x - 3.3f * static_cast<float>(node.district.size()), node.at.y + 74}, node.district, dim);
         break;
       }
       case NodeKind::Drain:
@@ -415,12 +417,17 @@ int Render(const Level& level, const std::string& out, const Placement& placemen
           const float a = turn + static_cast<float>(spoke) * 1.5708f;
           image.Segment(node.at, {node.at.x + std::cos(a) * 13.0f, node.at.y + std::sin(a) * 13.0f}, 2.0f, ink);
         }
-        for (int gate : node.gears) {  // a dashed line to each gate it flips
-          const Vec2 to = level.nodes[static_cast<size_t>(gate)].at;
-          for (int k = 0; k < 12; k += 2) {
-            const float t0 = static_cast<float>(k) / 12.0f, t1 = static_cast<float>(k + 1) / 12.0f;
-            image.Segment({node.at.x + (to.x - node.at.x) * t0, node.at.y + (to.y - node.at.y) * t0},
-                          {node.at.x + (to.x - node.at.x) * t1, node.at.y + (to.y - node.at.y) * t1}, 1.0f, dim);
+        for (size_t g = 0; g < node.gears.size(); ++g) {  // a dashed rod to each gate it flips, through its bends
+          const std::vector<Vec2> rod = RodPoints(level, static_cast<int>(n), static_cast<int>(g));
+          for (size_t r = 0; r + 1 < rod.size(); ++r) {
+            const Vec2 from = rod[r], to = rod[r + 1];
+            const int dashes = std::max(2, static_cast<int>(std::hypot(to.x - from.x, to.y - from.y) / 12.0f)) * 2;
+            for (int k = 0; k < dashes; k += 2) {
+              const float t0 = static_cast<float>(k) / static_cast<float>(dashes);
+              const float t1 = static_cast<float>(k + 1) / static_cast<float>(dashes);
+              image.Segment({from.x + (to.x - from.x) * t0, from.y + (to.y - from.y) * t0},
+                            {from.x + (to.x - from.x) * t1, from.y + (to.y - from.y) * t1}, 1.0f, dim);
+            }
           }
         }
         break;

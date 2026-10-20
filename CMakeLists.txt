@@ -17,6 +17,8 @@ set(THREADLOCK_RULES
   src/level_io.h
   src/apothecary_look.cpp
   src/apothecary_look.h
+  src/canal_look.cpp
+  src/canal_look.h
   src/solver.cpp
   src/solver.h
   src/generator.cpp

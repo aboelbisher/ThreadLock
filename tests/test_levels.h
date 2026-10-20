@@ -276,4 +276,24 @@ inline const std::string kRepair = R"({
   "placed": [{"piece": "separator", "at": "f", "locked": true}, {"piece": "tank4", "at": "t"}]
 })";
 
+// World 3's 3-6 The Mill Gate, a canal map: each amber barge turns the mill, which flips the blue gate (its rod
+// runs along Mill Lane, bending at (250, 360)); the harbours serve Lantern Row and Old Quay.
+inline const std::string kMillGateCanals = R"({
+  "id": "t-3-6", "name": "The Mill Gate",
+  "nodes": [
+    {"id": "sb", "kind": "spout", "at": [60, 30], "beads": "B*6", "beat": 3, "start": 12},
+    {"id": "sa", "kind": "spout", "at": [300, 30], "beads": "A*6", "beat": 6},
+    {"id": "pb", "kind": "pass", "at": [60, 150]},
+    {"id": "pa", "kind": "pass", "at": [240, 120]},
+    {"id": "x", "kind": "cross", "at": [180, 270], "socket": true},
+    {"id": "g", "kind": "gate", "at": [250, 270], "open": false},
+    {"id": "m", "kind": "mill", "at": [180, 360], "gears": [["g", [[250, 360]]]]},
+    {"id": "ca", "kind": "cup", "at": [60, 520], "want": "A", "count": 6, "district": "Lantern Row"},
+    {"id": "cb", "kind": "cup", "at": [300, 520], "want": "B", "count": 6, "district": "Old Quay"}
+  ],
+  "pipes": [["sb", "pb"], ["pb", "x", [[60, 270]]], ["sa", "pa", [[300, 120]]], ["pa", "x", [[180, 120]]],
+            ["x", "g"], ["g", "cb", [[300, 270]]], ["x", "m"], ["m", "ca", [[180, 420], [60, 420]]]],
+  "tray": ["turnstile", "tank4"]
+})";
+
 }  // namespace threadlock
