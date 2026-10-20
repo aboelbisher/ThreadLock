@@ -36,18 +36,36 @@ struct Noise {
 
 float Decay(float t, float attack, float time) { return t < attack ? t / attack : std::exp(-(t - attack) / time); }
 
+// One partial, amp sin(2 pi freq t + phase) Decay(t, attack, time), added from sample `from`: a phasor turned
+// by a fixed step each sample (no sin or exp per sample), stopped once it's below hearing. Every struck or
+// rubbed sound (bars, bells, glass) is a sum of these: the long ones ring 20-60 partials for seconds.
+void Partial(Buffer& out, size_t from, float freq, float amp, float attack, float time, float phase = 0.0f) {
+  const double step = static_cast<double>(kTau) * freq / static_cast<double>(out.rate);
+  const double c = std::cos(step), s = std::sin(step);
+  const double fall = std::exp(-1.0 / (static_cast<double>(time) * out.rate));
+  const size_t rise = std::max<size_t>(1, static_cast<size_t>(attack * static_cast<float>(out.rate)));
+  double re = std::cos(phase), im = std::sin(phase), env = 1.0;  // (re, im) = e^(i (step n + phase))
+  for (size_t i = from, n = 0; i < out.samples.size(); ++i, ++n) {
+    double level = static_cast<double>(n) / static_cast<double>(rise);
+    if (n >= rise) {
+      level = env;
+      env *= fall;
+      if (env < 1e-5) break;
+    }
+    out.samples[i] += static_cast<float>(amp * level * im);
+    const double next = re * c - im * s;
+    im = re * s + im * c;
+    re = next;
+  }
+}
+
 // One instrument note at `freq`, added into `out` from `start` seconds, scaled by `gain`.
 void Instrument(Color color, float freq, Buffer& out, float start, float gain) {
   const size_t from = out.At(start);
   switch (color) {
     case Color::Blue: {  // marimba: a struck bar's inharmonic partials, the high ones die first
       const float ratio[] = {1.0f, 3.93f, 9.0f}, amp[] = {1.0f, 0.32f, 0.08f}, time[] = {0.38f, 0.09f, 0.03f};
-      for (size_t i = from; i < out.samples.size(); ++i) {
-        const float t = out.T(i - from);
-        float v = 0.0f;
-        for (int k = 0; k < 3; ++k) v += amp[k] * std::sin(kTau * freq * ratio[k] * t) * Decay(t, 0.002f, time[k]);
-        out.samples[i] += gain * v;
-      }
+      for (int k = 0; k < 3; ++k) Partial(out, from, freq * ratio[k], gain * amp[k], 0.002f, time[k]);
       break;
     }
     case Color::Amber: {  // a plucked string (Karplus-Strong): a burst of noise in a feedback delay
@@ -124,12 +142,11 @@ void Sine(Buffer& out, float start, float length, float freq_from, float freq_to
 // attack, and two partials 0.7 Hz apart (the bowl is never perfectly round: a slow beating).
 void Harmonica(Buffer& out, float freq, float start, float gain, float attack = 0.07f, float decay = 0.32f) {
   const size_t from = out.At(start);
-  for (size_t i = from; i < out.samples.size(); ++i) {
-    const float t = out.T(i - from);
-    const float v = std::sin(kTau * freq * t) + 0.6f * std::sin(kTau * (freq + 0.7f) * t + 1.3f) +
-                    0.12f * std::sin(2.0f * kTau * freq * t) + 0.05f * std::sin(3.0f * kTau * freq * t);
-    out.samples[i] += gain * 0.6f * v * Decay(t, attack, decay);
-  }
+  const float g = gain * 0.6f;
+  Partial(out, from, freq, g, attack, decay);
+  Partial(out, from, freq + 0.7f, g * 0.6f, attack, decay, 1.3f);
+  Partial(out, from, 2.0f * freq, g * 0.12f, attack, decay);
+  Partial(out, from, 3.0f * freq, g * 0.05f, attack, decay);
 }
 
 // A celesta: a hammer on a small steel bar over a resonator: bright, quick, the 3.9 partial gone
@@ -137,12 +154,7 @@ void Harmonica(Buffer& out, float freq, float start, float gain, float attack = 
 void Celesta(Buffer& out, float freq, float start, float gain) {
   const float ratio[] = {1.0f, 2.0f, 3.9f}, amp[] = {1.0f, 0.3f, 0.18f}, time[] = {0.2f, 0.11f, 0.03f};
   const size_t from = out.At(start);
-  for (size_t i = from; i < out.samples.size(); ++i) {
-    const float t = out.T(i - from);
-    float v = 0.0f;
-    for (int k = 0; k < 3; ++k) v += amp[k] * std::sin(kTau * freq * ratio[k] * t) * Decay(t, 0.001f, time[k]);
-    out.samples[i] += gain * v;
-  }
+  for (int k = 0; k < 3; ++k) Partial(out, from, freq * ratio[k], gain * amp[k], 0.001f, time[k]);
 }
 
 // A tubular chime: a free-free bar's partials 1 : 2.756 : 5.404 : 8.933 (the high ones die first),
@@ -151,12 +163,7 @@ void TubularChime(Buffer& out, float freq, float start, float gain) {
   const float ratio[] = {1.0f, 2.756f, 5.404f, 8.933f}, amp[] = {1.0f, 0.45f, 0.25f, 0.12f};
   const float time[] = {0.45f, 0.3f, 0.14f, 0.06f};
   const size_t from = out.At(start);
-  for (size_t i = from; i < out.samples.size(); ++i) {
-    const float t = out.T(i - from);
-    float v = 0.0f;
-    for (int k = 0; k < 4; ++k) v += amp[k] * std::sin(kTau * freq * ratio[k] * t) * Decay(t, 0.0015f, time[k]);
-    out.samples[i] += gain * v;
-  }
+  for (int k = 0; k < 4; ++k) Partial(out, from, freq * ratio[k], gain * amp[k], 0.0015f, time[k]);
   Noise noise;
   float last = 0.0f;
   for (size_t i = from; i < out.At(start + 0.004f); ++i) {  // the strike: a high-passed tick
@@ -170,12 +177,7 @@ void TubularChime(Buffer& out, float freq, float start, float gain) {
 void PaneBell(Buffer& out, float freq, float start, float gain) {
   const float ratio[] = {1.0f, 2.0f, 2.76f}, amp[] = {1.0f, 0.2f, 0.3f}, time[] = {0.14f, 0.08f, 0.05f};
   const size_t from = out.At(start);
-  for (size_t i = from; i < out.samples.size(); ++i) {
-    const float t = out.T(i - from);
-    float v = 0.0f;
-    for (int k = 0; k < 3; ++k) v += amp[k] * std::sin(kTau * freq * ratio[k] * t) * Decay(t, 0.001f, time[k]);
-    out.samples[i] += gain * v;
-  }
+  for (int k = 0; k < 3; ++k) Partial(out, from, freq * ratio[k], gain * amp[k], 0.001f, time[k]);
 }
 
 // A state-variable filter (Chamberlin): band-passed and low-passed noise for smoke, liquid and air.
@@ -197,29 +199,6 @@ void HeartChimes(Buffer& out, float start, float base, float gain) {
 void Normalize(std::vector<float>& samples, float peak);
 
 // ---- The Shop set: wood and brass ----
-
-// One partial, amp sin(2 pi freq t) Decay(t, attack, time), added from sample `from`: a phasor turned by a
-// fixed step each sample (no sin or exp per sample), stopped once it's below hearing. For the long, many-partial
-// shop sounds (a bell is 6 partials, Market Day rings 7 of them twice).
-void Partial(Buffer& out, size_t from, float freq, float amp, float attack, float time) {
-  const double step = static_cast<double>(kTau) * freq / static_cast<double>(out.rate);
-  const double c = std::cos(step), s = std::sin(step);
-  const double fall = std::exp(-1.0 / (static_cast<double>(time) * out.rate));
-  const size_t rise = std::max<size_t>(1, static_cast<size_t>(attack * static_cast<float>(out.rate)));
-  double re = 1.0, im = 0.0, env = 1.0;  // (re, im) = e^(i step n)
-  for (size_t i = from, n = 0; i < out.samples.size(); ++i, ++n) {
-    double level = static_cast<double>(n) / static_cast<double>(rise);
-    if (n >= rise) {
-      level = env;
-      env *= fall;
-      if (env < 1e-5) break;
-    }
-    out.samples[i] += static_cast<float>(amp * level * im);
-    const double next = re * c - im * s;
-    im = re * s + im * c;
-    re = next;
-  }
-}
 
 // A rosewood marimba: a tuned bar's partials 1 : 4 : 10 (the high ones die first), a resonator tube
 // under it holding the fundamental a little longer, a soft mallet thump.
