@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -527,6 +528,26 @@ TEST_SUITE("content") {
     std::string other = kMillGateCanals;
     other.replace(other.find(R"("id": "t-3-6")"), 13, R"("id": "t-3-7")");
     CHECK(!near(canal::MakeCity(MakeLevel(other)).roofs[17].box.min, city.roofs[17].box.min));
+  }
+
+  TEST_CASE("a mill's rod pulses from the mill to the gate in one tick; the wheel turns a notch a drop") {
+    const Level level = MakeLevel(kMillGateCanals);
+    const std::vector<Vec2> rod = RodPoints(level, NodeOf(level, "m"), 0);  // (180,360) -> (250,360) -> (250,270)
+    auto near = [](std::optional<Vec2> a, Vec2 b) {
+      return a && std::fabs(a->x - b.x) < 0.01f && std::fabs(a->y - b.y) < 0.01f;
+    };
+    CHECK(!canal::PulseAt(rod, -0.1f));
+    CHECK(!canal::PulseAt(rod, 1.1f));
+    CHECK(near(canal::PulseAt(rod, 0.0f), {180, 360}));
+    CHECK(near(canal::PulseAt(rod, 70.0f / 160.0f), {250, 360}));    // the bend: 70 of the rod's 160
+    CHECK(near(canal::PulseAt(rod, 1.0f), {250, 270}));              // the gate
+    CHECK(canal::PulseAt(rod, 0.5f)->y == doctest::Approx(350.0f));  // 80 along: 10 up the second run
+    CHECK(canal::PulseAt({{0, 0}}, 0.5f) == std::nullopt);           // no rod, no pulse
+
+    CHECK(canal::WheelAngle(0, 0.0f) == doctest::Approx(0.0f));
+    CHECK(canal::WheelAngle(1, 0.0f) == doctest::Approx(3.14159265f / 3.0f));
+    CHECK(canal::WheelAngle(0, 0.5f) == doctest::Approx(3.14159265f / 6.0f));
+    CHECK(canal::WheelAngle(2, 1.5f) == doctest::Approx(3.14159265f));  // inside is capped at 1: three notches
   }
 
   TEST_CASE("every level's look is right: nodes on the board, shop walls straight") {

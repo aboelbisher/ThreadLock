@@ -35,4 +35,8 @@ float LockOpen(float since);
 // ticks since it landed.
 float Glide(float since);
 
+// A gate's leaves: 0 shut .. 1 open. `open_now` = the gate's state after its flip; the leaves swing to it over
+// 0.6 tick from when the flip landed (`since_flip` = ticks since then; before it, the old state).
+float GateOpenness(bool open_now, float since_flip);
+
 }  // namespace threadlock::barges

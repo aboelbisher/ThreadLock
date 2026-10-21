@@ -9,6 +9,7 @@ namespace {
 constexpr float kSlide = 8.0f;       // a barge slides this far out of its lock as it pours (board units)
 constexpr float kGlideTicks = 1.5f;  // a landed barge glides into its berth over this many ticks
 constexpr float kLeafOpen = 0.25f, kLeafHeld = 0.75f;  // ticks: the leaves open by the first, shut by 1.0
+constexpr float kGateSwing = 0.6f;                     // ticks: a gate's leaves swing from one state to the other
 
 Vec2 Unit(Vec2 v) {
   const float length = std::sqrt(v.x * v.x + v.y * v.y);
@@ -98,6 +99,12 @@ float LockOpen(float since) {
 float Glide(float since) {
   const float t = std::clamp(since / kGlideTicks, 0.0f, 1.0f);
   return 1.0f - (1.0f - t) * (1.0f - t);
+}
+
+float GateOpenness(bool open_now, float since_flip) {
+  const float t = std::clamp(since_flip / kGateSwing, 0.0f, 1.0f);
+  const float eased = 1.0f - (1.0f - t) * (1.0f - t);
+  return open_now ? eased : 1.0f - eased;
 }
 
 }  // namespace threadlock::barges

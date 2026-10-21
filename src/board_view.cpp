@@ -198,7 +198,10 @@ void BoardView::SetArt(BoardArt* art) {
 
 void BoardView::ClearMarkers() {
   markers_.clear();
-  for (NodeAnim& anim : anims_) anim.tick = -1000000;
+  for (NodeAnim& anim : anims_) {
+    anim.tick = -1000000;
+    anim.flip = -1000000;
+  }
   for (std::vector<barges::Landing>& landed : landed_) landed.clear();
   std::fill(cup_fill_.begin(), cup_fill_.end(), 0.0f);
   for (std::vector<float>& fills : bottle_fill_) std::fill(fills.begin(), fills.end(), 0.0f);
@@ -232,6 +235,7 @@ void BoardView::OnEvents(const std::vector<Event>& events, const Board& board) {
       case EventType::Flip:
         anims_[static_cast<size_t>(e.node)].flash = 1.0f;
         anims_[static_cast<size_t>(e.node)].tick = board.Ticks();
+        anims_[static_cast<size_t>(e.node)].flip = board.Ticks();
         break;
       case EventType::Collide: add(Marker::Mud, e.node); break;
       case EventType::NearMiss: add(Marker::NearMiss, e.node); break;

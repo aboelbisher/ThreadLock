@@ -41,6 +41,7 @@ struct NodeAnim {
   float arm = 0.0f;                       // flipper
   float flash = 0.0f;                     // a mix, a gate flipping
   int tick = -1000000;                    // the tick of its last pour, leave or flip (long ago = never)
+  int flip = -1000000;                    // the tick of a gate's last flip (its leaves swing the tick after)
 };
 
 // A moment on the board, shown where it happened (from the board's events): what went wrong, a near miss,

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <numbers>
 #include <string>
 
 #include <glm/glm.hpp>
@@ -558,6 +559,27 @@ std::vector<std::string> Problems(const Level& level) {
     }
   }
   return problems;
+}
+
+std::optional<Vec2> PulseAt(const std::vector<Vec2>& rod, float since) {
+  if (since < 0.0f || since > 1.0f || rod.size() < 2) return std::nullopt;
+  float total = 0.0f;
+  for (size_t k = 0; k + 1 < rod.size(); ++k) total += Distance(rod[k], rod[k + 1]);
+  const float target = since * total;
+  float walked = 0.0f;
+  for (size_t k = 0; k + 1 < rod.size(); ++k) {
+    const float length = Distance(rod[k], rod[k + 1]);
+    if (target <= walked + length) {
+      const float t = length > 0.0f ? (target - walked) / length : 0.0f;
+      return Vec2{rod[k].x + (rod[k + 1].x - rod[k].x) * t, rod[k].y + (rod[k + 1].y - rod[k].y) * t};
+    }
+    walked += length;
+  }
+  return rod.back();
+}
+
+float WheelAngle(int turns, float inside) {
+  return (static_cast<float>(turns) + std::clamp(inside, 0.0f, 1.0f)) * std::numbers::pi_v<float> / 3.0f;
 }
 
 }  // namespace threadlock::canal

@@ -127,6 +127,39 @@ TEST_SUITE("barges") {
     }
   }
 
+  TEST_CASE("a gate's leaves swing over 0.6 tick once its flip lands, from the old state to the new") {
+    CHECK(barges::GateOpenness(true, -1.0f) == doctest::Approx(0.0f));   // before the flip: the old (shut) state
+    CHECK(barges::GateOpenness(false, -1.0f) == doctest::Approx(1.0f));  // the old state was open
+    CHECK(barges::GateOpenness(true, 0.0f) == doctest::Approx(0.0f));
+    CHECK(barges::GateOpenness(true, 0.3f) == doctest::Approx(0.75f));  // eased: 1 - (1 - 0.5)^2
+    CHECK(barges::GateOpenness(true, 0.6f) == doctest::Approx(1.0f));
+    CHECK(barges::GateOpenness(true, 9.0f) == doctest::Approx(1.0f));
+    CHECK(barges::GateOpenness(false, 0.6f) == doctest::Approx(0.0f));
+    CHECK(barges::GateOpenness(false, 9.0f) == doctest::Approx(0.0f));
+  }
+
+  TEST_CASE("3-6's gate flips at the end of the tick its mill's barge leaves") {
+    const std::vector<World> worlds = LoadWorlds();
+    const Level& level = Level36(worlds);
+    const int mill = NodeOf(level, "m"), gate = NodeOf(level, "g");
+    Board board(level);
+    board.SetPlacement(level.pars.lean);
+    board.Start();
+    int leave_tick = -1, flip_tick = -1, turns_before = 0;
+    while (board.Running() && flip_tick < 0) {
+      for (const Event& e : board.Tick()) {
+        if (e.type == EventType::Leave && e.node == mill && leave_tick < 0) {
+          leave_tick = board.Ticks();
+          turns_before = board.MillTurns(mill);
+        }
+        if (e.type == EventType::Flip && e.node == gate && flip_tick < 0) flip_tick = board.Ticks();
+      }
+    }
+    REQUIRE(leave_tick >= 0);
+    CHECK(flip_tick == leave_tick);  // the same tick: the pulse runs during it, the leaves swing after
+    CHECK(turns_before == 1);
+  }
+
   TEST_CASE("a just-poured drop slides out of its lock, fading in") {
     const std::vector<World> worlds = LoadWorlds();
     const Level& level = Level36(worlds);

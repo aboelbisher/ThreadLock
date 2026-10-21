@@ -25,8 +25,9 @@
 // this way; World 3's older levels keep the workshop look.
 //
 // The barges (barges.h) are drawn here, not as the shared liquid: each drop is a barge of light on its canal, a
-// harbour's landed barges sit in their berths, and a lock's leaves swing as it pours. Step c3 draws the mill
-// and gates; until then they are the shared machine parts.
+// harbour's landed barges sit in their berths, and a lock's leaves swing as it pours. The mill (its house, its
+// wheel turning a notch a barge, its rods with a pulse along them to the gates) and the gates (their leaves
+// swinging when flipped, the lamp) are drawn here too, so this look doesn't use the shared machine parts.
 namespace threadlock {
 
 class CanalArt : public BoardArt {
@@ -84,12 +85,20 @@ class CanalArt : public BoardArt {
   void DrawBerths(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
   // A harbour's pill: its glyph and district's name, and its count of barges.
   void DrawPill(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
+  // A mill's house, wheel, axle and hub, and its rods (with their names: `ordinal` = how many mills came before it).
+  void DrawMill(wlw::ui::Canvas& canvas, const ArtFrame& frame, int mill, int ordinal) const;
+  // A mill's notch lights, its wheel's slats turning with the barges through it, its window, the pulse on its rods.
+  void DrawMillFront(wlw::ui::Canvas& canvas, const ArtFrame& frame, int mill) const;
+  // A gate's hinges, post and lamp housing.
+  void DrawGate(wlw::ui::Canvas& canvas, const ArtFrame& frame, int gate) const;
+  // A gate's leaves swinging as it flips, and its lamp (green open, red shut).
+  void DrawGateFront(wlw::ui::Canvas& canvas, const ArtFrame& frame, int gate) const;
 
   TilePool tiles_;
   std::vector<TileArt> tile_art_;  // per slot
   std::shared_ptr<wlw::rendering::Shader> ground_shader_;
   std::shared_ptr<wlw::ui::Font> street_;
-  WorkshopArt parts_;  // the mill, the gates and mud until this look draws its own
+  WorkshopArt parts_;  // mud until this look draws its own
   // This level's city.
   const Level* level_ = nullptr;
   canal::City city_;
@@ -97,6 +106,8 @@ class CanalArt : public BoardArt {
   std::vector<canal::Way> ways_;          // per pipe
   std::vector<canal::Lock> locks_;        // per node (a spout's)
   std::vector<canal::Harbour> harbours_;  // per node (a cup's)
+  std::vector<canal::Mill> mills_;        // per node (a mill's)
+  std::vector<canal::Gate> gates_;        // per node (a gate's)
   art::Glow glow_;
 };
 

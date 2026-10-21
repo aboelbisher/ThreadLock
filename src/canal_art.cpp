@@ -1,10 +1,12 @@
 #include "canal_art.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <optional>
 #include <utility>
 
 #include "wlw/rendering/shader.h"
@@ -38,6 +40,20 @@ constexpr Rgba kMurkHull = Hex(0x6A5D3C), kMurkCore = Hex(0x857652), kMurkGlow =
 constexpr Rgba kPillBack = Hex(0x080E1A, 0.9f), kPillNamed = Hex(0xB9C6E2), kPillFull = Hex(0xB8FAF2);
 constexpr float kBargeLength = 11.0f, kBargeWidth = 7.0f;  // board units (a barge's hull)
 constexpr float kPillWidth = 92.0f, kPillHeight = 18.0f;   // the harbour pill (board units)
+// The mill: a house on the bank away from its rod, a wheel across the canal (18 slats to a turn, one notch a
+// barge), a window, the rods with knuckles at their bends and their names along the first run.
+constexpr Rgba kHouse = Hex(0x1E2944), kNotchLit = Hex(0xFFC53D), kWindow = Hex(0xFFB347);
+constexpr Rgba kWheelDisk = Hex(0x2A1E12), kWheelRim = Hex(0x5A4126), kSlat = Hex(0x8A6A40);
+constexpr Rgba kCasing = Hex(0x3A2A12), kKnuckle = Hex(0x5A3E16), kRodDash = Hex(0xFFE6A6);
+constexpr Rgba kLabel = Hex(0xB9C6E2, 0.8f), kPulse = Hex(0xFFE6A6);
+constexpr float kWheelAlong = 9.0f, kWheelAcross = 17.0f;  // the wheel's half sizes along the canal and across the rod
+constexpr int kSlats = 18, kRimSteps = 36;
+constexpr float kNotchAcross = 3.5f;  // a notch: across the house face, 8 deep
+constexpr std::array<const char*, 3> kStreetNames{"Mill Lane", "Wheel Lane", "Gear Street"};
+// The gate: its leaves (14.5 long) hinged 13 either side of the canal, meeting a little upstream when shut; its
+// lamp at (12, 28) on a post. Red shut, green open.
+constexpr float kGateLeaf = 14.5f, kGateHinge = 13.0f;
+constexpr Rgba kHinge = Hex(0x8A6A40), kPost = Hex(0x55658A), kLampRed = Hex(0xFF4D4D), kLampGreen = Hex(0x5BE08A);
 
 uint64_t Mix(uint64_t h, uint64_t v) {
   h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
@@ -58,6 +74,11 @@ Rect ToCanvas(const Layout& layout, const canal::Box& box) {
 
 // A barge's light, a little paler than the liquid's colour (the lit hull).
 Rgba Hull(const Palette& palette, Color color) { return Mixed(LiquidColor(palette, color), Hex(0xFFFFFF), 0.12f); }
+
+// A point on a mill's wheel at angle `theta`, `reach` of the way from its middle to its rim (canvas units).
+glm::vec2 OnWheel(const Layout& layout, const canal::Frame& f, float theta, float reach) {
+  return layout.ToCanvas(f.Point(kWheelAlong * reach * std::sin(theta), kWheelAcross * reach * std::cos(theta)));
+}
 
 }  // namespace
 
@@ -102,9 +123,13 @@ void CanalArt::Prepare(const ArtFrame& frame) {
   ways_ = canal::Ways(level);
   locks_.assign(level.nodes.size(), {});
   harbours_.assign(level.nodes.size(), {});
+  mills_.assign(level.nodes.size(), {});
+  gates_.assign(level.nodes.size(), {});
   for (size_t n = 0; n < level.nodes.size(); ++n) {
     if (level.nodes[n].kind == NodeKind::Spout) locks_[n] = canal::LockAt(level, static_cast<int>(n));
     if (level.nodes[n].kind == NodeKind::Cup) harbours_[n] = canal::HarbourAt(level, static_cast<int>(n));
+    if (level.nodes[n].kind == NodeKind::Mill) mills_[n] = canal::MillAt(level, static_cast<int>(n));
+    if (level.nodes[n].kind == NodeKind::Gate) gates_[n] = canal::GateAt(level, static_cast<int>(n));
   }
 }
 
@@ -168,9 +193,12 @@ void CanalArt::DrawStill(int slot, int k, const ArtFrame& whole, glm::vec2 scree
   DrawCity(canvas, frame, top, bottom);
   DrawCanals(canvas, frame);
   const Level& level = *frame.level;
+  int mills = 0;
   for (size_t n = 0; n < level.nodes.size(); ++n) {
     if (level.nodes[n].kind == NodeKind::Spout) DrawLock(canvas, frame, static_cast<int>(n));
     if (level.nodes[n].kind == NodeKind::Cup) DrawHarbour(canvas, frame, static_cast<int>(n));
+    if (level.nodes[n].kind == NodeKind::Mill) DrawMill(canvas, frame, static_cast<int>(n), mills++);
+    if (level.nodes[n].kind == NodeKind::Gate) DrawGate(canvas, frame, static_cast<int>(n));
   }
   canvas.ShaderRect({{0.0f, 0.0f}, screen}, art.vignette);
 }
@@ -281,6 +309,68 @@ void CanalArt::DrawHarbour(Canvas& canvas, const ArtFrame& frame, int cup) const
     for (const float across : {-40.0f, 40.0f})
       canvas.Circle(layout.ToCanvas(f.Point(along, across)), 1.8f * s, kHarbourLamp);
   }
+}
+
+void CanalArt::DrawMill(Canvas& canvas, const ArtFrame& frame, int n, int ordinal) const {
+  const canal::Mill& mill = mills_[static_cast<size_t>(n)];
+  const canal::Frame& f = mill.frame;
+  const Layout& layout = frame.layout;
+  const float s = frame.Scale();
+  const Node& node = frame.level->nodes[static_cast<size_t>(n)];
+  // The house on the bank away from its rod, shaded on the half away from the moon; six notches on its face.
+  canvas.FillRect(ToCanvas(layout, mill.house), kHouse, 2.0f * s);
+  canvas.FillRect(ToCanvas(layout, f.Span(0.0f, 22.0f, -56.0f, -20.0f)), kRoofShade, 2.0f * s);
+  canvas.Line(layout.ToCanvas(f.Point(-22.0f, -38.0f)), layout.ToCanvas(f.Point(22.0f, -38.0f)), 1.0f * s, kRidge);
+  for (int j = 0; j < 6; ++j) {
+    const float v = -53.0f + 5.2f * static_cast<float>(j);
+    canvas.FillRect(ToCanvas(layout, f.Span(-8.0f, 0.0f, v - kNotchAcross * 0.5f, v + kNotchAcross * 0.5f)), kRidge,
+                    1.0f * s);
+  }
+  canvas.Circle(layout.ToCanvas(f.Point(12.0f, -50.0f)), 6.0f * s, kChimney);  // the window's frame, lit each frame
+  // The wheel: its disk, its rim, the axle through it to the hub on the rod's side.
+  std::vector<glm::vec2> rim;
+  for (int i = 0; i <= kRimSteps; ++i) {
+    rim.push_back(OnWheel(layout, f, 2.0f * kPi * static_cast<float>(i) / static_cast<float>(kRimSteps), 1.0f));
+  }
+  art::FillConvex(canvas, rim, kWheelDisk);
+  art::Polyline(canvas, rim, 2.0f * s, kWheelRim);
+  canvas.Line(layout.ToCanvas(f.Point(0.0f, -20.0f)), layout.ToCanvas(f.Point(0.0f, 22.0f)), 2.4f * s, kWheelRim);
+  canvas.Circle(layout.ToCanvas(f.Point(0.0f, 20.0f)), 3.2f * s, kLeaf);
+  // Each rod: its casing, the brass over it with a dash of light, a knuckle at each bend, and its name.
+  for (size_t g = 0; g < node.gears.size(); ++g) {
+    const std::vector<Vec2> rod = RodPoints(*frame.level, n, static_cast<int>(g));
+    std::vector<glm::vec2> points;
+    for (const Vec2 p : rod) points.push_back(layout.ToCanvas(p));
+    art::Polyline(canvas, points, 5.0f * s, kCasing);
+    art::Polyline(canvas, points, 2.6f * s, kLeaf);
+    for (size_t k = 1; k + 1 < points.size(); ++k) {
+      canvas.FillRect({points[k] - glm::vec2(5.0f * s), points[k] + glm::vec2(5.0f * s)}, kKnuckle, 2.0f * s);
+    }
+    for (size_t k = 0; k + 1 < points.size(); ++k) {
+      const glm::vec2 a = points[k], b = points[k + 1];
+      const int dashes = std::max(2, static_cast<int>(glm::length(b - a) / (7.0f * s)));
+      art::DashedLine(canvas, a, b, 1.0f * s, WithAlpha(kRodDash, 0.6f), dashes);
+    }
+    // The name lies along the rod's first run, on its far side, turned to read left to right.
+    const glm::vec2 run = glm::normalize(points[1] - points[0]);
+    const glm::vec2 mid = (points[0] + points[1]) * 0.5f + glm::vec2(run.y, -run.x) * (-9.0f * s);
+    TextStyle style;
+    style.color = kLabel;
+    style.rotation = std::atan2(run.y, run.x) + (run.x < 0.0f ? kPi : 0.0f);
+    canvas.Text(*street_, kStreetNames[static_cast<size_t>(ordinal + static_cast<int>(g)) % kStreetNames.size()], mid,
+                9.0f * s, Align::Center, style);
+  }
+}
+
+void CanalArt::DrawGate(Canvas& canvas, const ArtFrame& frame, int n) const {
+  const canal::Gate& gate = gates_[static_cast<size_t>(n)];
+  const canal::Frame& f = gate.frame;
+  const Layout& layout = frame.layout;
+  const float s = frame.Scale();
+  for (const float side : {-1.0f, 1.0f})
+    canvas.Circle(layout.ToCanvas(f.Point(0.0f, kGateHinge * side)), 2.4f * s, kHinge);
+  canvas.Line(layout.ToCanvas(f.Point(12.0f, 14.0f)), layout.ToCanvas(gate.lamp), 2.0f * s, kPost);
+  canvas.Circle(layout.ToCanvas(gate.lamp), 3.4f * s, kPost);
 }
 
 // ---- Each frame ----
@@ -396,10 +486,8 @@ void CanalArt::DrawBerths(Canvas& canvas, const ArtFrame& frame, int cup) const 
       to = f.Point(-4.0f - 7.0f * static_cast<float>(raft / 2), raft % 2 == 0 ? 4.5f : -4.5f);
       ++raft;
     }
-    const barges::Pose pose{{mouth.x + (to.x - mouth.x) * glide, mouth.y + (to.y - mouth.y) * glide},
-                            {f.u.x, f.u.y},
-                            1.0f,
-                            glide < 1.0f};
+    const barges::Pose pose{
+        {mouth.x + (to.x - mouth.x) * glide, mouth.y + (to.y - mouth.y) * glide}, {f.u.x, f.u.y}, 1.0f, glide < 1.0f};
     DrawBarge(canvas, frame, pose, landed.bead, {1.0f, true});
   }
 }
@@ -435,6 +523,65 @@ void CanalArt::DrawPill(Canvas& canvas, const ArtFrame& frame, int cup) const {
               TextStyle::Outlined(count_color, Hex(0x080E1A)));
 }
 
+void CanalArt::DrawMillFront(Canvas& canvas, const ArtFrame& frame, int n) const {
+  const canal::Frame& f = mills_[static_cast<size_t>(n)].frame;
+  const Layout& layout = frame.layout;
+  const float s = frame.Scale();
+  const NodeAnim& anim = frame.anims[static_cast<size_t>(n)];
+  const float clock = frame.Clock();
+  const int turns = frame.board->MillTurns(n);
+  // The drop in the mill (one at a time): how far through its dwell it is, so the wheel turns on through it.
+  float inside = 0.0f;
+  if (frame.board->Started()) {
+    for (const Drop& drop : frame.board->Drops()) {
+      if (!drop.alive || drop.loc.kind != Loc::InNode || drop.loc.index != n || drop.dwell_total <= 0) continue;
+      inside = (clock - static_cast<float>(drop.entered)) / static_cast<float>(drop.dwell_total);
+    }
+  }
+  const float wheel = canal::WheelAngle(turns, inside);
+  for (int k = 0; k < kSlats; ++k) {
+    const float theta = wheel + 2.0f * kPi * static_cast<float>(k) / static_cast<float>(kSlats);
+    canvas.Line(OnWheel(layout, f, theta, 0.4f), OnWheel(layout, f, theta, 0.95f), 2.0f * s, kSlat);
+  }
+  // One notch lit per turn of the wheel (the sixth, then the first again).
+  const int lit = turns % 6;
+  const float v = -53.0f + 5.2f * static_cast<float>(lit);
+  canvas.FillRect(ToCanvas(layout, f.Span(-8.0f, 0.0f, v - kNotchAcross * 0.5f, v + kNotchAcross * 0.5f)), kNotchLit,
+                  1.0f * s);
+  // The window glows while a barge is in the mill.
+  const bool busy = frame.board->Started() && frame.board->InsideCount(n) > 0;
+  glow_.Draw(canvas, layout.ToCanvas(f.Point(12.0f, -50.0f)), 6.0f * s, WithAlpha(kWindow, busy ? 0.9f : 0.25f));
+  // The pulse: from the mill down each of its rods to its gate, during the tick its barge left.
+  const float since = clock - static_cast<float>(anim.tick);
+  const Node& node = frame.level->nodes[static_cast<size_t>(n)];
+  for (size_t g = 0; g < node.gears.size(); ++g) {
+    const std::optional<Vec2> at = canal::PulseAt(RodPoints(*frame.level, n, static_cast<int>(g)), since);
+    if (at) glow_.Draw(canvas, layout.ToCanvas(*at), 4.0f * s, WithAlpha(kPulse, 0.9f * std::sin(kPi * since)));
+  }
+}
+
+void CanalArt::DrawGateFront(Canvas& canvas, const ArtFrame& frame, int n) const {
+  const canal::Gate& gate = gates_[static_cast<size_t>(n)];
+  const canal::Frame& f = gate.frame;
+  const Layout& layout = frame.layout;
+  const float s = frame.Scale();
+  const NodeAnim& anim = frame.anims[static_cast<size_t>(n)];
+  // The leaves swing from the old state to the new over 0.6 tick once the flip lands (the end of its tick).
+  const float open = barges::GateOpenness(frame.board->GateOpen(n), frame.Clock() - static_cast<float>(anim.flip + 1));
+  for (const float side : {-1.0f, 1.0f}) {
+    // Shut, the leaves meet a little upstream of the canal's middle; open, they swing round to lie along the bank.
+    const float shut = std::atan2(-kGateHinge * side, -7.0f);
+    const float angle = shut * (1.0f - open);
+    const Vec2 tip{kGateLeaf * std::cos(angle), kGateHinge * side + kGateLeaf * std::sin(angle)};
+    canvas.Line(layout.ToCanvas(f.Point(0.0f, kGateHinge * side)), layout.ToCanvas(f.Point(tip.x, tip.y)), 3.0f * s,
+                kLeaf);
+  }
+  const glm::vec2 lamp = layout.ToCanvas(gate.lamp);
+  const Rgba colour = Mixed(kLampRed, kLampGreen, open);
+  glow_.Draw(canvas, lamp, 9.0f * s, WithAlpha(colour, 0.45f));
+  canvas.Circle(lamp, (3.4f + 3.0f * anim.flash) * s, colour);
+}
+
 void CanalArt::DrawFront(Canvas& canvas, const ArtFrame& frame) {
   Prepare(frame);
   const Level& level = *frame.level;
@@ -457,8 +604,8 @@ void CanalArt::DrawFront(Canvas& canvas, const ArtFrame& frame) {
         break;
       }
       case NodeKind::Cup: DrawPill(canvas, frame, static_cast<int>(n)); break;
-      case NodeKind::Mill:
-      case NodeKind::Gate: DrawMachinePart(canvas, frame, static_cast<int>(n)); break;
+      case NodeKind::Mill: DrawMillFront(canvas, frame, static_cast<int>(n)); break;
+      case NodeKind::Gate: DrawGateFront(canvas, frame, static_cast<int>(n)); break;
       default: break;
     }
   }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -111,6 +112,13 @@ struct Gate {
   Box post;
 };
 Gate GateAt(const Level& level, int gate);
+
+// A mill's rod (`rod` = RodPoints: the mill, its bends, the gate): a pulse runs from the mill to the gate in one
+// tick. `since` 0..1 = its place along the rod (by length); none outside 0..1.
+std::optional<Vec2> PulseAt(const std::vector<Vec2>& rod, float since);
+// A mill's wheel, in radians: a notch (pi/3) per drop that left, plus the share of the drop inside now (0..1 of
+// its dwell), so the wheel turns on through a drop's dwell and is continuous as it leaves.
+float WheelAngle(int turns, float inside);
 
 // The city's still picture: rooftops in the gaps between the canals, a park, lamps along the quays. Generated
 // from the level's id (the same city every time), over the board and a screen's margin round it.
