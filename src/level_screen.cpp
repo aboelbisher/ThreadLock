@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "art_shapes.h"
+#include "canal_look.h"
 #include "solver.h"
 #include "ui_parts.h"
 #include "world_look.h"
@@ -139,9 +140,9 @@ std::vector<std::string> Wrap(const wlw::ui::Font& font, const std::string& text
   return lines;
 }
 
-const char* FailureTitle(const Outcome& outcome) {
+const char* FailureTitle(const Outcome& outcome, const WorldLook& look) {
   switch (outcome.failure) {
-    case Failure::Mud: return "Mud!";
+    case Failure::Mud: return look.mud_title;
     case Failure::WrongCup: return "Wrong colour";
     case Failure::Spill: return "Spill!";
     case Failure::Dry: return "A cup ran dry";
@@ -149,6 +150,34 @@ const char* FailureTitle(const Outcome& outcome) {
     case Failure::None: break;
   }
   return "Not quite";
+}
+
+// Why nothing can move (a jam): the lock or gate or piece the board's cycle waits on.
+std::string JamText(const Level& level, const Board& board) {
+  const int lonely = board.Jam().lonely;
+  if (lonely < 0) return "Nothing can move: each lock waits for another.";
+  if (level.nodes[static_cast<size_t>(lonely)].kind == NodeKind::Gate)
+    return "A gate stays shut: no drop will turn its mill.";
+  const int piece = board.PieceAt(lonely);
+  if (piece >= 0 && board.RoleOf(piece) == PieceRole::Trap) {
+    std::string name = PieceName(board.PieceInfo(piece).piece.type);
+    name[0] = static_cast<char>(name[0] - 'A' + 'a');
+    return "A " + name + " with one way in waits forever for a partner.";
+  }
+  return "A drop waits for a partner that never comes.";
+}
+
+// Each harbour's count, "Lantern Row 2/6, Old Quay 0/6."
+std::string HarbourCounts(const Level& level, const Board& board) {
+  std::string text;
+  for (size_t n = 0; n < level.nodes.size(); ++n) {
+    const Node& node = level.nodes[n];
+    if (node.kind != NodeKind::Cup) continue;
+    if (!text.empty()) text += ", ";
+    text +=
+        node.district + " " + std::to_string(board.Cup(static_cast<int>(n)).count) + "/" + std::to_string(node.count);
+  }
+  return text.empty() ? "" : text + ".";
 }
 
 std::string FailureText(const Level& level, const Board& board, const Outcome& outcome) {
@@ -163,8 +192,15 @@ std::string FailureText(const Level& level, const Board& board, const Outcome& o
   } else if (node && node->kind == NodeKind::Cup && !node->district.empty()) {
     bottle = node->district + "'s harbour";  // World 3
   }
+  const bool canals = canal::IsCanalMap(level);
   switch (outcome.failure) {
     case Failure::Mud:
+      if (canals) {
+        return node && node->kind == NodeKind::Merge ? "Nothing kept the merge: two barges entered it on the same "
+                                                       "tick. Their light ran together into murk."
+                                                     : "Nothing kept the crossing: two barges entered it on the same "
+                                                       "tick. Their light ran together into murk.";
+      }
       return node && node->kind == NodeKind::Merge ? "Two colours met where the pipes merge."
                                                    : "Two colours were in the same junction at once.";
     case Failure::WrongCup:
@@ -175,17 +211,9 @@ std::string FailureText(const Level& level, const Board& board, const Outcome& o
     case Failure::Dry:
       return bottle.empty() ? "A cup ended short: its drops went elsewhere." : bottle + " ended short.";
     case Failure::Jam: {
-      const int lonely = board.Jam().lonely;
-      if (lonely < 0) return "Nothing can move: each lock waits for another.";
-      if (level.nodes[static_cast<size_t>(lonely)].kind == NodeKind::Gate)
-        return "A gate stays shut: no drop will turn its mill.";
-      const int piece = board.PieceAt(lonely);
-      if (piece >= 0 && board.RoleOf(piece) == PieceRole::Trap) {
-        std::string name = PieceName(board.PieceInfo(piece).piece.type);
-        name[0] = static_cast<char>(name[0] - 'A' + 'a');
-        return "A " + name + " with one way in waits forever for a partner.";
-      }
-      return "A drop waits for a partner that never comes.";
+      // World 3: after the reason, how full every harbour got (the ones still waiting show it).
+      const std::string why = JamText(level, board);
+      return canals ? why + " " + HarbourCounts(level, board) : why;
     }
     case Failure::None: break;
   }
@@ -961,7 +989,7 @@ void LevelScreen::DrawStatus(UIContext& ui) {
       break;
     case Phase::Run:
       if (outcome.failure != Failure::None) {
-        text = FailureTitle(outcome);
+        text = FailureTitle(outcome, look_);
         color = ui_color::kBad;
       } else {
         text = "Pouring...  " + TimeText(board_.Ticks());
@@ -969,12 +997,11 @@ void LevelScreen::DrawStatus(UIContext& ui) {
       }
       break;
     case Phase::Done:
-      text = outcome.solved ? "Every lantern lit" : FailureTitle(outcome);
-      if (outcome.solved && look_.art != ArtKind::Lantern) text = "Every cup full and pure";
+      text = outcome.solved ? look_.solved_line : FailureTitle(outcome, look_);
       color = outcome.solved ? look_.accent : ui_color::kBad;
       break;
     case Phase::ShowMe:
-      text = show_done_ ? FailureTitle(result_) : "Watch closely...";
+      text = show_done_ ? FailureTitle(result_, look_) : "Watch closely...";
       color = show_done_ ? ui_color::kBad : look_.muted;
       break;
   }
@@ -1080,7 +1107,7 @@ void LevelScreen::DrawResult(UIContext& ui) {
   if (!result_.solved) {
     const Rgba primary = ui.theme.primary;
     ui.theme.primary = ui_color::kBad;  // the title takes the primary colour: a failure isn't green
-    const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, FailureTitle(result_), {310.0f, 250.0f}, true);
+    const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, FailureTitle(result_, look_), {310.0f, 250.0f}, true);
     ui.theme.primary = primary;
     const Rect& r = dialog.content;
     const std::vector<std::string> lines = Wrap(font, FailureText(*level_, board_, result_), 17.0f, r.Size().x - 20.0f);

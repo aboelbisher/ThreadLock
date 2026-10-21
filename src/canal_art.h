@@ -41,6 +41,8 @@ class CanalArt : public BoardArt {
   bool UsesLiquid() const override { return false; }
   void DrawDrops(wlw::ui::Canvas& picture, const ArtFrame& frame) override;
   void DrawFront(wlw::ui::Canvas& canvas, const ArtFrame& frame) override;
+  // The payoff's moment lasts as long as the district's light takes to run out.
+  float MomentLength(const Marker& marker) const override;
   // A harbour's berths.
   wlw::ui::Rect CupPool(const ArtFrame& frame, int cup) const override;
   // A lock's barges wait moored in its chamber (DrawBack): no swirl.
@@ -73,6 +75,10 @@ class CanalArt : public BoardArt {
   void DrawCity(wlw::ui::Canvas& canvas, const ArtFrame& frame, float top, float bottom) const;
   void DrawCanals(wlw::ui::Canvas& canvas, const ArtFrame& frame) const;
   void DrawLock(wlw::ui::Canvas& canvas, const ArtFrame& frame, int spout) const;
+  // A served harbour's lamps and warm glow (over the still picture), and the district's light (roofs and their
+  // skylights): a ring that runs out from the harbour once, and the roofs nearest it that stay lit.
+  void DrawPayoff(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
+  void DrawDistrict(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
   void DrawHarbour(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
   // The current: faint dashes drifting along the canals (on the picture, each frame).
   void DrawFlow(wlw::ui::Canvas& picture, const ArtFrame& frame) const;

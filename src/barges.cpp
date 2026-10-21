@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 namespace threadlock::barges {
 namespace {
@@ -105,6 +106,15 @@ float GateOpenness(bool open_now, float since_flip) {
   const float t = std::clamp(since_flip / kGateSwing, 0.0f, 1.0f);
   const float eased = 1.0f - (1.0f - t) * (1.0f - t);
   return open_now ? eased : 1.0f - eased;
+}
+
+float LampsAt(float age) { return std::clamp(age / kWarmLength, 0.0f, 1.0f); }
+
+float WarmAt(float age) { return std::sin(std::numbers::pi_v<float> * std::clamp(age / kWarmLength, 0.0f, 1.0f)); }
+
+float DistrictAt(float age) {
+  const float t = std::clamp(age / kDistrictLength, 0.0f, 1.0f);
+  return 1.0f - (1.0f - t) * (1.0f - t);
 }
 
 }  // namespace threadlock::barges

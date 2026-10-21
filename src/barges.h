@@ -39,4 +39,11 @@ float Glide(float since);
 // 0.6 tick from when the flip landed (`since_flip` = ticks since then; before it, the old state).
 float GateOpenness(bool open_now, float since_flip);
 
+// A harbour's payoff, `age` seconds after its order was filled: its lamps come on and its warm glow swells and
+// dies over kWarmLength; the district's light runs out from the harbour over kDistrictLength (eased out).
+inline constexpr float kWarmLength = 0.8f, kDistrictLength = 2.2f;
+float LampsAt(float age);     // 0..1
+float WarmAt(float age);      // 0..1, 0 at both ends
+float DistrictAt(float age);  // 0..1
+
 }  // namespace threadlock::barges

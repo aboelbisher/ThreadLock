@@ -89,6 +89,20 @@ TEST_SUITE("barges") {
     CHECK(barges::Glide(0.5f) > barges::Glide(0.25f) - 1e-6f);
   }
 
+  TEST_CASE("a harbour's payoff: lamps come on, the warm glow swells and dies, the district's light runs out") {
+    CHECK(barges::LampsAt(0.0f) == doctest::Approx(0.0f));
+    CHECK(barges::LampsAt(0.4f) == doctest::Approx(0.5f));
+    CHECK(barges::LampsAt(100.0f) == doctest::Approx(1.0f));
+    CHECK(barges::WarmAt(0.0f) == doctest::Approx(0.0f));
+    CHECK(barges::WarmAt(0.4f) == doctest::Approx(1.0f));
+    CHECK(barges::WarmAt(barges::kWarmLength) == doctest::Approx(0.0f));
+    CHECK(barges::WarmAt(100.0f) == doctest::Approx(0.0f));
+    CHECK(barges::DistrictAt(-1.0f) == doctest::Approx(0.0f));
+    CHECK(barges::DistrictAt(barges::kDistrictLength / 2.0f) == doctest::Approx(0.75f));  // eased out
+    CHECK(barges::DistrictAt(barges::kDistrictLength) == doctest::Approx(1.0f));
+    CHECK(barges::DistrictAt(100.0f) == doctest::Approx(1.0f));
+  }
+
   TEST_CASE("the barges of 3-6 stay in their canals, head along them, and land in order at Lantern Row") {
     const std::vector<World> worlds = LoadWorlds();
     const Level& level = Level36(worlds);

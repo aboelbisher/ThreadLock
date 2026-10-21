@@ -54,6 +54,11 @@ constexpr std::array<const char*, 3> kStreetNames{"Mill Lane", "Wheel Lane", "Ge
 // lamp at (12, 28) on a post. Red shut, green open.
 constexpr float kGateLeaf = 14.5f, kGateHinge = 13.0f;
 constexpr Rgba kHinge = Hex(0x8A6A40), kPost = Hex(0x55658A), kLampRed = Hex(0xFF4D4D), kLampGreen = Hex(0x5BE08A);
+// The payoff: a served harbour's lamps (lit), its warm glow, and the district's light: a ring from kDistrictNear out
+// to kDistrictFar (board units), the roofs nearest the harbour staying lit at kDistrictSteady.
+constexpr Rgba kLampLit = Hex(0xFFF0C8), kLampGlowLit = Hex(0xFFC870), kWarm = Hex(0xFFB347);
+constexpr float kDistrictNear = 40.0f, kDistrictFar = 340.0f, kDistrictRing = 30.0f, kDistrictSteady = 0.5f;
+constexpr float kSettled = 100.0f;  // seconds: long past any moment (Settle's own figure)
 
 uint64_t Mix(uint64_t h, uint64_t v) {
   h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
@@ -74,6 +79,22 @@ Rect ToCanvas(const Layout& layout, const canal::Box& box) {
 
 // A barge's light, a little paler than the liquid's colour (the lit hull).
 Rgba Hull(const Palette& palette, Color color) { return Mixed(LiquidColor(palette, color), Hex(0xFFFFFF), 0.12f); }
+
+// Seconds since a harbour's order was filled (its moment); settled (a long time) when there is none, or calm.
+float PaidAge(const ArtFrame& frame, int cup) {
+  if (frame.calm) return kSettled;
+  for (const Marker& marker : frame.markers) {
+    if (marker.kind == Marker::Paid && marker.node == cup) return marker.age;
+  }
+  return kSettled;
+}
+
+// A harbour serves its order: full, pure, and no barge more went over.
+bool Served(const ArtFrame& frame, int cup) {
+  if (!frame.board->Started()) return false;
+  const CupState state = frame.board->Cup(cup);
+  return state.count >= frame.level->nodes[static_cast<size_t>(cup)].count && !state.impure && !state.spilled;
+}
 
 // A point on a mill's wheel at angle `theta`, `reach` of the way from its middle to its rim (canvas units).
 glm::vec2 OnWheel(const Layout& layout, const canal::Frame& f, float theta, float reach) {
@@ -582,11 +603,62 @@ void CanalArt::DrawGateFront(Canvas& canvas, const ArtFrame& frame, int n) const
   canvas.Circle(lamp, (3.4f + 3.0f * anim.flash) * s, colour);
 }
 
+void CanalArt::DrawPayoff(Canvas& canvas, const ArtFrame& frame, int cup) const {
+  if (!Served(frame, cup)) return;  // a barge more after full (or mud): the lamps stay out
+  const canal::Harbour& harbour = harbours_[static_cast<size_t>(cup)];
+  const canal::Frame& f = harbour.frame;
+  const float s = frame.Scale();
+  const float age = PaidAge(frame, cup);
+  const float lamps = barges::LampsAt(age);
+  glow_.Draw(canvas, frame.layout.ToCanvas(f.Point(25.0f, 0.0f)), 70.0f * s,
+             WithAlpha(kWarm, 0.55f * barges::WarmAt(age)));
+  for (const float along : {-16.0f, harbour.Deep() + 4.0f}) {
+    for (const float across : {-40.0f, 40.0f}) {
+      const glm::vec2 lamp = frame.layout.ToCanvas(f.Point(along, across));
+      glow_.Draw(canvas, lamp, 6.0f * s, WithAlpha(kLampGlowLit, 0.9f * lamps));
+      canvas.Circle(lamp, 1.8f * s, Mixed(kHarbourLamp, kLampLit, lamps));
+    }
+  }
+}
+
+void CanalArt::DrawDistrict(Canvas& canvas, const ArtFrame& frame, int cup) const {
+  const canal::Box& basin = harbours_[static_cast<size_t>(cup)].basin;
+  const glm::vec2 centre{(basin.min.x + basin.max.x) * 0.5f, (basin.min.y + basin.max.y) * 0.5f};
+  const float reach = barges::DistrictAt(PaidAge(frame, cup));
+  const float front = kDistrictNear + (kDistrictFar - kDistrictNear) * reach;
+  const bool served = Served(frame, cup);
+  const float s = frame.Scale();
+  for (const canal::Roof& roof : city_.roofs) {
+    const glm::vec2 at{(roof.box.min.x + roof.box.max.x) * 0.5f, (roof.box.min.y + roof.box.max.y) * 0.5f};
+    const float d = glm::length(at - centre);
+    // The ring: roofs just behind its front light up, and it dies out as it runs out. While the harbour is served,
+    // the roofs nearest it stay lit.
+    const float ring = (1.0f - reach) * std::clamp((front - d) / kDistrictRing, 0.0f, 1.0f);
+    const float steady = served && d <= kDistrictNear ? kDistrictSteady : 0.0f;
+    const float light = std::max(ring, steady);
+    if (light <= 0.0f) continue;
+    canvas.FillRect(ToCanvas(frame.layout, roof.box), WithAlpha(kWarm, 0.16f * light));
+    for (const Vec2 window : roof.windows) {
+      glow_.Draw(canvas, frame.layout.ToCanvas({window.x + 0.9f, window.y + 0.9f}), 3.0f * s,
+                 WithAlpha(kSkylight, light));
+    }
+  }
+}
+
+float CanalArt::MomentLength(const Marker& marker) const {
+  return marker.kind == Marker::Paid ? barges::kDistrictLength : 0.0f;
+}
+
 void CanalArt::DrawFront(Canvas& canvas, const ArtFrame& frame) {
   Prepare(frame);
   const Level& level = *frame.level;
   const Layout& layout = frame.layout;
   const float s = frame.Scale();
+  for (size_t n = 0; n < level.nodes.size(); ++n) {
+    if (level.nodes[n].kind != NodeKind::Cup) continue;
+    DrawDistrict(canvas, frame, static_cast<int>(n));
+    DrawPayoff(canvas, frame, static_cast<int>(n));
+  }
   for (size_t n = 0; n < level.nodes.size(); ++n) {
     const Node& node = level.nodes[n];
     switch (node.kind) {
