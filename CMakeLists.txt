@@ -19,6 +19,10 @@ set(THREADLOCK_RULES
   src/apothecary_look.h
   src/canal_look.cpp
   src/canal_look.h
+  src/barges.cpp
+  src/barges.h
+  src/polyline.cpp
+  src/polyline.h
   src/solver.cpp
   src/solver.h
   src/generator.cpp
@@ -45,6 +49,8 @@ wlw_add_game(threadlock
     src/tile_pool.h
     src/apothecary_art.cpp
     src/apothecary_art.h
+    src/canal_art.cpp
+    src/canal_art.h
     src/art_shapes.cpp
     src/art_shapes.h
     src/board_art.cpp
@@ -111,6 +117,7 @@ if(NOT ANDROID)
       tests/machine_parts_tests.cpp
       tests/solver_tests.cpp
       tests/content_tests.cpp
+      tests/barges_tests.cpp
       tests/board_camera_tests.cpp
       tests/city_map_tests.cpp
       tests/audio_tests.cpp

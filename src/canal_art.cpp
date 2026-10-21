@@ -1,0 +1,492 @@
+#include "canal_art.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <utility>
+
+#include "wlw/rendering/shader.h"
+
+namespace threadlock {
+namespace {
+
+using art::kPi;
+using wlw::ui::Align;
+using wlw::ui::Canvas;
+using wlw::ui::Rect;
+using wlw::ui::TextStyle;
+
+// The city at night: slate rooftops, a dark park, skylights and quay lamps.
+constexpr Rgba kRoofTones[] = {Hex(0x161E33), Hex(0x1A233C), Hex(0x1D2742), Hex(0x141B2E), Hex(0x1F2A47)};
+constexpr Rgba kRoofShade = Hex(0x000000, 0.22f), kRidge = Hex(0x2C3858), kChimney = Hex(0x0D1322);
+constexpr Rgba kSkylight = Hex(0xFFD58A, 0.5f);
+constexpr Rgba kTreeDark = Hex(0x10291C), kTreeLight = Hex(0x1A3D29);
+constexpr Rgba kLampLight = Hex(0xFFE2A8), kLampGlow = Hex(0xFFC870, 0.18f);
+// The canals: a stone bank, a quay inside it, the water; the current's faint dashes.
+constexpr Rgba kBank = Hex(0x2A3550), kQuay = Hex(0x3B4A6C), kWater = Hex(0x0B1F35);
+constexpr float kBankWidth = 28.0f, kQuayWidth = 23.0f, kWaterWidth = 19.0f;
+constexpr Rgba kFlow = Hex(0x1D4A70);
+constexpr Rgba kBollard = Hex(0x55658A);
+constexpr Rgba kHarbourLamp = Hex(0x6A5A3A);  // dark until its district is served
+constexpr Rgba kLeaf = Hex(0xC9974E);         // a lock's brass gates
+constexpr float kJunction = 14.0f;            // half a junction's open basin
+// A barge: its wake, its tail light, and mud's murk (a barge of mud is the murky colours, dim).
+constexpr Rgba kWake = Hex(0x9FD4FF, 0.55f), kTail = Hex(0xFF4D4D);
+constexpr Rgba kMurkHull = Hex(0x6A5D3C), kMurkCore = Hex(0x857652), kMurkGlow = Hex(0x4E4429);
+constexpr Rgba kPillBack = Hex(0x080E1A, 0.9f), kPillNamed = Hex(0xB9C6E2), kPillFull = Hex(0xB8FAF2);
+constexpr float kBargeLength = 11.0f, kBargeWidth = 7.0f;  // board units (a barge's hull)
+constexpr float kPillWidth = 92.0f, kPillHeight = 18.0f;   // the harbour pill (board units)
+
+uint64_t Mix(uint64_t h, uint64_t v) {
+  h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
+  return h;
+}
+
+uint64_t Bits(float f) {
+  uint32_t u = 0;
+  std::memcpy(&u, &f, sizeof(u));
+  return u;
+}
+
+glm::vec2 V(Vec2 p) { return {p.x, p.y}; }
+
+Rect ToCanvas(const Layout& layout, const canal::Box& box) {
+  return {layout.ToCanvas(box.min), layout.ToCanvas(box.max)};
+}
+
+// A barge's light, a little paler than the liquid's colour (the lit hull).
+Rgba Hull(const Palette& palette, Color color) { return Mixed(LiquidColor(palette, color), Hex(0xFFFFFF), 0.12f); }
+
+}  // namespace
+
+void CanalArt::Create(wlw::app::Application& app, std::shared_ptr<wlw::ui::Font> street) {
+  ground_shader_ = wlw::rendering::Shader::FromFile("shaders/canal_night.shader");
+  street_ = std::move(street);
+  tiles_.Create(app.Window(), "Canal", Hex(0x0A101B));
+  AddTile();  // every board needs one: made up front, so the shader compiles in the warm-up
+}
+
+void CanalArt::AddTile() {
+  tiles_.Add();
+  TileArt art;
+  art.ground = wlw::rendering::ShaderMaterial::Create(ground_shader_);
+  art.vignette = wlw::rendering::ShaderMaterial::Create(ground_shader_);
+  art.ground->SetParam("uLayer", 0.0f);
+  art.vignette->SetParam("uLayer", 1.0f);
+  tile_art_.push_back(std::move(art));
+}
+
+void CanalArt::Invalidate() { tiles_.Invalidate(); }
+
+void CanalArt::Release() {
+  // Only a tall board has more than one tile.
+  tiles_.Shrink(1);
+  tile_art_.resize(1);
+  Invalidate();
+}
+
+void CanalArt::Prepare(const ArtFrame& frame) {
+  const Level& level = *frame.level;
+  if (level_ == &level && ways_.size() == level.pipes.size()) return;
+  level_ = &level;
+  city_ = canal::MakeCity(level);
+  canals_.clear();
+  for (const std::vector<Vec2>& canal : canal::CityCanals(level)) {
+    std::vector<glm::vec2> points;
+    for (const Vec2 p : canal) points.push_back(V(p));
+    canals_.push_back(art::MakePath(art::RoundCorners(points, canal::kBendRadius, 2.5f)));
+  }
+  // The drops follow the canal's middle (canal::Ways: the rules' points with the same round bends).
+  ways_ = canal::Ways(level);
+  locks_.assign(level.nodes.size(), {});
+  harbours_.assign(level.nodes.size(), {});
+  for (size_t n = 0; n < level.nodes.size(); ++n) {
+    if (level.nodes[n].kind == NodeKind::Spout) locks_[n] = canal::LockAt(level, static_cast<int>(n));
+    if (level.nodes[n].kind == NodeKind::Cup) harbours_[n] = canal::HarbourAt(level, static_cast<int>(n));
+  }
+}
+
+// ---- The still picture ----
+
+void CanalArt::DrawBack(Canvas& picture, const ArtFrame& frame) {
+  Prepare(frame);
+  const glm::vec2 screen = picture.Size();
+  const float h = screen.y;
+  const float scroll = frame.layout.scroll * frame.layout.scale;  // canvas units
+  const float total = h + frame.layout.scroll_max * frame.layout.scale;
+  const TilePool::Span span = TilePool::Visible(scroll, h, total);
+  const Layout layout = frame.layout.Unscrolled();
+  uint64_t key = Mix(0, reinterpret_cast<uintptr_t>(frame.level));
+  key = Mix(key, Bits(layout.origin.x));
+  key = Mix(key, Bits(layout.origin.y));
+  key = Mix(key, Bits(layout.scale));
+  key = Mix(key, Bits(layout.scroll_max));
+  key = Mix(key, Bits(screen.x));
+  key = Mix(key, Bits(screen.y));
+  key = Mix(key, Bits(picture.PixelsPerUnit()));
+  while (tiles_.Count() < std::min(span.count, 3)) AddTile();
+  for (int k = span.first; k <= span.last; ++k) {
+    const int slot = tiles_.Hold(k, span.first, span.last);
+    if (slot < 0 || tiles_[slot].fresh) continue;
+    const uint64_t base = Mix(key, static_cast<uint64_t>(k) + 1u);
+    if (tiles_[slot].base == base) continue;
+    DrawStill(slot, k, frame, screen, total);
+    tiles_[slot].base = tiles_[slot].key = base;
+  }
+  tiles_.Draw(picture, span.first, span.last, scroll);
+  tiles_.EndFrame();
+
+  DrawFlow(picture, frame);
+  for (size_t n = 0; n < frame.level->nodes.size(); ++n) {
+    if (frame.level->nodes[n].kind == NodeKind::Spout) DrawMoored(picture, frame, static_cast<int>(n));
+  }
+}
+
+void CanalArt::DrawStill(int slot, int k, const ArtFrame& whole, glm::vec2 screen, float total) {
+  TilePool::Slot& tile = tiles_[slot];
+  TileArt& art = tile_art_[static_cast<size_t>(slot)];
+  Canvas& canvas = tile.view->GetCanvas();
+  // This tile's piece of the board: the layout at scroll 0, moved up by the tiles above it.
+  ArtFrame frame = whole;
+  frame.layout = whole.layout.Unscrolled();
+  frame.layout.origin.y -= static_cast<float>(k) * screen.y;
+  tile.view->SetUpdateMode(wlw::scene::Viewport::UpdateMode::Once);
+
+  for (const auto& material : {art.ground, art.vignette}) {
+    material->SetParam("uCanvas", screen);
+    material->SetParam("uOffset", glm::vec2(0.0f, static_cast<float>(k) * screen.y));
+    material->SetParam("uTotal", glm::vec2(screen.x, total));
+    material->SetParam("uScreen", screen);
+    material->SetParam("uScale", frame.Scale());
+  }
+  canvas.ShaderRect({{0.0f, 0.0f}, screen}, art.ground);
+  // What this tile shows of the board (board units), with a margin for what reaches in from outside it.
+  const float top = frame.layout.ToBoard({0.0f, 0.0f}).y - 20.0f;
+  const float bottom = frame.layout.ToBoard(screen).y + 20.0f;
+  DrawCity(canvas, frame, top, bottom);
+  DrawCanals(canvas, frame);
+  const Level& level = *frame.level;
+  for (size_t n = 0; n < level.nodes.size(); ++n) {
+    if (level.nodes[n].kind == NodeKind::Spout) DrawLock(canvas, frame, static_cast<int>(n));
+    if (level.nodes[n].kind == NodeKind::Cup) DrawHarbour(canvas, frame, static_cast<int>(n));
+  }
+  canvas.ShaderRect({{0.0f, 0.0f}, screen}, art.vignette);
+}
+
+void CanalArt::DrawCity(Canvas& canvas, const ArtFrame& frame, float top, float bottom) const {
+  const Layout& layout = frame.layout;
+  const float s = frame.Scale();
+  for (const canal::Roof& roof : city_.roofs) {
+    if (roof.box.max.y < top || roof.box.min.y > bottom) continue;
+    const Rect r = ToCanvas(layout, roof.box);
+    canvas.FillRect(r, kRoofTones[roof.tone]);
+    // The half away from the moon in shade, a ridge along the middle, a chimney, a skylight or two.
+    const glm::vec2 mid = (r.min + r.max) * 0.5f;
+    if (roof.across) {
+      canvas.FillRect({{r.min.x, mid.y}, r.max}, kRoofShade);
+      canvas.Line({r.min.x + 2.0f * s, mid.y}, {r.max.x - 2.0f * s, mid.y}, 1.0f * s, kRidge);
+    } else {
+      canvas.FillRect({{mid.x, r.min.y}, r.max}, kRoofShade);
+      canvas.Line({mid.x, r.min.y + 2.0f * s}, {mid.x, r.max.y - 2.0f * s}, 1.0f * s, kRidge);
+    }
+    const glm::vec2 chimney = layout.ToCanvas(roof.chimney);
+    canvas.FillRect({chimney, chimney + glm::vec2(3.0f * s)}, kChimney);
+    for (const Vec2 window : roof.windows) {
+      const glm::vec2 w = layout.ToCanvas(window);
+      canvas.FillRect({w, w + glm::vec2(1.8f * s)}, kSkylight);
+    }
+  }
+  for (const canal::Tree& tree : city_.trees) {
+    const glm::vec2 c = layout.ToCanvas(tree.at);
+    canvas.Circle(c, tree.r * s, kTreeDark);
+    canvas.Circle(c - glm::vec2(tree.r * 0.3f * s), tree.r * 0.55f * s, kTreeLight);
+  }
+  for (const Vec2 lamp : city_.lamps) {
+    if (lamp.y < top || lamp.y > bottom) continue;
+    const glm::vec2 c = layout.ToCanvas(lamp);
+    glow_.Draw(canvas, c, 5.0f * s, kLampGlow);
+    canvas.Circle(c, 1.4f * s, kLampLight);
+  }
+}
+
+void CanalArt::DrawCanals(Canvas& canvas, const ArtFrame& frame) const {
+  const Layout& layout = frame.layout;
+  const float s = frame.Scale();
+  std::vector<art::Path> paths;
+  for (const art::Path& canal : canals_) {
+    std::vector<glm::vec2> points;
+    for (const glm::vec2 p : canal.points) points.push_back(layout.ToCanvas({p.x, p.y}));
+    paths.push_back(art::MakePath(std::move(points)));
+  }
+  // Layer by layer over every canal, so where canals meet their water runs together.
+  for (const auto& [width, color] : {std::pair{kBankWidth, kBank}, {kQuayWidth, kQuay}, {kWaterWidth, kWater}}) {
+    for (const art::Path& path : paths) art::Stroke(canvas, path, 0.0f, width * s, color);
+  }
+  // A junction opens into a little basin with a bollard at each corner; a crossing with a bridge locked on it
+  // is an aqueduct: one canal runs over the other between parapets.
+  const Level& level = *frame.level;
+  for (size_t n = 0; n < level.nodes.size(); ++n) {
+    const Node& node = level.nodes[n];
+    if (node.kind != NodeKind::Cross && node.kind != NodeKind::Merge && node.kind != NodeKind::Fork) continue;
+    const glm::vec2 c = layout.ToCanvas(node.at);
+    canvas.FillRect({c - glm::vec2(kJunction * s), c + glm::vec2(kJunction * s)}, kWater);
+    for (const glm::vec2 corner : {glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(-1, 1), glm::vec2(1, 1)})
+      canvas.Circle(c + corner * (16.0f * s), 2.2f * s, kBollard);
+    bool aqueduct = false;
+    for (const TrayPiece& piece : level.tray)
+      aqueduct = aqueduct || (piece.locked && piece.at == static_cast<int>(n) && piece.piece.type == PieceType::Bridge);
+    if (!aqueduct || node.ins.empty()) continue;
+    const std::vector<Vec2> in = canal::CanalPoints(level, level.pipes[static_cast<size_t>(node.ins[0])]);
+    glm::vec2 u = glm::normalize(V(in.back()) - V(in[in.size() - 2]));
+    const glm::vec2 w{-u.y, u.x};
+    canvas.FillRect({c - glm::vec2(kJunction * s), c + glm::vec2(kJunction * s)}, kWater);
+    for (const float side : {-1.0f, 1.0f}) {
+      const glm::vec2 edge = c + w * (side * 12.5f * s);
+      canvas.Line(edge - u * (19.0f * s), edge + u * (19.0f * s), 3.0f * s, kQuay);
+      canvas.Line(edge - u * (19.0f * s) - w * (side * 1.0f * s), edge + u * (19.0f * s) - w * (side * 1.0f * s),
+                  0.8f * s, WithAlpha(kBollard, 0.8f));
+    }
+  }
+}
+
+void CanalArt::DrawLock(Canvas& canvas, const ArtFrame& frame, int spout) const {
+  const canal::Lock& lock = locks_[static_cast<size_t>(spout)];
+  const float s = frame.Scale();
+  const canal::Frame& f = lock.frame;
+  canvas.FillRect(ToCanvas(frame.layout, lock.chamber), kBank, 3.0f * s);
+  canvas.FillRect(ToCanvas(frame.layout, f.Span(-canal::kLockBack + 3.0f, canal::kLockFront - 3.0f, -12.0f, 12.0f)),
+                  kWater, 2.0f * s);
+}
+
+void CanalArt::DrawHarbour(Canvas& canvas, const ArtFrame& frame, int cup) const {
+  const canal::Harbour& harbour = harbours_[static_cast<size_t>(cup)];
+  const Layout& layout = frame.layout;
+  const float s = frame.Scale();
+  const canal::Frame& f = harbour.frame;
+  const float deep = harbour.Deep();
+  canvas.FillRect(ToCanvas(layout, harbour.basin), kBank, 8.0f * s);
+  canvas.FillRect(ToCanvas(layout, f.Span(-canal::kBasinBack + 4.0f, deep - 4.0f, -canal::kBasinHalf + 4.0f,
+                                          canal::kBasinHalf - 4.0f)),
+                  kWater, 6.0f * s);
+  // Piers between the last row's berths, and the harbour's four lamps (dark until it's served).
+  const float last = canal::kBerthRow * static_cast<float>(harbour.rows - 1);
+  for (int q = 0; q <= canal::kBerthsPerRow; ++q) {
+    const float across = (static_cast<float>(q) - 3.0f) * 13.0f;
+    canvas.Line(layout.ToCanvas(f.Point(36.0f + last, across)), layout.ToCanvas(f.Point(54.0f + last, across)),
+                2.0f * s, kQuay);
+  }
+  for (const float along : {-16.0f, deep + 4.0f}) {
+    for (const float across : {-40.0f, 40.0f})
+      canvas.Circle(layout.ToCanvas(f.Point(along, across)), 1.8f * s, kHarbourLamp);
+  }
+}
+
+// ---- Each frame ----
+
+void CanalArt::DrawFlow(Canvas& picture, const ArtFrame& frame) const {
+  // Two strands of dashes, one each side of the middle, drifting with the current at their own pace.
+  const float s = frame.Scale();
+  const float top = frame.layout.ToBoard({0.0f, 0.0f}).y - 10.0f;
+  const float bottom = frame.layout.ToBoard(picture.Size()).y + 10.0f;
+  struct Strand {
+    float across, dash, period, speed, alpha;
+  };
+  constexpr Strand kStrands[] = {{-4.0f, 3.0f, 14.0f, 6.0f, 0.8f}, {4.0f, 5.0f, 18.0f, 4.4f, 0.6f}};
+  for (const art::Path& canal : canals_) {
+    for (const Strand& strand : kStrands) {
+      const float shift = std::fmod(frame.time * strand.speed, strand.period);
+      for (float d = shift; d + strand.dash < canal.Length(); d += strand.period) {
+        const glm::vec2 a = canal.PointAt(d), b = canal.PointAt(d + strand.dash);
+        if (std::max(a.y, b.y) < top || std::min(a.y, b.y) > bottom) continue;
+        const glm::vec2 w = canal.DirectionAt(d);
+        const glm::vec2 off = glm::vec2(-w.y, w.x) * strand.across;
+        picture.Line(frame.layout.ToCanvas({a.x + off.x, a.y + off.y}),
+                     frame.layout.ToCanvas({b.x + off.x, b.y + off.y}), 1.2f * s, WithAlpha(kFlow, strand.alpha));
+      }
+    }
+  }
+}
+
+void CanalArt::DrawMoored(Canvas& canvas, const ArtFrame& frame, int spout) const {
+  const Node& node = frame.level->nodes[static_cast<size_t>(spout)];
+  const canal::Frame& f = locks_[static_cast<size_t>(spout)].frame;
+  const int poured = frame.board->Started() ? frame.board->Poured(spout) : 0;
+  const int left = static_cast<int>(node.beads.size()) - poured;
+  for (int k = 0; k < left; ++k) {
+    // Two abreast, the next out at the front nearest the gates; past the chamber they wait up the canal.
+    const float along = 6.5f - 12.5f * static_cast<float>(k / 2);
+    const float across = k % 2 == 0 ? 4.5f : -4.5f;
+    const barges::Pose pose{f.Point(along, across), {f.u.x, f.u.y}};
+    DrawBarge(canvas, frame, pose, node.beads[static_cast<size_t>(poured + k)], {0.55f, false});
+  }
+}
+
+void CanalArt::DrawDrops(Canvas& picture, const ArtFrame& frame) {
+  Prepare(frame);
+  if (frame.board->Started()) {
+    for (const Drop& drop : frame.board->Drops()) {
+      if (!drop.alive) continue;
+      const barges::Pose pose = barges::PoseOf(*frame.level, ways_, drop, frame.alpha);
+      DrawBarge(picture, frame, pose, drop.bead, {pose.fade, true});
+    }
+  }
+  for (size_t n = 0; n < frame.level->nodes.size(); ++n) {
+    if (frame.level->nodes[n].kind == NodeKind::Cup) DrawBerths(picture, frame, static_cast<int>(n));
+  }
+}
+
+void CanalArt::DrawBarge(Canvas& canvas, const ArtFrame& frame, const barges::Pose& pose, const Bead& bead,
+                         BargeLook look) const {
+  const float s = frame.Scale();
+  const glm::vec2 h = glm::vec2(pose.heading.x, pose.heading.y);
+  const glm::vec2 w{-h.y, h.x};
+  // A point `along` the barge's way and `across` it, in canvas units.
+  auto at = [&](float along, float across) {
+    return frame.layout.ToCanvas({pose.at.x + h.x * along + w.x * across, pose.at.y + h.y * along + w.y * across});
+  };
+  const float a = look.alpha * pose.fade;
+  const bool murk = bead.IsMud();
+  const Rgba hull = murk ? kMurkHull : Hull(*frame.palette, bead.a);
+  const Rgba core = murk ? kMurkCore : Mixed(LiquidColor(*frame.palette, bead.a), Hex(0xFFFFFF), 0.6f);
+  const Rgba glow = murk ? kMurkGlow : LiquidColor(*frame.palette, bead.a);
+  if (look.lit) {
+    // Its light: three soft glows along the hull.
+    for (const float along : {-5.0f, 0.0f, 5.0f})
+      glow_.Draw(canvas, at(along, 0.0f), 6.0f * s, WithAlpha(glow, (murk ? 0.5f : 0.75f) * a));
+    if (pose.moving) {
+      for (const float side : {-1.0f, 1.0f}) {
+        canvas.Line(at(-6.0f, 2.0f * side), at(-16.0f, 5.0f * side), 1.0f * s, WithAlpha(kWake, a));
+      }
+    }
+  }
+  const float half = kBargeLength * 0.5f - kBargeWidth * 0.5f;  // the hull's round ends sit this far from its middle
+  if (bead.IsBlend()) {
+    // A blend: its second colour on the back half.
+    const Rgba back = murk ? kMurkHull : Hull(*frame.palette, bead.b);
+    canvas.Line(at(-half, 0.0f), at(0.0f, 0.0f), kBargeWidth * s, WithAlpha(back, a));
+    canvas.Line(at(0.0f, 0.0f), at(half, 0.0f), kBargeWidth * s, WithAlpha(hull, a));
+  } else {
+    canvas.Line(at(-half, 0.0f), at(half, 0.0f), kBargeWidth * s, WithAlpha(hull, a));
+  }
+  canvas.Line(at(-1.7f, 0.0f), at(1.7f, 0.0f), 2.6f * s, WithAlpha(core, a));
+  if (look.lit) {
+    const glm::vec2 tail = at(-kBargeLength * 0.5f - 1.0f, 0.0f);
+    glow_.Draw(canvas, tail, 4.0f * s, WithAlpha(kTail, 0.45f * a));
+    canvas.Circle(tail, 1.6f * s, WithAlpha(kTail, a));
+  }
+}
+
+void CanalArt::DrawBerths(Canvas& canvas, const ArtFrame& frame, int cup) const {
+  const canal::Harbour& harbour = harbours_[static_cast<size_t>(cup)];
+  const canal::Frame& f = harbour.frame;
+  const Vec2 mouth = f.Point(-4.0f, 0.0f);
+  const int capacity = harbour.rows * canal::kBerthsPerRow;
+  int berth = 0, raft = 0;
+  for (const barges::Landing& landed : frame.landed[static_cast<size_t>(cup)]) {
+    // A blend takes two berths (its barge sits in the first); past the last berth a barge rafts at the mouth.
+    const float since = frame.Clock() - static_cast<float>(landed.tick);
+    const float glide = barges::Glide(since);
+    Vec2 to;
+    if (berth < capacity) {
+      to = harbour.Berth(berth);
+      berth += landed.bead.Drops();
+    } else {
+      to = f.Point(-4.0f - 7.0f * static_cast<float>(raft / 2), raft % 2 == 0 ? 4.5f : -4.5f);
+      ++raft;
+    }
+    const barges::Pose pose{{mouth.x + (to.x - mouth.x) * glide, mouth.y + (to.y - mouth.y) * glide},
+                            {f.u.x, f.u.y},
+                            1.0f,
+                            glide < 1.0f};
+    DrawBarge(canvas, frame, pose, landed.bead, {1.0f, true});
+  }
+}
+
+void CanalArt::DrawPill(Canvas& canvas, const ArtFrame& frame, int cup) const {
+  const Node& node = frame.level->nodes[static_cast<size_t>(cup)];
+  const CupState& state = frame.board->Started() ? frame.board->Cup(cup) : CupState{};
+  const canal::Box& box = harbours_[static_cast<size_t>(cup)].pill;
+  const float s = frame.Scale();
+  char count[24];
+  std::snprintf(count, sizeof(count), "%d/%d", state.count, node.count);
+  const bool bad = state.impure || state.spilled;
+  const Rgba count_color = bad ? ui_color::kBad : state.count >= node.count ? kPillFull : kPillNamed;
+  const Rgba name_color = Mixed(LiquidColor(*frame.palette, node.want), Hex(0xFFFFFF), 0.65f);
+  // Glyph, name, count: at full size they may be wider than the pill, so all three shrink to fit it.
+  const float pad = 6.0f, gap = 4.0f, glyph = 4.5f;
+  const float wanted = (2.0f * pad + 2.0f * glyph + gap * 2.0f) * s + street_->Measure(node.district, 12.0f * s) +
+                       frame.font->Measure(count, 11.0f * s);
+  const float fit = std::min(1.0f, kPillWidth * s / std::max(wanted, 1.0f));
+  const float width = std::min(kPillWidth * s, wanted * fit);
+  const glm::vec2 centre = frame.layout.ToCanvas({(box.min.x + box.max.x) * 0.5f, (box.min.y + box.max.y) * 0.5f});
+  const glm::vec2 half{width * 0.5f, kPillHeight * s * 0.5f};
+  canvas.FillRect({centre - half, centre + half}, kPillBack, kPillHeight * s * 0.5f);
+  const float left = centre.x - width * 0.5f + (pad + glyph) * s * fit;
+  art::Glyph(canvas, node.want, {left, centre.y}, glyph * s * fit, LiquidColor(*frame.palette, node.want));
+  const float name_at = left + (glyph + gap) * s * fit;
+  const float name_width = street_->Measure(node.district, 12.0f * s * fit);
+  canvas.Text(*street_, node.district, {name_at + name_width * 0.5f, centre.y}, 12.0f * s * fit, Align::Center,
+              TextStyle::Outlined(name_color, Hex(0x080E1A)));
+  const float count_at = name_at + name_width + gap * s * fit;
+  const float count_width = frame.font->Measure(count, 11.0f * s * fit);
+  canvas.Text(*frame.font, count, {count_at + count_width * 0.5f, centre.y}, 11.0f * s * fit, Align::Center,
+              TextStyle::Outlined(count_color, Hex(0x080E1A)));
+}
+
+void CanalArt::DrawFront(Canvas& canvas, const ArtFrame& frame) {
+  Prepare(frame);
+  const Level& level = *frame.level;
+  const Layout& layout = frame.layout;
+  const float s = frame.Scale();
+  for (size_t n = 0; n < level.nodes.size(); ++n) {
+    const Node& node = level.nodes[n];
+    switch (node.kind) {
+      case NodeKind::Spout: {
+        // The lock's two brass gates: shut meeting a little ahead of the chamber's middle; open (swung back
+        // against the chamber's sides) while the lock pours.
+        const canal::Frame& f = locks_[n].frame;
+        const float open = barges::LockOpen(frame.Clock() - static_cast<float>(frame.anims[n].tick));
+        for (const float side : {-1.0f, 1.0f}) {
+          const Vec2 shut{19.0f, 1.0f * side}, swung{5.0f, 12.0f * side};
+          const Vec2 tip{shut.x + (swung.x - shut.x) * open, shut.y + (swung.y - shut.y) * open};
+          canvas.Line(layout.ToCanvas(f.Point(16.0f, 12.0f * side)), layout.ToCanvas(f.Point(tip.x, tip.y)), 2.6f * s,
+                      kLeaf);
+        }
+        break;
+      }
+      case NodeKind::Cup: DrawPill(canvas, frame, static_cast<int>(n)); break;
+      case NodeKind::Mill:
+      case NodeKind::Gate: DrawMachinePart(canvas, frame, static_cast<int>(n)); break;
+      default: break;
+    }
+  }
+}
+
+wlw::ui::Rect CanalArt::CupPool(const ArtFrame& frame, int cup) const {
+  const canal::Harbour& harbour = harbours_[static_cast<size_t>(cup)];
+  return ToCanvas(frame.layout, harbour.frame.Span(18.0f, harbour.Deep() - 27.0f, -40.0f, 40.0f));
+}
+
+glm::vec2 CanalArt::CupTop(const ArtFrame& frame, int cup) const {
+  const canal::Box& basin = harbours_[static_cast<size_t>(cup)].basin;
+  return frame.layout.ToCanvas({(basin.min.x + basin.max.x) * 0.5f, basin.min.y - 8.0f});
+}
+
+void CanalArt::DrawMud(Canvas& canvas, glm::vec2 at, float age, float scale, float time) const {
+  parts_.DrawMud(canvas, at, age, scale, time);
+}
+
+glm::vec2 CanalArt::PipePoint(const ArtFrame& frame, int pipe, float distance) const {
+  const Pipe& rules = frame.level->pipes[static_cast<size_t>(pipe)];
+  if (level_ != frame.level || static_cast<size_t>(pipe) >= ways_.size() || rules.length <= 0.0f)
+    return BoardArt::PipePoint(frame, pipe, distance);
+  return frame.layout.ToCanvas(ways_[static_cast<size_t>(pipe)].PointAt(distance));
+}
+
+float CanalArt::SocketRadius(const Node& node) const {
+  return node.kind == NodeKind::Cross || node.kind == NodeKind::Merge ? 15.0f : 13.0f;
+}
+
+}  // namespace threadlock

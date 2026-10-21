@@ -5,6 +5,7 @@
 
 #include <glm/glm.hpp>
 
+#include "barges.h"
 #include "palette.h"
 #include "threadlock_rules.h"
 #include "wlw/ui/canvas.h"
@@ -39,6 +40,7 @@ struct NodeAnim {
   float spin = 0.0f, spin_target = 0.0f;  // turnstile arms, mixer swirl, mill wheel, rack turntable
   float arm = 0.0f;                       // flipper
   float flash = 0.0f;                     // a mix, a gate flipping
+  int tick = -1000000;                    // the tick of its last pour, leave or flip (long ago = never)
 };
 
 // A moment on the board, shown where it happened (from the board's events): what went wrong, a near miss,
@@ -63,12 +65,15 @@ struct ArtFrame {
   bool calm = false;   // reduced motion: nothing drifts or flickers
   bool editing = true;
   std::span<const NodeAnim> anims;
-  std::span<const float> cup_fill;                  // per node: drops in it (animated)
-  std::span<const std::vector<float>> bottle_fill;  // per rack, per bottle
+  std::span<const float> cup_fill;                       // per node: drops in it (animated)
+  std::span<const std::vector<float>> bottle_fill;       // per rack, per bottle
+  std::span<const std::vector<barges::Landing>> landed;  // per cup: the barges that landed, in order
   std::span<const Marker> markers;
 
   float Scale() const { return layout.scale; }
   glm::vec2 At(int node) const { return layout.ToCanvas(level->nodes[static_cast<size_t>(node)].at); }
+  // The board clock in ticks, with the drops' place between two ticks (alpha).
+  float Clock() const { return board ? static_cast<float>(board->Ticks()) + alpha : 0.0f; }
 };
 
 class BoardArt {
@@ -84,6 +89,10 @@ class BoardArt {
   virtual void DrawBack(wlw::ui::Canvas& picture, const ArtFrame& frame) = 0;
   // Over the liquid, under the pieces: the parts' fronts and their labels.
   virtual void DrawFront(wlw::ui::Canvas& canvas, const ArtFrame& frame) = 0;
+  // Whether the drops are the shared liquid (metaballs); a world that draws its drops itself answers false.
+  virtual bool UsesLiquid() const { return true; }
+  // The drops, drawn by the world (only when UsesLiquid is false), on the Picture layer after the back.
+  virtual void DrawDrops(wlw::ui::Canvas&, const ArtFrame&) {}
   // The liquid: drops, cups' pools, spouts' swirls (canvas units).
   void DrawLiquid(Liquid& liquid, const ArtFrame& frame, float alpha) const;
   // A drop `distance` board units along pipe.points, in canvas units.

@@ -43,6 +43,11 @@ src/apothecary_look.{h,cpp}   World 2's shop in board units (tool + art): orders
                               jars + slates, the bell, rack bottles + clock, the moments' timing (paid, spill, short)
 src/canal_look.{h,cpp}        World 3's canal city in board units (tool + art): districts (harbours), canal width + round bends,
                               the canal map's look checks (canal::Problems: bends, locks on straight stretches, crossings, rods)
+src/canal_art.{h,cpp}         World 3, The Canal City: the still city in tiles (roofs, canals, locks, harbours), the barges on
+                              the picture, the harbours' pills and berths, the lock leaves (shut, or swung as it pours)
+src/barges.{h,cpp}            World 3's barges (plain C++, tested): a drop's pose along its canal, the landed barges' glides,
+                              a lock's leaves
+src/polyline.{h,cpp}          paths (glm, header-only): round bends (RoundCorners), points by distance; the canals use it
 src/solver.{h,cpp}            every placement where each piece acts, run each: pars (Lean/Swift), solutions, NextHint
 src/generator.{h,cpp}         daily puzzle + Lab: 4 templates (race, shares, mixer, shared pipe), solver-filtered
 src/catalog.{h,cpp}           loads assets/levels/world*.json + pars.json (platform::ReadFile)
@@ -154,10 +159,11 @@ PC tests and the tool without CMake/vcpkg, from a VS developer shell (repo root)
 ```
 cl /nologo /std:c++20 /EHsc /W4 /WX /O2 /external:W0 /external:I external\WLWengine\third_party\tinygltf ^
    /external:I external\WLWengine\third_party\doctest /Fe:build\pc\threadlock_tests.exe ^
-   tests\*.cpp src\threadlock_rules.cpp src\level_io.cpp src\apothecary_look.cpp src\canal_look.cpp src\solver.cpp ^
+   /external:I external\WLWengine\third_party\glm ^
+   tests\*.cpp src\threadlock_rules.cpp src\level_io.cpp src\apothecary_look.cpp src\canal_look.cpp src\polyline.cpp src\barges.cpp src\solver.cpp ^
    src\generator.cpp src\board_camera.cpp ^
    src\audio_synth.cpp src\ambience.cpp src\sound_cues.cpp src\city_map.cpp
-(the tool: tools\threadlock_tool.cpp + the same sources but board_camera, sound_cues and city_map, plus /external:I ...\third_party\stb)
+(the tool: tools\threadlock_tool.cpp + the same sources but board_camera, sound_cues and city_map, plus /external:I ...\third_party\stb; json.hpp is in tinygltf)
 ```
 CMake (desktop) also defines `threadlock_tests` and `threadlock_tool`; those need the engine's vcpkg submodule
 (`git submodule update --init --recursive`). VS is at `C:\Program Files\Microsoft Visual Studio\18\Community`
@@ -169,8 +175,8 @@ match the code): `clang-format -i --style=file:<engine>/.clang-format src/* test
 The same tests on a phone (ARM64, the NDK's clang), from Git Bash with `MSYS_NO_PATHCONV=1`:
 ```
 $NDK/toolchains/llvm/prebuilt/windows-x86_64/bin/clang++.exe --target=aarch64-linux-android24 -std=c++20 -O2 \
-  -static-libstdc++ -isystem external/WLWengine/third_party/tinygltf -isystem external/WLWengine/third_party/doctest \
-  tests/*.cpp src/threadlock_rules.cpp src/level_io.cpp src/apothecary_look.cpp src/canal_look.cpp src/solver.cpp src/generator.cpp src/board_camera.cpp \
+  -static-libstdc++ -isystem external/WLWengine/third_party/tinygltf -isystem external/WLWengine/third_party/doctest -isystem external/WLWengine/third_party/glm \
+  tests/*.cpp src/threadlock_rules.cpp src/level_io.cpp src/apothecary_look.cpp src/canal_look.cpp src/polyline.cpp src/barges.cpp src/solver.cpp src/generator.cpp src/board_camera.cpp \
   src/audio_synth.cpp src/ambience.cpp src/sound_cues.cpp src/city_map.cpp \
   -o build/android-tests/threadlock_tests
 adb -s <serial> push build/android-tests/threadlock_tests /data/local/tmp/tl/   (+ assets/levels/*.json to /data/local/tmp/tl/assets/levels/)

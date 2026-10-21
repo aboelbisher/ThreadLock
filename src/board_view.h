@@ -66,7 +66,8 @@ class BoardView {
   void BeginFrame(const Board& board, const Palette& palette, const wlw::ui::Font& font, float time, float dt,
                   bool calm, bool editing);
   void DrawBack(wlw::ui::Canvas& picture);
-  void DrawLiquid(Liquid& liquid, float alpha);  // alpha: how far between the last tick and the next
+  void DrawLiquid(Liquid& liquid, float alpha);           // alpha: how far between the last tick and the next
+  void DrawDrops(wlw::ui::Canvas& picture, float alpha);  // the world's own drops (BoardArt::UsesLiquid false)
   void DrawParts(wlw::ui::Canvas& canvas, const Options& options);
   void DrawMarkers(wlw::ui::Canvas& canvas);
   void DrawSpotlight(wlw::ui::Canvas& canvas, int node, int slot, float amount) const;
@@ -92,8 +93,9 @@ class BoardView {
   ArtFrame frame_;
   std::vector<Marker> markers_;
   std::vector<NodeAnim> anims_;
-  std::vector<float> cup_fill_;                  // animated fill per node (drops)
-  std::vector<std::vector<float>> bottle_fill_;  // the same per rack bottle
+  std::vector<float> cup_fill_;                       // animated fill per node (drops)
+  std::vector<std::vector<float>> bottle_fill_;       // the same per rack bottle
+  std::vector<std::vector<barges::Landing>> landed_;  // per cup: the barges that landed, in order
 };
 
 }  // namespace threadlock

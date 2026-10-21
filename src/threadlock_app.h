@@ -6,6 +6,7 @@
 #include <string>
 
 #include "apothecary_art.h"
+#include "canal_art.h"
 #include "board_art.h"
 #include "catalog.h"
 #include "city_art.h"
@@ -57,10 +58,12 @@ class ThreadlockApp : public wlw::app::System {
   CityArt& GetCityArt() { return city_art_; }  // the map's look (its tiles freed while it's closed)
   // The big EDIT / PLAY button's gradient (assets/shaders/ui_gradient.shader).
   const std::shared_ptr<wlw::rendering::ShaderMaterial>& ActionMaterial() const { return action_material_; }
-  // How a world's boards are drawn (world 0 = the daily and the Lab).
-  BoardArt& ArtFor(int world);
+  // How a level's board is drawn: its world's art (world 0 = the daily and the Lab); World 3's canal city
+  // only for canal maps (its older levels keep the workshop look).
+  BoardArt& ArtFor(const Level& level);
   const wlw::ui::Font& GetFont() const { return *font_; }
-  const wlw::ui::Font& GetHand() const { return *hand_; }  // handwriting (Caveat Bold): slips, bottle labels
+  const wlw::ui::Font& GetHand() const { return *hand_; }      // handwriting (Caveat Bold): slips, bottle labels
+  const wlw::ui::Font& GetStreet() const { return *street_; }  // the canal city's lettering (Cormorant SC Bold)
   const Palette& GetPalette() const { return PaletteByKey(progress_->settings.palette); }
   wlw::app::Application& Services() { return App(); }
   float Time() const { return time_; }
@@ -105,9 +108,10 @@ class ThreadlockApp : public wlw::app::System {
   WorkshopArt workshop_art_;
   LanternArt lantern_art_;
   ApothecaryArt apothecary_art_;
+  CanalArt canal_art_;
   CityArt city_art_;
   std::shared_ptr<wlw::rendering::ShaderMaterial> action_material_;
-  std::shared_ptr<wlw::ui::Font> font_, hand_;
+  std::shared_ptr<wlw::ui::Font> font_, hand_, street_;
   std::unique_ptr<wlw::kit::Ads> ads_;
   wlw::kit::AdPacing pacing_;
   std::deque<Level> kept_;  // generated levels (a deque: pointers stay valid as it grows)

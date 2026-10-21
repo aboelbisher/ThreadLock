@@ -2,6 +2,7 @@
 // file; generated levels (daily, Lab) are deterministic, valid and solvable.
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -431,20 +432,26 @@ TEST_SUITE("content") {
     };
     using List = std::vector<std::string>;
     CHECK(problems(R"(, "district": "Old Quay")", "") == List{"harbour cb has no district"});
+    CHECK(problems("Old Quay", "Old Quay by the Locks") == List{"harbour cb's district name has more than 14 letters"});
     CHECK(problems("Old Quay", "Lantern Row") == List{"harbours ca and cb both serve Lantern Row"});
     CHECK(problems("[60, 420]]", "[70, 420]]") == List{"pipe m -> ca runs at a slant (segment 2)"});
-    CHECK(problems("[[180, 420], [60, 420]]", "[[180, 380], [60, 380]]") ==
-          List{"canal m -> ca has no room to bend (segment 0)"});
+    CHECK(Has(problems("[[180, 420], [60, 420]]", "[[180, 380], [60, 380]]"),
+              "canal m -> ca has no room to bend (segment 0)"));
     CHECK(problems(R"(["pb", "x", [[60, 270]]])", R"(["pb", "x", [[100, 150], [100, 270]]])") ==
           List{"node pb isn't on a straight stretch"});
     {
       std::string json = kMillGateCanals;  // Lantern Row's harbour beside Old Quay's canal
       json.replace(json.find(R"("at": [60, 520])"), 15, R"("at": [280, 520])");
       json.replace(json.find("[60, 420]]"), 10, "[280, 420]]");
-      CHECK(LookProblems(MakeLevel(json)) == List{"canal g -> cb runs along canal m -> ca"});
+      CHECK(Has(LookProblems(MakeLevel(json)), "canal g -> cb runs along canal m -> ca"));
+      CHECK(Has(LookProblems(MakeLevel(json)), "harbours ca and cb overlap"));
     }
-    CHECK(problems("[[180, 420], [60, 420]]", "[[180, 420], [330, 420], [330, 560], [60, 560]]") ==
-          List{"canal g -> cb crosses canal m -> ca outside a crossing"});
+    CHECK(Has(problems("[[180, 420], [60, 420]]", "[[180, 420], [330, 420], [330, 560], [60, 560]]"),
+              "canal g -> cb crosses canal m -> ca outside a crossing"));
+    // Room for the city's buildings.
+    CHECK(problems(R"("at": [60, 520])", R"("at": [60, 540])") == List{"harbour ca's basin or name is off the board"});
+    CHECK(problems("[[180, 420], [60, 420]]", "[[180, 394], [60, 394]]") ==
+          List{"the mill m's house sits on canal m -> ca"});
     CHECK(problems(R"([["g", [[250, 360]]]])", R"(["g"])") == List{"the rod m -> g runs at a slant (segment 0)"});
     CHECK(problems("[[250, 360]]", "[[365, 360], [365, 300], [250, 300]]") == List{"the rod m -> g is off the board"});
     CHECK(problems("[[250, 360]]", "[[180, 400], [250, 400]]") == List{"the rod m -> g runs along canal m -> ca"});
@@ -460,6 +467,66 @@ TEST_SUITE("content") {
     const Level old = MakeLevel(plain);
     CHECK(!canal::IsCanalMap(old));
     CHECK(LookProblems(old).empty());
+  }
+
+  TEST_CASE("the canal city round 3-6: locks, harbours, the mill's house, the gate's lamp, rooftops") {
+    const Level level = MakeLevel(kMillGateCanals);
+    auto near = [](Vec2 a, Vec2 b) { return std::fabs(a.x - b.x) < 0.01f && std::fabs(a.y - b.y) < 0.01f; };
+    auto same = [&](const canal::Box& a, canal::Box b) { return near(a.min, b.min) && near(a.max, b.max); };
+
+    // The blue lock at (60, 30), its canal running down: the chamber 30 behind to 18 ahead, the stub up off the top.
+    const canal::Lock lock = canal::LockAt(level, NodeOf(level, "sb"));
+    CHECK(near(lock.frame.u, {0, 1}));
+    CHECK(near(lock.frame.w, {-1, 0}));
+    CHECK(same(lock.chamber, {{45, 0}, {75, 48}}));
+    CHECK(lock.stub == std::vector<Vec2>{{60, -100}, {60, 0}});
+
+    // Lantern Row's harbour at (60, 520): a basin 72 deep, its name under it, the first berth on the left.
+    const canal::Harbour harbour = canal::HarbourAt(level, NodeOf(level, "ca"));
+    CHECK(harbour.rows == 1);
+    CHECK(same(harbour.basin, {{14, 508}, {106, 580}}));
+    CHECK(same(harbour.pill, {{14, 580}, {106, 598}}));
+    CHECK(near(harbour.Berth(0), {27.5f, 545.5f}));
+    CHECK(near(harbour.Berth(5), {92.5f, 545.5f}));
+
+    // The mill at (180, 360): its rod runs right, so its house stands on the left bank.
+    const canal::Mill mill = canal::MillAt(level, NodeOf(level, "m"));
+    CHECK(same(mill.house, {{124, 338}, {160, 382}}));
+    // The gate at (250, 270) on a canal running right; its rod comes up from below, so its lamp is below.
+    const canal::Gate gate = canal::GateAt(level, NodeOf(level, "g"));
+    CHECK(near(gate.lamp, {262, 298}));
+
+    // The city: the same every time, a park on the board, no rooftop on a canal or a building.
+    const canal::City city = canal::MakeCity(level);
+    CHECK(city.roofs.size() > 100);
+    CHECK(city.trees.size() == 16);
+    CHECK(city.lamps.size() > 10);
+    CHECK(city.park.max.x - city.park.min.x == doctest::Approx(70.0f));
+    const canal::City again = canal::MakeCity(level);
+    REQUIRE(again.roofs.size() == city.roofs.size());
+    CHECK(near(again.roofs[17].box.min, city.roofs[17].box.min));
+    const std::vector<std::vector<Vec2>> canals = canal::CityCanals(level);
+    CHECK(canals[0] == std::vector<Vec2>{{60, -100}, {60, 30}, {60, 150}});  // the stub, then sb -> pb
+    const std::vector<canal::Box> keep = canal::KeepOuts(level);
+    for (const canal::Roof& roof : city.roofs) {
+      for (const std::vector<Vec2>& canal : canals) {
+        for (size_t k = 0; k + 1 < canal.size(); ++k) {
+          const canal::Box clear{
+              {std::min(canal[k].x, canal[k + 1].x) - 14, std::min(canal[k].y, canal[k + 1].y) - 14},
+              {std::max(canal[k].x, canal[k + 1].x) + 14, std::max(canal[k].y, canal[k + 1].y) + 14}};
+          CHECK(!roof.box.Overlaps(clear));
+        }
+      }
+      for (const canal::Box& box : keep) CHECK(!roof.box.Overlaps(box));
+      CHECK(!roof.box.Overlaps(city.park));
+    }
+    for (const Vec2 lamp : city.lamps) {
+      for (const Node& node : level.nodes) CHECK(std::hypot(lamp.x - node.at.x, lamp.y - node.at.y) >= 22.0f);
+    }
+    // Another level, another city.
+    std::string other = kMillGateCanals;
+    other.replace(other.find(R"("id": "t-3-6")"), 13, R"("id": "t-3-7")");
+    CHECK(!near(canal::MakeCity(MakeLevel(other)).roofs[17].box.min, city.roofs[17].box.min));
   }
 
   TEST_CASE("every level's look is right: nodes on the board, shop walls straight") {

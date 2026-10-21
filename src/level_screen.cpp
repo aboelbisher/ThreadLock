@@ -196,12 +196,12 @@ std::string FailureText(const Level& level, const Board& board, const Outcome& o
 
 LevelScreen::LevelScreen(ThreadlockApp& app, const Level* level, LevelSource source)
     : app_(app), level_(level), source_(source), board_(*level), look_(LookForWorld(level->world)) {
-  view_.SetArt(&app_.ArtFor(level_->world));
+  view_.SetArt(&app_.ArtFor(*level_));
   view_.SetLevel(level_);
 }
 
 void LevelScreen::OnEnter() {
-  app_.GetLiquid().SetActive(true);
+  app_.GetLiquid().SetActive(view_.Art().UsesLiquid());
   view_.Art().Invalidate();
   app_.GetFeedback().SetSoundSet(look_.sounds);
   WLW_LOG_INFO("Level %s %s (%s)", level_->id.c_str(), level_->name.c_str(), LevelTypeKey(level_->type));
@@ -614,10 +614,14 @@ void LevelScreen::RenderUI(UIContext& ui) {
   view_.BeginFrame(board_, palette, font, time, ui.dt, app_.Calm(), phase_ == Phase::Edit);
   Liquid& liquid = app_.GetLiquid();
   view_.DrawBack(liquid.Picture());
-  liquid.Begin(canvas.Size(), time);
   const float alpha = phase_ == Phase::Run || (phase_ == Phase::ShowMe && !show_done_) ? clock_ / kTickSeconds : 1.0f;
-  view_.DrawLiquid(liquid, alpha);
-  liquid.End();
+  if (view_.Art().UsesLiquid()) {
+    liquid.Begin(canvas.Size(), time);
+    view_.DrawLiquid(liquid, alpha);
+    liquid.End();
+  } else {
+    view_.DrawDrops(liquid.Picture(), alpha);  // the world's own drops (barges), on the bloomed layer
+  }
   liquid.Draw(liquid.Picture());
 
   if (dialog_ == Dialog::None) {

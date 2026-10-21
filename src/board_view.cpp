@@ -187,6 +187,7 @@ void BoardView::SetLevel(const Level* level) {
   bottle_fill_.assign(level ? level->nodes.size() : 0, {});
   for (size_t n = 0; level && n < level->nodes.size(); ++n) bottle_fill_[n].assign(level->nodes[n].slots.size(), 0.0f);
   markers_.clear();
+  landed_.assign(level ? level->nodes.size() : 0, {});
   if (art_) art_->Invalidate();
 }
 
@@ -197,6 +198,8 @@ void BoardView::SetArt(BoardArt* art) {
 
 void BoardView::ClearMarkers() {
   markers_.clear();
+  for (NodeAnim& anim : anims_) anim.tick = -1000000;
+  for (std::vector<barges::Landing>& landed : landed_) landed.clear();
   std::fill(cup_fill_.begin(), cup_fill_.end(), 0.0f);
   for (std::vector<float>& fills : bottle_fill_) std::fill(fills.begin(), fills.end(), 0.0f);
 }
@@ -219,12 +222,17 @@ void BoardView::OnEvents(const std::vector<Event>& events, const Board& board) {
         }
         break;
       }
+      case EventType::Pour: anims_[static_cast<size_t>(e.node)].tick = board.Ticks(); break;
       case EventType::Leave:
+        anims_[static_cast<size_t>(e.node)].tick = board.Ticks();
         if (level_->nodes[static_cast<size_t>(e.node)].kind == NodeKind::Mill)
           anims_[static_cast<size_t>(e.node)].spin_target += kPi / 3.0f;  // a notch
         break;
       case EventType::Mix: anims_[static_cast<size_t>(e.node)].flash = 1.0f; break;
-      case EventType::Flip: anims_[static_cast<size_t>(e.node)].flash = 1.0f; break;
+      case EventType::Flip:
+        anims_[static_cast<size_t>(e.node)].flash = 1.0f;
+        anims_[static_cast<size_t>(e.node)].tick = board.Ticks();
+        break;
       case EventType::Collide: add(Marker::Mud, e.node); break;
       case EventType::NearMiss: add(Marker::NearMiss, e.node); break;
       case EventType::Land: {
@@ -235,6 +243,7 @@ void BoardView::OnEvents(const std::vector<Event>& events, const Board& board) {
             !(e.bead.a == want && (!e.bead.IsBlend() || e.bead.b == want)) && !e.bead.IsMud()) {
           add(Marker::WrongCup, e.node, e.slot);
         }
+        if (node.kind == NodeKind::Cup) landed_[static_cast<size_t>(e.node)].push_back({e.bead, board.Ticks()});
         break;
       }
       case EventType::Spill: add(Marker::Spill, e.node, e.slot); break;
@@ -331,6 +340,7 @@ void BoardView::BeginFrame(const Board& board, const Palette& palette, const wlw
   frame_.anims = anims_;
   frame_.cup_fill = cup_fill_;
   frame_.bottle_fill = bottle_fill_;
+  frame_.landed = landed_;
   frame_.markers = markers_;
 }
 
@@ -341,6 +351,11 @@ void BoardView::DrawBack(Canvas& picture) {
 void BoardView::DrawLiquid(Liquid& liquid, float alpha) {
   frame_.alpha = alpha;
   if (level_ && art_) art_->DrawLiquid(liquid, frame_, alpha);
+}
+
+void BoardView::DrawDrops(Canvas& picture, float alpha) {
+  frame_.alpha = alpha;
+  if (level_ && art_) art_->DrawDrops(picture, frame_);
 }
 
 glm::vec2 BoardView::MarkerCanvas(int node, int slot) const {
