@@ -120,6 +120,16 @@ std::optional<Vec2> PulseAt(const std::vector<Vec2>& rod, float since);
 // its dwell), so the wheel turns on through a drop's dwell and is continuous as it leaves.
 float WheelAngle(int turns, float inside);
 
+// A jam's picture on the canals. A red lamp sits on each stuck node, beside it (kLampOffset up and right of its
+// centre, off the water's edge).
+inline constexpr float kLampOffset = 20.0f;
+Vec2 LampAt(const Level& level, int node);
+// The circle of waiting (JamReport::cycle; `lonely` = a shut gate nothing opens): the shortest way along the canals
+// and the mills' rods from each node of the circle to the next, as one closed loop inset kLoopInset toward its
+// middle. A shut gate brings its mill (and the rod) in before it. Empty when the nodes aren't joined.
+inline constexpr float kLoopInset = 12.0f;
+std::vector<Vec2> JamLoop(const Level& level, const std::vector<int>& cycle, int lonely);
+
 // The city's still picture: rooftops in the gaps between the canals, a park, lamps along the quays. Generated
 // from the level's id (the same city every time), over the board and a screen's margin round it.
 struct Roof {

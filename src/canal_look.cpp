@@ -582,4 +582,138 @@ float WheelAngle(int turns, float inside) {
   return (static_cast<float>(turns) + std::clamp(inside, 0.0f, 1.0f)) * std::numbers::pi_v<float> / 3.0f;
 }
 
+Vec2 LampAt(const Level& level, int node) {
+  const Vec2 at = level.nodes[static_cast<size_t>(node)].at;
+  return {at.x + kLampOffset, at.y - kLampOffset};
+}
+
+namespace {
+
+// One way from a node to a neighbour: its polyline (board units, from the node) and its length.
+struct Hop {
+  int to = 0;
+  std::vector<Vec2> via;
+  float length = 0.0f;
+};
+
+float Length(const std::vector<Vec2>& line) {
+  float total = 0.0f;
+  for (size_t k = 0; k + 1 < line.size(); ++k) total += Distance(line[k], line[k + 1]);
+  return total;
+}
+
+// Every way a drop can go, from each node: a canal both ways, a mill's rod both ways.
+std::vector<std::vector<Hop>> Hops(const Level& level) {
+  std::vector<std::vector<Hop>> hops(level.nodes.size());
+  for (const Pipe& pipe : level.pipes) {
+    std::vector<Vec2> points = CanalPoints(level, pipe);
+    const float length = Length(points);
+    hops[static_cast<size_t>(pipe.from)].push_back({pipe.to, points, length});
+    std::reverse(points.begin(), points.end());
+    hops[static_cast<size_t>(pipe.to)].push_back({pipe.from, points, length});
+  }
+  for (size_t m = 0; m < level.nodes.size(); ++m) {
+    const Node& mill = level.nodes[m];
+    for (size_t g = 0; g < mill.gears.size(); ++g) {
+      std::vector<Vec2> rod = RodPoints(level, static_cast<int>(m), static_cast<int>(g));
+      const float length = Length(rod);
+      const int gate = mill.gears[g];
+      hops[m].push_back({gate, rod, length});
+      std::reverse(rod.begin(), rod.end());
+      hops[static_cast<size_t>(gate)].push_back({static_cast<int>(m), rod, length});
+    }
+  }
+  return hops;
+}
+
+// The shortest way from `from` to `to` over the hops, as one polyline (empty when there is none).
+std::vector<Vec2> Shortest(const std::vector<std::vector<Hop>>& hops, int from, int to) {
+  constexpr float kFar = 1e30f;
+  const size_t n = hops.size();
+  std::vector<float> dist(n, kFar);
+  std::vector<int> prev(n, -1), way(n, -1);
+  std::vector<bool> done(n, false);
+  dist[static_cast<size_t>(from)] = 0.0f;
+  for (;;) {
+    int best = -1;
+    for (size_t i = 0; i < n; ++i) {
+      if (!done[i] && dist[i] < kFar && (best < 0 || dist[i] < dist[static_cast<size_t>(best)])) {
+        best = static_cast<int>(i);
+      }
+    }
+    if (best < 0 || best == to) break;
+    done[static_cast<size_t>(best)] = true;
+    const std::vector<Hop>& out = hops[static_cast<size_t>(best)];
+    for (size_t h = 0; h < out.size(); ++h) {
+      const size_t next = static_cast<size_t>(out[h].to);
+      const float total = dist[static_cast<size_t>(best)] + out[h].length;
+      if (total >= dist[next]) continue;
+      dist[next] = total;
+      prev[next] = best;
+      way[next] = static_cast<int>(h);
+    }
+  }
+  if (from == to || dist[static_cast<size_t>(to)] >= kFar) return {};
+  // Walk back from `to`, then join the ways in order (each starts where the last one ended).
+  std::vector<const std::vector<Vec2>*> legs;
+  for (int at = to; at != from; at = prev[static_cast<size_t>(at)]) {
+    const Hop& hop =
+        hops[static_cast<size_t>(prev[static_cast<size_t>(at)])][static_cast<size_t>(way[static_cast<size_t>(at)])];
+    legs.push_back(&hop.via);
+  }
+  std::vector<Vec2> path;
+  for (auto leg = legs.rbegin(); leg != legs.rend(); ++leg) {
+    path.insert(path.end(), path.empty() ? (*leg)->begin() : (*leg)->begin() + 1, (*leg)->end());
+  }
+  return path;
+}
+
+}  // namespace
+
+std::vector<Vec2> JamLoop(const Level& level, const std::vector<int>& cycle, int lonely) {
+  std::vector<int> ring = cycle;
+  if (lonely >= 0 && level.nodes[static_cast<size_t>(lonely)].kind == NodeKind::Gate &&
+      std::find(ring.begin(), ring.end(), lonely) == ring.end()) {
+    ring.push_back(lonely);
+  }
+  // A shut gate's mill comes in just before it: its rod is part of the circle.
+  std::vector<int> nodes;
+  for (const int n : ring) {
+    if (level.nodes[static_cast<size_t>(n)].kind == NodeKind::Gate) {
+      for (size_t m = 0; m < level.nodes.size(); ++m) {
+        const std::vector<int>& gears = level.nodes[m].gears;
+        const int mill = static_cast<int>(m);
+        const bool works = std::find(gears.begin(), gears.end(), n) != gears.end();
+        const bool listed = std::find(ring.begin(), ring.end(), mill) != ring.end();
+        if (works && !listed && std::find(nodes.begin(), nodes.end(), mill) == nodes.end()) nodes.push_back(mill);
+      }
+    }
+    nodes.push_back(n);
+  }
+  if (nodes.size() < 2) return {};
+  const std::vector<std::vector<Hop>> hops = Hops(level);
+  std::vector<Vec2> loop;
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    const std::vector<Vec2> leg = Shortest(hops, nodes[i], nodes[(i + 1) % nodes.size()]);
+    if (leg.empty()) return {};
+    loop.insert(loop.end(), loop.empty() ? leg.begin() : leg.begin() + 1, leg.end());
+  }
+  // Inset toward the circle's middle. The last leg ends where the first began, so the loop is closed.
+  Vec2 middle{0.0f, 0.0f};
+  for (const Vec2 p : loop) {
+    middle.x += p.x;
+    middle.y += p.y;
+  }
+  middle.x /= static_cast<float>(loop.size());
+  middle.y /= static_cast<float>(loop.size());
+  for (Vec2& p : loop) {
+    const float d = Distance(p, middle);
+    if (d > kLoopInset) {
+      p.x += (middle.x - p.x) * kLoopInset / d;
+      p.y += (middle.y - p.y) * kLoopInset / d;
+    }
+  }
+  return loop;
+}
+
 }  // namespace threadlock::canal

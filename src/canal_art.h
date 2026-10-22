@@ -41,7 +41,10 @@ class CanalArt : public BoardArt {
   bool UsesLiquid() const override { return false; }
   void DrawDrops(wlw::ui::Canvas& picture, const ArtFrame& frame) override;
   void DrawFront(wlw::ui::Canvas& canvas, const ArtFrame& frame) override;
-  // The payoff's moment lasts as long as the district's light takes to run out.
+  // The failures' moments: murk, wrong colour, spill, short and the jam are drawn on the canals (DrawMarker); a
+  // near miss keeps the shared look.
+  bool DrawMarker(wlw::ui::Canvas& canvas, const ArtFrame& frame, const Marker& marker) const override;
+  // The payoff's moment lasts as long as the district's light takes to run out; each failure's, as long as it plays.
   float MomentLength(const Marker& marker) const override;
   // A harbour's berths.
   wlw::ui::Rect CupPool(const ArtFrame& frame, int cup) const override;
@@ -65,6 +68,8 @@ class CanalArt : public BoardArt {
   struct BargeLook {
     float alpha = 1.0f;
     bool lit = true;
+    float tail_light = 1.0f;  // a jam's waiting barges pulse
+    float outline = 0.0f;     // a red edge round the hull (a wrong colour in its berth)
   };
 
   void Prepare(const ArtFrame& frame);
@@ -91,6 +96,11 @@ class CanalArt : public BoardArt {
   void DrawBerths(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
   // A harbour's pill: its glyph and district's name, and its count of barges.
   void DrawPill(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
+  // The moments (DrawMarker): murk (a cloud over the junction, a stain along its canals, the mud barges dim), short
+  // (ghost berths for the missing barges), the jam (red lamps on the stuck nodes, the circle of waiting traced round).
+  void DrawMurk(wlw::ui::Canvas& canvas, const ArtFrame& frame, const Marker& marker) const;
+  void DrawShort(wlw::ui::Canvas& canvas, const ArtFrame& frame, const Marker& marker) const;
+  void DrawJam(wlw::ui::Canvas& canvas, const ArtFrame& frame, const Marker& marker) const;
   // A mill's house, wheel, axle and hub, and its rods (with their names: `ordinal` = how many mills came before it).
   void DrawMill(wlw::ui::Canvas& canvas, const ArtFrame& frame, int mill, int ordinal) const;
   // A mill's notch lights, its wheel's slats turning with the barges through it, its window, the pulse on its rods.

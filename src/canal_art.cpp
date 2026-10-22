@@ -59,6 +59,13 @@ constexpr Rgba kHinge = Hex(0x8A6A40), kPost = Hex(0x55658A), kLampRed = Hex(0xF
 constexpr Rgba kLampLit = Hex(0xFFF0C8), kLampGlowLit = Hex(0xFFC870), kWarm = Hex(0xFFB347);
 constexpr float kDistrictNear = 40.0f, kDistrictFar = 340.0f, kDistrictRing = 30.0f, kDistrictSteady = 0.5f;
 constexpr float kSettled = 100.0f;  // seconds: long past any moment (Settle's own figure)
+// The failures' moments (seconds): the murk's cloud grows, its stain runs out along the canals, the short's ghost
+// berths fade in, the wrong colour and spill tags come up, the jam's circle is traced round once.
+constexpr float kMurkLength = 1.2f, kStainLength = 1.4f, kFailLength = 1.2f, kShortLength = 1.2f, kJamLength = 1.3f;
+constexpr Rgba kFail = Hex(0xFF5A5A), kFailInk = Hex(0x080E1A);  // the red tags, lamps and the circle
+constexpr Rgba kMurkCloud = Hex(0x5E5233), kMurkCloudDark = Hex(0x433A24);
+constexpr Rgba kStain = Hex(0x4E4429), kStainDash = Hex(0x6E6040), kGhost = Hex(0xFF8A8A);
+constexpr float kStainWidth = 17.0f, kCircleWidth = 2.4f;
 
 uint64_t Mix(uint64_t h, uint64_t v) {
   h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
@@ -94,6 +101,57 @@ bool Served(const ArtFrame& frame, int cup) {
   if (!frame.board->Started()) return false;
   const CupState state = frame.board->Cup(cup);
   return state.count >= frame.level->nodes[static_cast<size_t>(cup)].count && !state.impure && !state.spilled;
+}
+
+float EaseOut(float t) { return 1.0f - (1.0f - t) * (1.0f - t); }
+
+// A moment's progress, 0..1 over `length` seconds (a calm frame shows its end at once).
+float Progress(const ArtFrame& frame, const Marker& marker, float length) {
+  return frame.calm ? 1.0f : std::clamp(marker.age / length, 0.0f, 1.0f);
+}
+
+// Whether a moment of this kind happened anywhere on the board.
+bool Happened(const ArtFrame& frame, Marker::Kind kind) {
+  for (const Marker& marker : frame.markers) {
+    if (marker.kind == kind) return true;
+  }
+  return false;
+}
+
+// The moment of this kind at this node, if it happened.
+const Marker* MomentOf(const ArtFrame& frame, Marker::Kind kind, int node) {
+  for (const Marker& marker : frame.markers) {
+    if (marker.kind == kind && marker.node == node) return &marker;
+  }
+  return nullptr;
+}
+
+// A failure's word in a red tag (a pill) at `at`, fading in with alpha 0..1.
+void Tag(Canvas& canvas, const ArtFrame& frame, glm::vec2 at, const char* text, float alpha) {
+  const float s = frame.Scale();
+  const float width = frame.font->Measure(text, 13.0f * s) + 16.0f * s;
+  const glm::vec2 half{width * 0.5f, 9.0f * s};
+  canvas.FillRect({at - half, at + half}, WithAlpha(kFail, alpha), 9.0f * s);
+  canvas.Text(*frame.font, text, at, 13.0f * s, Align::Center, TextStyle{.color = WithAlpha(kFailInk, alpha)});
+}
+
+float Length(const std::vector<glm::vec2>& line) {
+  float total = 0.0f;
+  for (size_t k = 0; k + 1 < line.size(); ++k) total += glm::distance(line[k], line[k + 1]);
+  return total;
+}
+
+// A stroke along a polyline from distance `from` to `to` (canvas units; outside its ends it is clipped).
+void Trace(Canvas& canvas, const std::vector<glm::vec2>& line, float from, float to, float width, Rgba color) {
+  float walked = 0.0f;
+  for (size_t k = 0; k + 1 < line.size(); ++k) {
+    const float seg = glm::distance(line[k], line[k + 1]);
+    if (seg > 0.0f && walked + seg > from && walked < to) {
+      const float t0 = std::max(0.0f, from - walked) / seg, t1 = std::min(seg, to - walked) / seg;
+      canvas.Line(line[k] + (line[k + 1] - line[k]) * t0, line[k] + (line[k + 1] - line[k]) * t1, width, color);
+    }
+    walked += seg;
+  }
 }
 
 // A point on a mill's wheel at angle `theta`, `reach` of the way from its middle to its rim (canvas units).
@@ -436,11 +494,17 @@ void CanalArt::DrawMoored(Canvas& canvas, const ArtFrame& frame, int spout) cons
 
 void CanalArt::DrawDrops(Canvas& picture, const ArtFrame& frame) {
   Prepare(frame);
+  // After murk, its barges sit dim with no wake; after a jam, the waiting ones' red tails pulse.
+  const bool murk = Happened(frame, Marker::Mud), jam = Happened(frame, Marker::Jam);
+  const float pulse = 0.55f + 0.45f * std::sin(7.0f * frame.time);
   if (frame.board->Started()) {
     for (const Drop& drop : frame.board->Drops()) {
       if (!drop.alive) continue;
       const barges::Pose pose = barges::PoseOf(*frame.level, ways_, drop, frame.alpha);
-      DrawBarge(picture, frame, pose, drop.bead, {pose.fade, true});
+      BargeLook look{pose.fade, true};
+      if (murk && drop.bead.IsMud()) look = {0.55f, false};
+      if (jam && drop.waiting) look.tail_light = pulse;
+      DrawBarge(picture, frame, pose, drop.bead, look);
     }
   }
   for (size_t n = 0; n < frame.level->nodes.size(); ++n) {
@@ -473,6 +537,8 @@ void CanalArt::DrawBarge(Canvas& canvas, const ArtFrame& frame, const barges::Po
     }
   }
   const float half = kBargeLength * 0.5f - kBargeWidth * 0.5f;  // the hull's round ends sit this far from its middle
+  if (look.outline > 0.0f)
+    canvas.Line(at(-half, 0.0f), at(half, 0.0f), (kBargeWidth + 3.0f) * s, WithAlpha(kFail, look.outline * a));
   if (bead.IsBlend()) {
     // A blend: its second colour on the back half.
     const Rgba back = murk ? kMurkHull : Hull(*frame.palette, bead.b);
@@ -484,8 +550,8 @@ void CanalArt::DrawBarge(Canvas& canvas, const ArtFrame& frame, const barges::Po
   canvas.Line(at(-1.7f, 0.0f), at(1.7f, 0.0f), 2.6f * s, WithAlpha(core, a));
   if (look.lit) {
     const glm::vec2 tail = at(-kBargeLength * 0.5f - 1.0f, 0.0f);
-    glow_.Draw(canvas, tail, 4.0f * s, WithAlpha(kTail, 0.45f * a));
-    canvas.Circle(tail, 1.6f * s, WithAlpha(kTail, a));
+    glow_.Draw(canvas, tail, 4.0f * s, WithAlpha(kTail, 0.45f * a * look.tail_light));
+    canvas.Circle(tail, 1.6f * s, WithAlpha(kTail, a * look.tail_light));
   }
 }
 
@@ -494,22 +560,30 @@ void CanalArt::DrawBerths(Canvas& canvas, const ArtFrame& frame, int cup) const 
   const canal::Frame& f = harbour.frame;
   const Vec2 mouth = f.Point(-4.0f, 0.0f);
   const int capacity = harbour.rows * canal::kBerthsPerRow;
-  int berth = 0, raft = 0;
+  const Node& node = frame.level->nodes[static_cast<size_t>(cup)];
+  const Marker* wrong = MomentOf(frame, Marker::WrongCup, cup);
+  const float s = frame.Scale();
+  int berth = 0, raft = 0, ordered = 0;
   for (const barges::Landing& landed : frame.landed[static_cast<size_t>(cup)]) {
-    // A blend takes two berths (its barge sits in the first); past the last berth a barge rafts at the mouth.
+    // A blend takes two berths (its barge sits in the first). Past the last berth, or past the order (a spill), a
+    // barge rafts at the mouth.
     const float since = frame.Clock() - static_cast<float>(landed.tick);
     const float glide = barges::Glide(since);
     Vec2 to;
-    if (berth < capacity) {
+    if (berth < capacity && ordered < node.count) {
       to = harbour.Berth(berth);
       berth += landed.bead.Drops();
     } else {
       to = f.Point(-4.0f - 7.0f * static_cast<float>(raft / 2), raft % 2 == 0 ? 4.5f : -4.5f);
       ++raft;
     }
+    ordered += landed.bead.Drops();
     const barges::Pose pose{
         {mouth.x + (to.x - mouth.x) * glide, mouth.y + (to.y - mouth.y) * glide}, {f.u.x, f.u.y}, 1.0f, glide < 1.0f};
-    DrawBarge(canvas, frame, pose, landed.bead, {1.0f, true});
+    // A barge of the wrong colour gets a red edge in its berth while its moment plays.
+    const bool pure = landed.bead.a == node.want && (!landed.bead.IsBlend() || landed.bead.b == node.want);
+    const float outline = wrong && !pure && !landed.bead.IsMud() ? Progress(frame, *wrong, kFailLength) : 0.0f;
+    DrawBarge(canvas, frame, pose, landed.bead, {1.0f, true, 1.0f, outline});
   }
 }
 
@@ -645,8 +719,132 @@ void CanalArt::DrawDistrict(Canvas& canvas, const ArtFrame& frame, int cup) cons
   }
 }
 
+bool CanalArt::DrawMarker(Canvas& canvas, const ArtFrame& frame, const Marker& marker) const {
+  if (level_ != frame.level) return false;  // the canals are laid out in Prepare, before the markers are drawn
+  if (marker.kind == Marker::Jam) {
+    DrawJam(canvas, frame, marker);
+    return true;
+  }
+  if (marker.node < 0) return false;
+  const NodeKind kind = frame.level->nodes[static_cast<size_t>(marker.node)].kind;
+  switch (marker.kind) {
+    case Marker::Paid: return true;  // the harbour's art shows it (DrawFront)
+    case Marker::Mud: DrawMurk(canvas, frame, marker); return true;
+    case Marker::WrongCup:
+    case Marker::Spill:
+      if (kind != NodeKind::Cup) return false;
+      Tag(canvas, frame, CupTop(frame, marker.node), marker.kind == Marker::WrongCup ? "wrong colour" : "spill",
+          Progress(frame, marker, kFailLength));
+      return true;
+    case Marker::Dry:
+      if (kind != NodeKind::Cup) return false;
+      DrawShort(canvas, frame, marker);
+      return true;
+    default: return false;  // a near miss: the shared look
+  }
+}
+
+void CanalArt::DrawMurk(Canvas& canvas, const ArtFrame& frame, const Marker& marker) const {
+  const float s = frame.Scale();
+  const glm::vec2 at = frame.At(marker.node);
+  // The stain: along each canal that meets the junction, out from it (its reach grows to 50 board units).
+  const float reach = 6.0f + 44.0f * EaseOut(Progress(frame, marker, kStainLength));
+  const Node& node = frame.level->nodes[static_cast<size_t>(marker.node)];
+  auto stain = [&](int pipe, bool leaving) {
+    const Pipe& rules = frame.level->pipes[static_cast<size_t>(pipe)];
+    const canal::Way& way = ways_[static_cast<size_t>(pipe)];
+    const float length = std::min(reach, rules.length);
+    std::vector<glm::vec2> line;
+    for (int k = 0; k <= 25; ++k) {
+      const float d = length * static_cast<float>(k) / 25.0f;
+      line.push_back(frame.layout.ToCanvas(way.PointAt(leaving ? d : rules.length - d)));
+    }
+    const float total = Length(line);
+    Trace(canvas, line, 0.0f, total, kStainWidth * s, kStain);
+    for (float d = 0.0f; d < total; d += 12.0f * s) Trace(canvas, line, d, d + 6.0f * s, 2.0f * s, kStainDash);
+  };
+  for (const int pipe : node.ins) stain(pipe, false);
+  for (const int pipe : node.outs) stain(pipe, true);
+  // The cloud over the stain: soft puffs round the junction, growing out, thin enough to show the dim barges in it.
+  const float r = (22.0f + 40.0f * EaseOut(Progress(frame, marker, kMurkLength))) * s;
+  for (int k = 0; k < 5; ++k) {
+    const float angle = 2.0f * kPi * static_cast<float>(k) / 5.0f;
+    glow_.Draw(canvas, at + glm::vec2(std::cos(angle), std::sin(angle)) * (r * 0.4f), r * 0.75f,
+               WithAlpha(kMurkCloud, 0.45f));
+  }
+  glow_.Draw(canvas, at, r * 0.8f, WithAlpha(kMurkCloudDark, 0.5f));
+}
+
+void CanalArt::DrawShort(Canvas& canvas, const ArtFrame& frame, const Marker& marker) const {
+  const float s = frame.Scale();
+  const int cup = marker.node;
+  const canal::Harbour& harbour = harbours_[static_cast<size_t>(cup)];
+  const Node& node = frame.level->nodes[static_cast<size_t>(cup)];
+  const CupState state = frame.board->Started() ? frame.board->Cup(cup) : CupState{};
+  const float alpha = Progress(frame, marker, kShortLength);
+  const int capacity = harbour.rows * canal::kBerthsPerRow;
+  const Vec2 u = harbour.frame.u, w = harbour.frame.w;
+  const float half_length = kBargeLength * 0.5f, half_width = kBargeWidth * 0.5f;
+  // The berths the order is still short of: dashed outlines where the barges should be.
+  for (int k = state.count; k < std::min(node.count, capacity); ++k) {
+    const Vec2 c = harbour.Berth(k);
+    auto corner = [&](float along, float across) {
+      return frame.layout.ToCanvas({c.x + u.x * along + w.x * across, c.y + u.y * along + w.y * across});
+    };
+    const glm::vec2 a = corner(-half_length, -half_width), b = corner(half_length, -half_width);
+    const glm::vec2 d = corner(half_length, half_width), e = corner(-half_length, half_width);
+    const Rgba ink = WithAlpha(kGhost, alpha);
+    art::DashedLine(canvas, a, b, 1.5f * s, ink, 4);
+    art::DashedLine(canvas, b, d, 1.5f * s, ink, 4);
+    art::DashedLine(canvas, d, e, 1.5f * s, ink, 4);
+    art::DashedLine(canvas, e, a, 1.5f * s, ink, 4);
+  }
+  Tag(canvas, frame, CupTop(frame, cup), "short", alpha);
+}
+
+void CanalArt::DrawJam(Canvas& canvas, const ArtFrame& frame, const Marker& marker) const {
+  const float s = frame.Scale();
+  const float traced = Progress(frame, marker, kJamLength);
+  const JamReport jam = frame.board->Jam();
+  // A red lamp beside each stuck node (cups, drains and spouts keep their own look, a gate's own lamp is already
+  // red), lit as the circle is traced.
+  for (const int node : jam.stuck_nodes) {
+    const NodeKind kind = frame.level->nodes[static_cast<size_t>(node)].kind;
+    if (kind == NodeKind::Cup || kind == NodeKind::Drain || kind == NodeKind::Spout || kind == NodeKind::Gate) continue;
+    const glm::vec2 lamp = frame.layout.ToCanvas(canal::LampAt(*frame.level, node));
+    glow_.Draw(canvas, lamp, 8.0f * s, WithAlpha(kFail, 0.6f * traced));
+    canvas.Circle(lamp, 2.6f * s, WithAlpha(kFail, traced));
+  }
+  // The circle of waiting: traced round once, then it marches round.
+  const std::vector<Vec2> ring = canal::JamLoop(*frame.level, jam.cycle, jam.lonely);
+  if (ring.size() >= 2) {
+    std::vector<glm::vec2> line;
+    for (const Vec2 p : ring) line.push_back(frame.layout.ToCanvas(p));
+    const float length = Length(line);
+    if (traced < 1.0f) {
+      Trace(canvas, line, 0.0f, length * traced, kCircleWidth * s, kFail);
+    } else {
+      const float period = 14.0f * s, dash = 8.0f * s, shift = std::fmod(frame.time * 20.0f * s, period);
+      for (float d = -shift; d < length; d += period) Trace(canvas, line, d, d + dash, kCircleWidth * s, kFail);
+    }
+  }
+  if (jam.lonely >= 0) {
+    const bool gate = frame.level->nodes[static_cast<size_t>(jam.lonely)].kind == NodeKind::Gate;
+    canvas.Text(*frame.font, gate ? "never opens" : "waits forever", frame.At(jam.lonely) + glm::vec2(0.0f, 34.0f * s),
+                14.0f * s, Align::Center, TextStyle::Outlined(kFail, ui_color::kBackground, traced));
+  }
+}
+
 float CanalArt::MomentLength(const Marker& marker) const {
-  return marker.kind == Marker::Paid ? barges::kDistrictLength : 0.0f;
+  switch (marker.kind) {
+    case Marker::Paid: return barges::kDistrictLength;
+    case Marker::Mud: return kStainLength;
+    case Marker::WrongCup:
+    case Marker::Spill: return kFailLength;
+    case Marker::Dry: return kShortLength;
+    case Marker::Jam: return kJamLength;
+    default: return 0.0f;
+  }
 }
 
 void CanalArt::DrawFront(Canvas& canvas, const ArtFrame& frame) {

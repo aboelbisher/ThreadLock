@@ -1107,10 +1107,15 @@ void LevelScreen::DrawResult(UIContext& ui) {
   if (!result_.solved) {
     const Rgba primary = ui.theme.primary;
     ui.theme.primary = ui_color::kBad;  // the title takes the primary colour: a failure isn't green
-    const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, FailureTitle(result_, look_), {310.0f, 250.0f}, true);
+    // Two lines fit above the buttons; the card grows a line's height for each one more (the dialog's content is
+    // 40 narrower than the card).
+    constexpr float kCardWidth = 310.0f;
+    const std::vector<std::string> lines =
+        Wrap(font, FailureText(*level_, board_, result_), 17.0f, kCardWidth - 40.0f - 20.0f);
+    const float height = 250.0f + 22.0f * static_cast<float>(std::max(0, static_cast<int>(lines.size()) - 2));
+    const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, FailureTitle(result_, look_), {kCardWidth, height}, true);
     ui.theme.primary = primary;
     const Rect& r = dialog.content;
-    const std::vector<std::string> lines = Wrap(font, FailureText(*level_, board_, result_), 17.0f, r.Size().x - 20.0f);
     float y = r.min.y + 18.0f;
     for (const std::string& line : lines) {
       canvas.Text(font, line, {r.Center().x, y}, 17.0f, Align::Center, Outlined(ui_color::kInk));

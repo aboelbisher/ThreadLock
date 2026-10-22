@@ -550,6 +550,59 @@ TEST_SUITE("content") {
     CHECK(canal::WheelAngle(2, 1.5f) == doctest::Approx(3.14159265f));  // inside is capped at 1: three notches
   }
 
+  TEST_CASE("a jam's circle runs along the canals and rods, closed, through the nodes it joins") {
+    const Level level = MakeLevel(kMillGateCanals);
+    const int x = NodeOf(level, "x"), g = NodeOf(level, "g"), m = NodeOf(level, "m");
+    // Every canal's middle line and every mill's rod, as segments.
+    std::vector<std::pair<Vec2, Vec2>> lines;
+    for (const Pipe& pipe : level.pipes) {
+      const std::vector<Vec2> points = canal::CanalPoints(level, pipe);
+      for (size_t k = 0; k + 1 < points.size(); ++k) lines.push_back({points[k], points[k + 1]});
+    }
+    const std::vector<Vec2> rod = RodPoints(level, m, 0);
+    for (size_t k = 0; k + 1 < rod.size(); ++k) lines.push_back({rod[k], rod[k + 1]});
+    auto distance_to = [&](Vec2 p) {
+      float best = 1e9f;
+      for (const auto& [a, b] : lines) {
+        const float dx = b.x - a.x, dy = b.y - a.y;
+        const float t = std::clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy), 0.0f, 1.0f);
+        best = std::min(best, std::hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)));
+      }
+      return best;
+    };
+    auto near_node = [&](const std::vector<Vec2>& loop, int node) {
+      const Vec2 at = level.nodes[static_cast<size_t>(node)].at;
+      float best = 1e9f;
+      for (const Vec2 p : loop) best = std::min(best, std::hypot(p.x - at.x, p.y - at.y));
+      return best;
+    };
+
+    // x -> g: the shut gate's mill comes in before it (x, m, g), the rod joins m and g.
+    const std::vector<Vec2> loop = canal::JamLoop(level, {x, g}, -1);
+    REQUIRE(loop.size() >= 4);
+    CHECK(loop.front().x == doctest::Approx(loop.back().x));
+    CHECK(loop.front().y == doctest::Approx(loop.back().y));
+    for (const Vec2 p : loop) CHECK(distance_to(p) <= canal::kLoopInset + 0.5f);
+    for (const int n : {x, m, g}) {
+      INFO("node ", n, " is ", near_node(loop, n), " from the loop; ", loop.size(), " points");
+      CHECK(near_node(loop, n) <= canal::kLoopInset + 0.5f);
+    }
+
+    // The lonely gate joins the circle as well; a single node is no circle.
+    CHECK(!canal::JamLoop(level, {x}, g).empty());
+    CHECK(canal::JamLoop(level, {x}, -1).empty());
+
+    // A red lamp beside each stuck node, clear of every canal's water (half a canal, 14, from its middle line).
+    for (const char* id : {"x", "g", "m", "pa", "pb"}) {
+      const int n = NodeOf(level, id);
+      const Vec2 lamp = canal::LampAt(level, n);
+      CHECK(std::hypot(lamp.x - level.nodes[static_cast<size_t>(n)].at.x,
+                       lamp.y - level.nodes[static_cast<size_t>(n)].at.y) ==
+            doctest::Approx(canal::kLampOffset * std::sqrt(2.0f)));
+      CHECK(distance_to(lamp) >= 14.0f);
+    }
+  }
+
   TEST_CASE("every level's look is right: nodes on the board, shop walls straight") {
     for (const World& world : LoadAll()) {
       for (const Level& level : world.levels) {
