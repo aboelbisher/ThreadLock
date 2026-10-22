@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "canal_look.h"
 #include "stars.h"
 #include "threadlock_rules.h"
 
@@ -22,7 +23,7 @@
 namespace threadlock::city {
 
 inline constexpr float kWidth = 390.0f;
-inline constexpr float kHeight = 5684.0f;
+inline constexpr float kHeight = 5968.0f;
 inline constexpr float kMockView = 844.0f;  // the view height the scroll targets were tuned on
 
 inline constexpr int kPetals = 15;  // World 1's main path
@@ -97,7 +98,8 @@ int DistrictAt(float y);  // the world whose stretch holds map y
 // Worlds 2-4 asleep in mist: their levels as lamps, 15 on a winding path then 3 challenge diamonds.
 // Until each world gets its own art they stay playable: an open district's lamps are buttons. World 2's
 // lamps stand in three rows of five across the market square (the second right to left), then the
-// challenges' diamonds, right to left.
+// challenges' diamonds, right to left. World 3's are harbours on the Grand Canal, five rows of three
+// (every other row right to left), then the buoys in the lagoon, right to left.
 std::array<Vec2, kDistrictLamps> DistrictLamps(int world);
 inline constexpr float kLampHit = 30.0f;
 int HitLamp(int world, Vec2 at);  // the lamp a tap picks, -1 if none
@@ -107,9 +109,9 @@ struct Cubic {
   Vec2 At(float t) const;
   std::vector<Vec2> Points(int samples) const;  // samples + 1
 };
-// The valve down to the district's first lamp (World 2: a short stub into its name plate).
+// The valve down to the district's first lamp (worlds 2 and 3: a short stub into its name plate).
 Cubic GatePipe(int world);
-// The district before it down to this one's valve (its last lamp; World 2's fountain); world >= 3.
+// The district before it down to this one's valve (its last lamp; World 2's fountain, World 3's lagoon); world >= 3.
 Cubic LinkPipe(int world);
 // The tower's pipe, from under the lantern path down to World 2's valve: it fills with stars toward the gate.
 inline constexpr Vec2 kTowerPipeTop{195.0f, 2050.0f};
@@ -132,7 +134,7 @@ inline constexpr float kShelves[3] = {2752.0f, 2842.0f, 2930.0f};
 inline constexpr Vec2 kBellPivot{350.0f, 2600.0f};
 inline constexpr Vec2 kFountain{195.0f, 3580.0f};  // the basin's middle
 inline constexpr float kMarketBottom = 3622.0f;    // the square's last cobbles
-Vec2 BottleSpot(int level);  // level 0..14: the bottle's bottom middle on its shelf
+Vec2 BottleSpot(int level);                        // level 0..14: the bottle's bottom middle on its shelf
 Vec2 GlobeSpot(int challenge);
 // The scroll that shows the shop window (or its fanlight's globes) with the square's first lamps.
 float ShopScroll(float view, bool globes);
@@ -146,6 +148,41 @@ struct LampTrail {
   Cubic curve;
 };
 const std::vector<LampTrail>& MarketTrail();
+
+// ---- The canal quarter (World 3's district; the approved mock CanalQuarter.dc.html, map y = mock y + 3574) ----
+// The quarter seen from above at night. Under the plate a sluice lets the Grand Canal in; it winds down past
+// fifteen harbours, one per level (its lamp is the button, the rooftops round it are the level's
+// neighbourhood), into the lagoon, where three buoys are the challenges. A solve lights its neighbourhood and
+// the canal on to the next harbour.
+inline constexpr Box kQuarterPlate{85.0f, 3760.0f, 305.0f, 3810.0f};
+inline constexpr Box kSluice{180.0f, 3822.0f, 210.0f, 3842.0f};
+inline constexpr Box kLagoon{28.0f, 4724.0f, 362.0f, 4852.0f};
+inline constexpr float kLagoonCorner = 40.0f;
+inline constexpr float kCanalBend = 22.0f;  // the Grand Canal's round bends
+inline constexpr Vec2 kParks[2] = {{195.0f, 4074.0f}, {195.0f, 4394.0f}};
+inline constexpr Vec2 kParkHalf{30.0f, 15.0f};
+const std::vector<Vec2>& GrandCanal();  // its corners, from the sluice to the lagoon
+float CanalLength();                    // along its corners
+// The first `length` of the canal, its bends rounded (sampled every `step` along an arc).
+std::vector<Vec2> CanalPart(float length, float step);
+// How far along the canal a lamp stands (a buoy: past its end, out in the lagoon).
+float CanalAt(int lamp);
+// How far the canal is lit while `lamp` is the next to play: down to it (-1, or a challenge: all the way to the
+// lagoon).
+float CanalTrail(int lamp);
+
+struct QuarterRoof {
+  canal::Roof roof;
+  int hood = -1;  // whose neighbourhood it is: the nearest harbour on the main path (-1: by the plate or the lagoon)
+  float distance = 0.0f;  // from that harbour's lamp
+};
+const std::vector<QuarterRoof>& QuarterRoofs();  // top to bottom, clear of the canal, lamps, parks, pipes and plates
+float HoodReach(int hood);                       // its farthest roof
+const std::vector<canal::Tree>& QuarterTrees();  // in the two parks
+const std::vector<Box>& QuarterBridges();        // over the canal
+const std::vector<Vec2>& QuayLamps();            // along the canal, sides in turn
+// The scroll that shows a lamp just past the middle of the view (where its news plays).
+float QuarterScroll(int lamp, float view);
 
 // ---- The view ----
 // Scroll (map y at the top of a view `view` tall) that shows lantern i, the window, or the gate of a world.

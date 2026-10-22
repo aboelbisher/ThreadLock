@@ -57,11 +57,11 @@ class MapScreen : public wlw::app::Screen {
   float Chime();  // the next note up the scale (a pitch)
 
   bool LockedShown(int lantern) const;
-  bool LampLockedShown(int lamp) const;      // World 2's, the same way
-  bool MarketInView() const;                 // the open market square fills the middle of the view
-  const StarMap& Stars() const;              // the saved stars, or tl.stars' (dev)
-  const Level* CurrentLevel() const;         // the next level to play, by Stars()
-  float LanternY(const Level* level) const;  // map y of a level's lantern or lamp, < 0 if none
+  bool LampLockedShown(int world, int lamp) const;  // worlds 2 and 3, the same way
+  bool MarketInView() const;                        // the open market square fills the middle of the view
+  const StarMap& Stars() const;                     // the saved stars, or tl.stars' (dev)
+  const Level* CurrentLevel() const;                // the next level to play, by Stars()
+  float LanternY(const Level* level) const;         // map y of a level's lantern or lamp, < 0 if none
   void Tap(glm::vec2 map);
   void Fill(CityFrame& frame, glm::vec2 screen, float scale);
   void DrawHud(wlw::ui::UIContext& ui);

@@ -78,25 +78,58 @@ Vec2 WayIn(const Level& level, const Node& node) {
   return AxisWay(points[points.size() - 2], points.back());
 }
 
-// A small fast random sequence (mulberry32), the same on every device: the city's seed is its level's id.
-class Random {
- public:
-  explicit Random(const std::string& seed) {
-    for (const char c : seed) state_ = (state_ ^ static_cast<uint8_t>(c)) * 16777619u;  // FNV-1a
-  }
-  float Next() {
-    state_ += 0x6D2B79F5u;
-    uint32_t t = state_;
-    t = (t ^ (t >> 15)) * (t | 1u);
-    t ^= t + (t ^ (t >> 7)) * (t | 61u);
-    return static_cast<float>((t ^ (t >> 14)) >> 8) / 16777216.0f;
-  }
-
- private:
-  uint32_t state_ = 2166136261u;
-};
-
 }  // namespace
+
+Random::Random(const std::string& seed) {
+  for (const char c : seed) state_ = (state_ ^ static_cast<uint8_t>(c)) * 16777619u;  // FNV-1a
+}
+
+float Random::Next() {
+  state_ += 0x6D2B79F5u;
+  uint32_t t = state_;
+  t = (t ^ (t >> 15)) * (t | 1u);
+  t ^= t + (t ^ (t >> 7)) * (t | 61u);
+  return static_cast<float>((t ^ (t >> 14)) >> 8) / 16777216.0f;
+}
+
+void Rooftops(Random& random, const Box& area, const std::function<bool(const Box&)>& blocked,
+              std::vector<Roof>& roofs) {
+  constexpr float kCell = 38.0f;
+  auto add = [&](float x, float y, float w, float h) {
+    const Box box{{x, y}, {x + w, y + h}};
+    if (w < 9.0f || h < 9.0f || blocked(box)) return;
+    Roof roof;
+    roof.box = box;
+    roof.tone = std::min(4, static_cast<int>(random.Next() * 5.0f));
+    roof.across = w >= h;
+    const float cx = random.Next(), cy = random.Next();
+    roof.chimney = {x + 3.0f + cx * (w - 9.0f), y + 3.0f + cy * (h - 9.0f)};
+    const int windows = random.Next() < 0.45f ? 1 + static_cast<int>(random.Next() * 2.0f) : 0;
+    for (int i = 0; i < windows; ++i) {
+      const float wx = random.Next(), wy = random.Next();
+      roof.windows.push_back({x + 2.0f + wx * (w - 4.0f), y + 2.0f + wy * (h - 4.0f)});
+    }
+    roofs.push_back(std::move(roof));
+  };
+  for (float gy = area.min.y; gy < area.max.y; gy += kCell) {
+    for (float gx = area.min.x; gx < area.max.x; gx += kCell) {
+      const float x = gx + 3.0f + random.Next() * 3.0f, y = gy + 3.0f + random.Next() * 3.0f;
+      const float w = 32.0f - random.Next() * 5.0f, h = 32.0f - random.Next() * 5.0f;
+      const float cut = random.Next();
+      if (cut < 0.35f) {
+        const float s = 0.4f + random.Next() * 0.2f;
+        add(x, y, w * s - 1.5f, h);
+        add(x + w * s + 1.5f, y, w * (1.0f - s) - 1.5f, h);
+      } else if (cut < 0.7f) {
+        const float t = 0.4f + random.Next() * 0.2f;
+        add(x, y, w, h * t - 1.5f);
+        add(x, y + h * t + 1.5f, w, h * (1.0f - t) - 1.5f);
+      } else {
+        add(x, y, w, h);
+      }
+    }
+  }
+}
 
 Box Frame::Span(float along0, float along1, float across0, float across1) const {
   const Vec2 a = Point(along0, across0), b = Point(along1, across1);
@@ -251,40 +284,7 @@ City MakeCity(const Level& level) {
   }
 
   // Rooftops: each block whole, or split across or down into two.
-  auto add = [&](float x, float y, float w, float h) {
-    const Box box{{x, y}, {x + w, y + h}};
-    if (w < 9.0f || h < 9.0f || hits(box)) return;
-    Roof roof;
-    roof.box = box;
-    roof.tone = std::min(4, static_cast<int>(random.Next() * 5.0f));
-    roof.across = w >= h;
-    const float cx = random.Next(), cy = random.Next();
-    roof.chimney = {x + 3.0f + cx * (w - 9.0f), y + 3.0f + cy * (h - 9.0f)};
-    const int windows = random.Next() < 0.45f ? 1 + static_cast<int>(random.Next() * 2.0f) : 0;
-    for (int i = 0; i < windows; ++i) {
-      const float wx = random.Next(), wy = random.Next();
-      roof.windows.push_back({x + 2.0f + wx * (w - 4.0f), y + 2.0f + wy * (h - 4.0f)});
-    }
-    city.roofs.push_back(std::move(roof));
-  };
-  for (float gy = y0; gy < y1; gy += kCell) {
-    for (float gx = x0; gx < x1; gx += kCell) {
-      const float x = gx + 3.0f + random.Next() * 3.0f, y = gy + 3.0f + random.Next() * 3.0f;
-      const float w = 32.0f - random.Next() * 5.0f, h = 32.0f - random.Next() * 5.0f;
-      const float cut = random.Next();
-      if (cut < 0.35f) {
-        const float s = 0.4f + random.Next() * 0.2f;
-        add(x, y, w * s - 1.5f, h);
-        add(x + w * s + 1.5f, y, w * (1.0f - s) - 1.5f, h);
-      } else if (cut < 0.7f) {
-        const float t = 0.4f + random.Next() * 0.2f;
-        add(x, y, w, h * t - 1.5f);
-        add(x, y + h * t + 1.5f, w, h * (1.0f - t) - 1.5f);
-      } else {
-        add(x, y, w, h);
-      }
-    }
-  }
+  Rooftops(random, {{x0, y0}, {x1, y1}}, hits, city.roofs);
 
   // Lamps along the quays: every 46, sides in turn, 16 off the middle; none near a node, a bend, a basin or a
   // lock, or in another canal.

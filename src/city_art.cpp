@@ -7,6 +7,7 @@
 #include <cstring>
 #include <string>
 
+#include "canal_palette.h"
 #include "ui_parts.h"
 #include "wlw/rendering/shader.h"
 #include "wlw/utils/textures.h"
@@ -20,9 +21,11 @@ using wlw::ui::Align;
 using wlw::ui::Canvas;
 using wlw::ui::Rect;
 
-constexpr float kLow = 1400.0f;  // everything under the tower stands this much lower than in the first mock
-constexpr float kShop = 284.0f;  // World 2's shop front made the map this much taller (3f)
-constexpr float kDeep = kLow + kShop;  // the canal quarter and the sanctum: under the market
+constexpr float kLow = 1400.0f;              // everything under the tower stands this much lower than in the first mock
+constexpr float kShop = 284.0f;              // World 2's shop front made the map this much taller (3f)
+constexpr float kDeep = kLow + kShop;        // the canal quarter and the sanctum: under the market
+constexpr float kQuarter = 284.0f;           // World 3's canal quarter made it taller again (World 3 step f)
+constexpr float kDeeper = kDeep + kQuarter;  // the sanctum: under the canal quarter
 constexpr int kTilePool = 3;
 constexpr float kText = 1.15f;  // the mock's CSS font sizes -> canvas line heights
 
@@ -63,6 +66,15 @@ constexpr Rgba kShelf = Hex(0x8A6038);
 constexpr Rgba kParchment = Hex(0xF3E8CC);
 constexpr Rgba kAmberLit = Hex(0xFFB45C);
 constexpr Rgba kShopBrass = Hex(0xC9974E);
+// The canal quarter (World 3; its city's colours are the boards', canal_palette.h): the night, the plate, the
+// harbours' lamps and the light down the canal.
+constexpr Rgba kQuarterNight = Hex(0x0A101B);
+constexpr Rgba kPlateInk = Hex(0xEEF4FF), kPlateDim = Hex(0x7F8BA6), kTeal = Hex(0x7FE3D8), kTealLit = Hex(0xB8FAF2);
+constexpr Rgba kBasinWater = Hex(0x0E2742), kBasinLocked = Hex(0x0A1424);
+constexpr Rgba kHarbourRing = Hex(0x8A9AC0), kHarbourLocked = Hex(0x2C3550), kHarbourPerfect = Hex(0xFFE6A6);
+constexpr Rgba kCanalLit = Hex(0x1E5A7A), kBargeAmber = Hex(0xFFC53D), kBargeBlue = Hex(0x4D8DFF);
+constexpr Rgba kHoodWarm = canal::color::kWarm;  // a lit neighbourhood
+constexpr float kBargeSpeed = 25.0f;             // map units a second
 
 uint64_t Mix(uint64_t h, uint64_t v) {
   h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
@@ -210,6 +222,43 @@ void Title(Canvas& c, const wlw::ui::Font& font, const std::string& number, cons
   c.Text(font, name, {left + wn + gap, at.y}, size, Align::Left, {.color = color});
 }
 
+// Letter-spaced lettering (the canal quarter's plate): `spacing` canvas units between letters.
+float SpacedWidth(const wlw::ui::Font& font, const std::string& text, float size, float spacing) {
+  float width = 0.0f;
+  for (const char ch : text) width += font.Measure(std::string(1, ch), size) + spacing;
+  return text.empty() ? 0.0f : width - spacing;
+}
+
+void Spaced(Canvas& c, const wlw::ui::Font& font, const std::string& text, float left, float y, float size,
+            float spacing, const Rgba& color) {
+  for (const char ch : text) {
+    const std::string letter(1, ch);
+    c.Text(font, letter, {left, y}, size, Align::Left, {.color = color});
+    left += font.Measure(letter, size) + spacing;
+  }
+}
+
+// Dashes `on` long every `period` along a path in map units, the first `phase` in, round ended; only those near
+// map y0..y1 (the view). `shift` moves them off the line.
+template <typename At>
+void Dashes(Canvas& c, const At& at, float s, const art::Path& path, float on, float period, float phase, float width,
+            const Rgba& color, float y0, float y1, glm::vec2 shift = {}) {
+  const float length = path.Length();
+  for (float a = std::fmod(phase, period) - period; a < length; a += period) {
+    const float from = std::max(0.0f, a), to = std::min(length, a + on);
+    if (to - from < 0.5f) continue;
+    const float y = path.PointAt(from).y;
+    if (y < y0 - 40.0f || y > y1 + 40.0f) continue;
+    std::vector<glm::vec2> points;
+    for (const glm::vec2 q : path.Part(from, to).points) points.push_back(at(q.x + shift.x, q.y + shift.y));
+    art::Polyline(c, points, width * s, color);
+    if (width >= 3.0f) {
+      c.Circle(points.front(), width * 0.5f * s, color);
+      c.Circle(points.back(), width * 0.5f * s, color);
+    }
+  }
+}
+
 }  // namespace
 
 void CityArt::Create(wlw::app::Application& app) {
@@ -225,8 +274,8 @@ void CityArt::Release() { tiles_.Shrink(0); }
 
 void CityArt::Build() {
   built_ = true;
-  // Rooftops round the tower's foot, then the canal quarter's houses, in the order the mock drew them
-  // (they share one sequence of random numbers: the market square's old houses still draw theirs, unkept).
+  // Rooftops round the tower's foot, in the order the mock drew them (they share one sequence of random
+  // numbers: the market square's old houses still draw theirs, unkept).
   Rng r(11);
   auto houses = [&](float yb, float x0, float x1, float w_min, float w_span, float h_min, float h_span, Rgba fill,
                     Rgba stroke, float width, bool keep = true) {
@@ -250,8 +299,6 @@ void CityArt::Build() {
   houses(930 + kLow, 252, 400, 34, 22, 40, 50, Hex(0x0F1624), Hex(0x26324A), 1.5f);
   for (float yb : {1420.0f, 1640.0f, 1860.0f, 2060.0f})
     houses(yb + kLow, -10, 400, 38, 26, 34, 40, Hex(0x0D1524), Hex(0x22314A), 1.2f, false);
-  for (float yb : {2398.0f, 2728.0f, 3000.0f})
-    houses(yb + kDeep, -10, 400, 24, 12, 50, 50, Hex(0x0D1422), Hex(0x22314A), 1.2f);
 
   Rng stars(5);
   for (int k = 0; k < 30; ++k) {
@@ -263,9 +310,12 @@ void CityArt::Build() {
     sky_stars_.push_back(dot);
   }
 
-  for (int w = 3; w <= city::kDistricts; ++w) {
+  std::vector<glm::vec2> canal;
+  for (const Vec2 q : city::CanalPart(city::CanalLength(), 2.5f)) canal.push_back({q.x, q.y});
+  grand_canal_ = art::MakePath(std::move(canal));
+  for (int w = 4; w <= city::kDistricts; ++w) {
     // The dotted path through a sleeping district's first 15 lamps: the same smooth curve as the lantern path
-    // (World 2's market has its own trail, city::MarketTrail).
+    // (World 2's market has its own trail, city::MarketTrail; World 3's lamps stand on the Grand Canal).
     const auto lamps = city::DistrictLamps(w);
     std::vector<Vec2>& path = lamp_paths_[static_cast<size_t>(w - 1)];
     for (int j = 0; j + 1 < 15; ++j) {
@@ -323,6 +373,7 @@ void CityArt::Draw(Canvas& picture, Canvas& canvas, const CityFrame& frame, floa
   const Xf x{s, frame.scroll};
   DrawLights(picture, x, frame);
   DrawMarket(picture, canvas, x, frame);
+  DrawQuarter(picture, canvas, x, frame);
   DrawMist(picture, x, frame);
   DrawDistricts(picture, canvas, x, frame);
   DrawWindow(picture, x, frame);
@@ -434,31 +485,13 @@ void CityArt::DrawTown(Canvas& c, const Xf& x, float top, float bottom) {
   const float s = x.s;
   // The districts' ground.
   DrawMarketStill(c, x, top, bottom);
-  c.FillRect({x(0, 2080 + kDeep), x(kWidth, 3040 + kDeep)}, Hex(0x09101A));
-  c.FillRect({x(0, 3040 + kDeep), x(kWidth, 4000 + kDeep)}, Hex(0x0A0810));
+  DrawQuarterStill(c, x, top, bottom);
+  c.FillRect({x(0, 3040 + kDeeper), x(kWidth, 4000 + kDeeper)}, Hex(0x0A0810));
   // The square under the tower, cobbled.
   if (top < 1060 + kLow && bottom > 930 + kLow) {
     c.FillRect({x(0, 930 + kLow), x(kWidth, 1060 + kLow)}, Hex(0x0D1320));
     for (float y = 948.0f; y < 1060.0f; y += 18.0f)
       c.Line(x(0, y + kLow), x(kWidth, y + kLow), 1.0f * s, Hex(0x151D2C));
-  }
-  // The canals and their bridges.
-  for (float wy : {2400.0f, 2730.0f}) {
-    const float y = wy + kDeep;
-    if (top > y + 80.0f || bottom < y - 10.0f) continue;
-    const Rgba water = Hex(0x0A1C2A);
-    c.FillRect({x(0, y), x(kWidth, y + 70)}, water);
-    for (int k = 0; k < 4; ++k) {
-      const float ry = y + 22.0f + static_cast<float>(k % 2) * 22.0f, rx = 20.0f + static_cast<float>(k) * 100.0f;
-      c.Line(x(rx, ry), x(rx + 40, ry), 1.2f * s, Hex(0x14324A));
-    }
-    const float bx = wy < 2500.0f ? 70.0f : 230.0f;
-    c.FillRect({x(bx - 60, y - 8), x(bx + 90, y + 70)}, Hex(0x2A3A56));
-    c.FillRect({x(bx - 58.5f, y - 6.5f), x(bx + 88.5f, y + 70)}, Hex(0x0F1828));
-    c.Circle(x(bx + 25, y + 70), 41.5f * s, Hex(0x2A3A56));
-    c.Circle(x(bx + 25, y + 70), 40.0f * s, water);
-    // Only the arch's upper half shows: the ground under the canal covers the rest.
-    c.FillRect({x(bx - 20, y + 70), x(bx + 70, y + 113)}, Hex(0x09101A));
   }
   // Houses and rooftops.
   for (const Shape& shape : shapes_) {
@@ -469,8 +502,8 @@ void CityArt::DrawTown(Canvas& c, const Xf& x, float top, float bottom) {
     Outline(c, points, shape.width * s, shape.stroke);
   }
   // The sanctum, deep under the city: strata, a domed hall with its columns and spire.
-  if (bottom > 3070 + kDeep) {
-    for (float y = 3070.0f + kDeep; y < 4000.0f + kDeep; y += 34.0f) {
+  if (bottom > 3070 + kDeeper) {
+    for (float y = 3070.0f + kDeeper; y < 4000.0f + kDeeper; y += 34.0f) {
       if (y < top - 10.0f || y > bottom + 10.0f) continue;
       std::vector<glm::vec2> wave;
       for (int i = 0; i <= 20; ++i) {
@@ -479,7 +512,7 @@ void CityArt::DrawTown(Canvas& c, const Xf& x, float top, float bottom) {
       }
       art::Polyline(c, wave, 1.2f * s, Hex(0x16121F));
     }
-    const float yb = 3640.0f + kDeep;
+    const float yb = 3640.0f + kDeeper;
     const Rgba fill = Hex(0x120E1C), edge = Hex(0x2E2846);
     if (top < yb + 40.0f && bottom > yb - 250.0f) {
       c.Circle(x(195, yb - 70), 126.6f * s, edge);
@@ -555,12 +588,12 @@ void CityArt::DrawLights(Canvas& p, const Xf& x, const CityFrame& frame) {
       p.FillRect({x(w.x, w.y + kLow), x(w.x + 6, w.y + 8 + kLow)}, Hex(0xFFCF7A, k < on ? 0.85f : 0.08f));
     }
   }
-  if (visible(3300.0f + kDeep, 3900.0f + kDeep)) {
+  if (visible(3300.0f + kDeeper, 3900.0f + kDeeper)) {
     static constexpr Vec2 kCandles[] = {{60, 3500}, {330, 3480}, {120, 3720}, {270, 3740},
                                         {40, 3860}, {350, 3880}, {195, 3780}, {150, 3330}};
     for (int k = 0; k < 8; ++k) {
       const float f = frame.calm ? 0.75f : 0.75f + 0.25f * std::sin(t * 2.0f + static_cast<float>(k) * 1.7f);
-      p.Circle(x(kCandles[k].x, kCandles[k].y + kDeep), 2.2f * s, Hex(0xE6CC88, 0.5f * f));
+      p.Circle(x(kCandles[k].x, kCandles[k].y + kDeeper), 2.2f * s, Hex(0xE6CC88, 0.5f * f));
     }
   }
   // Light rising down the tower's pipe toward World 2's gate.
@@ -575,14 +608,18 @@ void CityArt::DrawLights(Canvas& p, const Xf& x, const CityFrame& frame) {
 }
 
 void CityArt::DrawMist(Canvas& p, const Xf& x, const CityFrame& frame) {
-  static constexpr float kBands[3][3] = {{1060, 1150, 1200}, {2010 + kShop, 2110 + kShop, 2150 + kShop},
-                                         {2980 + kShop, 3060 + kShop, 3110 + kShop}};
+  static constexpr float kBands[3][3] = {{1060, 1150, 1200},
+                                         {2010 + kShop, 2110 + kShop, 2150 + kShop},
+                                         {2980 + kShop + kQuarter, 3060 + kShop + kQuarter, 3110 + kShop + kQuarter}};
   const float view_bottom = frame.scroll + frame.ViewHeight();
   for (int m = 0; m < 3; ++m) {
     const float y = kBands[m][0] + kLow;
     if (y > view_bottom + 20.0f || y + 220.0f < frame.scroll - 20.0f) continue;
-    // Thinner over a district that has woken; the market's lifts as its shop wakes.
-    const float thick = m == 0 ? 1.0f - frame.market.awake : frame.districts[static_cast<size_t>(m)].open ? 0.45f : 1.0f;
+    // Thinner over a district that has woken; the market's and the canal quarter's lift as they wake.
+    const float thick = m == 0                                         ? 1.0f - frame.market.awake
+                        : m == 1                                       ? 1.0f - frame.quarter.awake
+                        : frame.districts[static_cast<size_t>(m)].open ? 0.45f
+                                                                       : 1.0f;
     if (thick <= 0.0f) continue;
     for (int k = 0; k < 22; ++k) {
       const float f = (static_cast<float>(k) + 0.5f) / 22.0f;
@@ -616,9 +653,10 @@ void CityArt::DrawDistricts(Canvas& p, Canvas& c, const Xf& x, const CityFrame& 
       art::Stroke(p, part, 0.0f, 5.0f * s, kLight);
       if (df.pour >= 1.0f) Dots(p, points, 15.0f * s, (frame.calm ? 0.0f : t * 33.0f) * s, 1.5f * s, kBead);
     }
-    // The lamps: asleep (dark), open (a ring and its number), lit (its level solved). The market draws its own.
+    // The lamps: asleep (dark), open (a ring and its number), lit (its level solved). The market and the canal
+    // quarter draw their own.
     const auto lamps = city::DistrictLamps(w);
-    for (int j = 0; w != 2 && j < city::kDistrictLamps; ++j) {
+    for (int j = 0; w == 4 && j < city::kDistrictLamps; ++j) {
       const city::Light& light = df.lamps[static_cast<size_t>(j)];
       const bool challenge = j >= 15;
       const glm::vec2 at = x(lamps[static_cast<size_t>(j)]);
@@ -678,6 +716,31 @@ void CityArt::DrawDistricts(Canvas& p, Canvas& c, const Xf& x, const CityFrame& 
       RoundRect(c, {x(70, py), x(320, py + 50)}, 6.0f * s, kWood, kCopper, 1.5f * s);
       Title(c, font, "2", Upper(df.name), x(195, py + 16), 11.0f * kText * s, kAmberLit);
       c.Text(font, d.place, x(195, py + 35), 15.0f * kText * s, Align::Center, {.color = kParchment});
+      continue;
+    }
+    if (w == 3 && frame.street) {  // the quarter's: night blue and silver, its name letter-spaced, lit as it wakes
+      const city::Box& b = city::kQuarterPlate;
+      const float awake = frame.quarter.awake;
+      RoundRect(c, {x(b.x0, b.y0), x(b.x1, b.y1)}, 6.0f * s, Hex(0x141C2E), Hex(0xB9C6E2), 1.5f * s);
+      Outline(c, {x(b.x0 + 6, b.y0 + 6), x(b.x1 - 6, b.y0 + 6), x(b.x1 - 6, b.y1 - 6), x(b.x0 + 6, b.y1 - 6)}, 1.0f * s,
+              canal::color::kQuay);
+      const std::string place = "The Canal Quarter";  // Cormorant SC: small capitals
+      float size = 19.0f * kText * s, spacing = 3.0f * s;
+      const float wide = SpacedWidth(*frame.street, place, size, spacing), room = (b.x1 - b.x0 - 24.0f) * s;
+      if (wide > room) size *= room / wide, spacing *= room / wide;
+      const glm::vec2 big = x(195, b.y0 + 22);
+      Spaced(c, *frame.street, place, big.x - SpacedWidth(*frame.street, place, size, spacing) * 0.5f, big.y, size,
+             spacing, Mixed(kPlateDim, kPlateInk, awake));
+      // "3 · RUSH HOUR": the world's number and name, small, teal.
+      const float small = 9.5f * kText * s, gap = small * 0.55f, tracking = 1.5f * s;
+      const std::string number = std::to_string(w), name = Upper(df.name);
+      const float wn = SpacedWidth(font, number, small, tracking), wt = SpacedWidth(font, name, small, tracking);
+      const glm::vec2 line = x(195, b.y0 + 40);
+      const float left = line.x - (wn + gap + wt) * 0.5f;
+      const Rgba teal = WithAlpha(kTeal, 0.4f + 0.6f * awake);
+      Spaced(c, font, number, left, line.y, small, tracking, teal);
+      c.Circle({left + wn + gap * 0.5f, line.y}, small * 0.09f, teal);
+      Spaced(c, font, name, left + wn + gap, line.y, small, tracking, teal);
       continue;
     }
     RoundRect(c, {x(92, py), x(298, py + 54)}, 9.0f * s, Hex(0x0B111C), kBrassDim, 1.5f * s);
@@ -842,7 +905,7 @@ void CityArt::DrawMarketStill(Canvas& c, const Xf& x, float top, float bottom) {
                                        : Mixed(Hex(0x2A1C14), Hex(0x1A120C), (mid - kWarmest) / (kEnd - kWarmest));
     // Past the fountain it fades into the canal quarter's night.
     const float night = Clamp01((mid - city::kMarketBottom) / (kEnd - city::kMarketBottom));
-    c.FillRect({x(0, y), x(kWidth, std::min(y + kStrip + 0.5f, kEnd))}, Mixed(ground, Hex(0x09101A), Smooth(night)));
+    c.FillRect({x(0, y), x(kWidth, std::min(y + kStrip + 0.5f, kEnd))}, Mixed(ground, kQuarterNight, Smooth(night)));
   }
   // The cobbles, each row offset by half a stone.
   int row = 0;
@@ -926,7 +989,8 @@ void CityArt::DrawMarket(Canvas& p, Canvas& c, const Xf& x, const CityFrame& fra
     }
     arch.push_back(x(330, 2666));
     FillShape(p, arch, glass);
-    for (Vec2 to : {Vec2{195, 2590}, Vec2{118, 2602}, Vec2{272, 2602}}) p.Line(x(195, 2666), x(to), 2.0f * s, kCopperDark);
+    for (Vec2 to : {Vec2{195, 2590}, Vec2{118, 2602}, Vec2{272, 2602}})
+      p.Line(x(195, 2666), x(to), 2.0f * s, kCopperDark);
     for (int k = 0; k < city::kLobes; ++k) {
       const size_t i = static_cast<size_t>(15 + k);
       const glm::vec2 g = x(city::GlobeSpot(k));
@@ -1093,8 +1157,7 @@ void CityArt::DrawMarketLamps(Canvas& p, Canvas& c, const Xf& x, const CityFrame
         const float x0 = at.x + (-22.0f + 44.0f * static_cast<float>(k) / count) * s;
         const float x1 = at.x + (-22.0f + 44.0f * static_cast<float>(k + 1) / count) * s;
         const std::vector<glm::vec2> sliver = ClipSlab(body, x0, x1);
-        if (sliver.size() >= 3)
-          FillShape(p, sliver, WithAlpha(LiquidColor(*frame.palette, colors[k]), Clamp01(a[0])));
+        if (sliver.size() >= 3) FillShape(p, sliver, WithAlpha(LiquidColor(*frame.palette, colors[k]), Clamp01(a[0])));
       }
     }
     Outline(p, body, (perfect ? 3.5f : 2.5f) * s, ring);
@@ -1132,6 +1195,188 @@ void CityArt::DrawMarketLamps(Canvas& p, Canvas& c, const Xf& x, const CityFrame
     const std::vector<glm::vec2> ring =
         m.breathe >= 15 ? DiamondPoints(at, 28.0f * s) : CirclePoints(at, 26.0f * s, 36);
     Outline(p, ring, 3.0f * s, Hex(0xFFE6A6, o));
+  }
+}
+
+// ---- The canal quarter (World 3) ----
+
+void CityArt::DrawQuarterStill(Canvas& c, const Xf& x, float top, float bottom) {
+  using namespace canal::color;
+  const city::District& d = city::Districts()[2];
+  if (bottom < city::kMarketBottom || top > d.bottom) return;
+  const float s = x.s;
+  c.FillRect({x(0, d.top), x(kWidth, d.bottom)}, kQuarterNight);
+  // Rooftops seen from above: the half away from the moon in shade, a ridge, a chimney (skylights light each frame).
+  for (const city::QuarterRoof& q : city::QuarterRoofs()) {
+    const canal::Roof& roof = q.roof;
+    if (roof.box.max.y < top || roof.box.min.y > bottom) continue;
+    const Rect r{x(roof.box.min), x(roof.box.max)};
+    c.FillRect(r, kRoofTones[roof.tone]);
+    const glm::vec2 mid = (r.min + r.max) * 0.5f;
+    if (roof.across) {
+      c.FillRect({{r.min.x, mid.y}, r.max}, kRoofShade);
+      c.Line({r.min.x + 2.0f * s, mid.y}, {r.max.x - 2.0f * s, mid.y}, 1.0f * s, kRidge);
+    } else {
+      c.FillRect({{mid.x, r.min.y}, r.max}, kRoofShade);
+      c.Line({mid.x, r.min.y + 2.0f * s}, {mid.x, r.max.y - 2.0f * s}, 1.0f * s, kRidge);
+    }
+    const glm::vec2 chimney = x(roof.chimney);
+    c.FillRect({chimney, chimney + glm::vec2(3.0f * s)}, kChimney);
+  }
+  for (const canal::Tree& tree : city::QuarterTrees()) {
+    const glm::vec2 at = x(tree.at);
+    c.Circle(at, tree.r * s, kTreeDark);
+    c.Circle(at - glm::vec2(tree.r * 0.3f * s), tree.r * 0.55f * s, kTreeLight);
+  }
+  if (top > city::kLagoon.y1 + 20.0f || bottom < city::kSluice.y0 - 20.0f) return;
+  // The Grand Canal: bank, quay, water, the lagoon at its end, the sluice under the plate, its bridges.
+  std::vector<glm::vec2> points;
+  for (const glm::vec2 q : grand_canal_.points) points.push_back(x(q.x, q.y));
+  const art::Path canal = art::MakePath(std::move(points));
+  for (const auto& [width, color] : {std::pair{34.0f, kBank}, {29.0f, kQuay}, {25.0f, kWater}})
+    art::Stroke(c, canal, 0.0f, width * s, color);
+  const city::Box& lagoon = city::kLagoon;
+  c.FillRect({x(lagoon.x0, lagoon.y0), x(lagoon.x1, lagoon.y1)}, kBank, city::kLagoonCorner * s);
+  c.FillRect({x(lagoon.x0 + 5, lagoon.y0 + 5), x(lagoon.x1 - 5, lagoon.y1 - 5)}, kQuay, (city::kLagoonCorner - 4) * s);
+  c.FillRect({x(lagoon.x0 + 8, lagoon.y0 + 8), x(lagoon.x1 - 8, lagoon.y1 - 8)}, kWater, (city::kLagoonCorner - 6) * s);
+  const city::Box& sluice = city::kSluice;
+  c.FillRect({x(sluice.x0, sluice.y0), x(sluice.x1, sluice.y1)}, kBank, 3.0f * s);
+  art::Polyline(c, {x(183, sluice.y1 - 2), x(195, sluice.y1 - 8), x(207, sluice.y1 - 2)}, 2.4f * s, kBrass);
+  for (const city::Box& b : city::QuarterBridges())
+    RoundRect(c, {x(b.x0, b.y0), x(b.x1, b.y1)}, 0.0f, Hex(0x3A4560), kBollard, 1.0f * s);
+  for (const Vec2 lamp : city::QuayLamps()) {
+    if (lamp.y < top - 10.0f || lamp.y > bottom + 10.0f) continue;
+    glow_.Draw(c, x(lamp), 5.0f * s, kLampGlow);
+    c.Circle(x(lamp), 1.4f * s, WithAlpha(kLampLight, 0.7f));
+  }
+}
+
+void CityArt::DrawQuarter(Canvas& p, Canvas& c, const Xf& x, const CityFrame& frame) {
+  using namespace canal::color;
+  const city::District& d = city::Districts()[2];
+  const float s = x.s, t = frame.time, view_top = frame.scroll, view_bottom = frame.scroll + frame.ViewHeight();
+  if (view_top > d.bottom || view_bottom < city::kMarketBottom) return;
+  const CityFrame::Quarter& q = frame.quarter;
+
+  // Each neighbourhood lights out from its harbour, roof by roof (the farthest at its reach); the skylights glow.
+  std::array<float, 15> radius{};
+  for (int h = 0; h < 15; ++h) {
+    const float k = Clamp01(q.hood[static_cast<size_t>(h)]);
+    radius[static_cast<size_t>(h)] =
+        k > 0.0f ? 20.0f + (city::HoodReach(h) + 20.0f) * (1.0f - (1.0f - k) * (1.0f - k)) : -1.0f;
+  }
+  for (const city::QuarterRoof& roof : city::QuarterRoofs()) {
+    const canal::Box& box = roof.roof.box;
+    if (box.max.y < view_top - 10.0f || box.min.y > view_bottom + 10.0f) continue;
+    const float lit = roof.hood >= 0 ? Clamp01((radius[static_cast<size_t>(roof.hood)] - roof.distance) / 40.0f) : 0.0f;
+    if (lit > 0.0f) p.FillRect({x(box.min), x(box.max)}, WithAlpha(kHoodWarm, 0.12f * lit));
+    for (const Vec2 window : roof.roof.windows) {
+      const glm::vec2 w = x(window);
+      if (lit > 0.0f) glow_.Draw(p, w + glm::vec2(1.0f * s), 7.0f * s, WithAlpha(kLampGlowLit, 0.9f * lit));
+      p.FillRect({w, w + glm::vec2(2.0f * s)},
+                 lit > 0.0f ? WithAlpha(kLampLit, 0.3f + 0.7f * lit) : Hex(0xFFD58A, 0.3f));
+    }
+  }
+
+  // The water's ripples drift down the canal.
+  const float drift = frame.calm ? 0.0f : t * 9.3f;
+  Dashes(p, x, s, grand_canal_, 3.0f, 14.0f, drift, 1.2f, WithAlpha(kFlow, 0.7f), view_top, view_bottom,
+         {-5.0f, -4.0f});
+
+  // The light down the canal to the next harbour, barges of both colours moving down it.
+  if (q.trail > 1.0f) {
+    std::vector<glm::vec2> map_points, points;
+    for (const Vec2 v : city::CanalPart(q.trail, 2.5f)) {
+      map_points.push_back({v.x, v.y});
+      points.push_back(x(v));
+    }
+    const art::Path lit = art::MakePath(points);
+    art::Stroke(p, lit, 0.0f, 22.0f * s, WithAlpha(kTeal, 0.14f));
+    art::Stroke(p, lit, 0.0f, 20.0f * s, WithAlpha(kCanalLit, 0.6f));
+    const art::Path along = art::MakePath(std::move(map_points));
+    const float run = frame.calm ? 0.0f : t * kBargeSpeed;
+    Dashes(p, x, s, along, 9.0f, 40.0f, run, 6.0f, kBargeAmber, view_top, view_bottom);
+    Dashes(p, x, s, along, 9.0f, 40.0f, run + 20.0f, 6.0f, kBargeBlue, view_top, view_bottom);
+    if (q.running) glow_.Draw(p, points.back(), 16.0f * s, WithAlpha(kTealLit, 0.8f));
+  }
+
+  DrawQuarterLamps(p, c, x, frame);
+
+  // Asleep behind its gate: the quarter lies dark under the mist, which lifts as it wakes.
+  if (q.awake < 1.0f)
+    p.FillRect({x(0, city::kMarketBottom), x(kWidth, d.bottom)}, Hex(0x0B111D, 0.62f * (1.0f - q.awake)));
+}
+
+void CityArt::DrawQuarterLamps(Canvas& p, Canvas& c, const Xf& x, const CityFrame& frame) {
+  using namespace canal::color;
+  const float s = x.s, t = frame.time, view_bottom = frame.scroll + frame.ViewHeight();
+  const CityFrame::Quarter& q = frame.quarter;
+  const bool shut = !frame.districts[1].open;
+  const wlw::ui::Font& font = *frame.font;
+  const auto lamps = city::DistrictLamps(3);
+  for (int j = 0; j < city::kDistrictLamps; ++j) {
+    const size_t n = static_cast<size_t>(j);
+    const Vec2 l = lamps[n];
+    if (l.y + 70.0f < frame.scroll || l.y - 70.0f > view_bottom) continue;
+    const bool buoy = j >= 15, locked = q.locked[n];
+    const auto& a = q.lamp[n];
+    const bool perfect = a[0] >= 1.0f && a[1] >= 1.0f && a[2] >= 1.0f;
+    const glm::vec2 at = x(l);
+    // A harbour lit by its neighbourhood (a buoy by its own light): the warm halo, the basin, the level's colours
+    // on the water, the ring.
+    const float halo = buoy ? Clamp01(a[0]) : Clamp01(q.hood[n]);
+    if (halo > 0.0f) glow_.Draw(p, at, 60.0f * s, WithAlpha(kHoodWarm, 0.4f * halo));
+    const std::vector<glm::vec2> basin = buoy ? DiamondPoints(at, 30.0f * s) : CirclePoints(at, 27.0f * s, 32);
+    FillShape(p, basin, kWater);
+    Outline(p, basin, 5.0f * s, kQuay);
+    const std::vector<glm::vec2> inner = buoy ? DiamondPoints(at, 19.0f * s) : CirclePoints(at, 17.5f * s, 32);
+    FillShape(p, inner, locked ? kBasinLocked : kBasinWater);
+    const std::vector<Color>& colors = q.colors[n];
+    if (a[0] > 0.0f && !colors.empty()) {
+      const float count = static_cast<float>(colors.size());
+      for (size_t k = 0; k < colors.size(); ++k) {
+        const float x0 = at.x + (-18.0f + 36.0f * static_cast<float>(k) / count) * s;
+        const float x1 = at.x + (-18.0f + 36.0f * static_cast<float>(k + 1) / count) * s;
+        const std::vector<glm::vec2> sliver = ClipSlab(inner, x0, x1);
+        if (sliver.size() >= 3)
+          FillShape(p, sliver, WithAlpha(LiquidColor(*frame.palette, colors[k]), 0.85f * Clamp01(a[0])));
+      }
+    }
+    const bool next = j == q.breathe;
+    const std::vector<glm::vec2> ring = buoy ? DiamondPoints(at, 22.0f * s) : CirclePoints(at, 20.0f * s, 32);
+    const Rgba ring_color = perfect ? kHarbourPerfect : locked ? kHarbourLocked : next ? kTealLit : kHarbourRing;
+    Outline(p, ring, (next ? 4.0f : 3.0f) * s, ring_color);
+    if (q.lamp_flash[n][0] > 0.0f) Outline(p, ring, 5.0f * s, Hex(0xFFFFFF, q.lamp_flash[n][0]));
+
+    // The number (none while the gate is shut, faint while locked), and its stars under it (not while locked).
+    if (shut) continue;
+    const std::string number = buoy ? "C" + std::to_string(j - 14) : std::to_string(j + 1);
+    const float size = (buoy ? 13.0f : 17.0f) * kText * s;
+    wlw::ui::TextStyle style{.color = kPlateInk, .outline = 0.1f, .outline_color = Hex(0x0A101B, 0.9f)};
+    if (locked) {
+      style = {.color = Hex(0xEEF4FF, 0.22f)};
+    } else if (a[0] > 0.0f) {
+      style = {
+          .color = kQuarterNight, .outline = 0.1f, .outline_color = Rgba{1.0f, 240.0f / 255.0f, 210.0f / 255.0f, 0.7f}};
+    }
+    c.Text(font, number, at, size, Align::Center, style);
+    if (locked) continue;
+    for (int k = 0; k < 3; ++k) {
+      const glm::vec2 star = x(l.x + static_cast<float>(k - 1) * 13.0f, l.y + (buoy ? 40.0f : 38.0f));
+      const float lit = Clamp01(a[static_cast<size_t>(k)]);
+      const float r = lit > 0.0f ? 5.0f + 2.5f * (1.0f - lit) : 5.0f;
+      StarShape(c, star, (r + 1.0f) * s, lit > 0.0f ? Hex(0xB5781C, std::max(0.4f, lit)) : Hex(0x3B4A6C, 0.9f));
+      StarShape(c, star, r * s, lit > 0.0f ? Hex(0xFFC24D, std::max(0.4f, lit)) : Hex(0x1A2236, 0.9f));
+    }
+  }
+  // The next level to play breathes: a teal ring round its basin.
+  if (q.breathe >= 0 && q.breathe < city::kDistrictLamps) {
+    const glm::vec2 at = x(lamps[static_cast<size_t>(q.breathe)]);
+    const float period = q.pulse ? 0.7f : 2.4f, low = q.pulse ? 0.15f : 0.2f;
+    const float o = frame.calm ? 0.8f : low + (1.0f - low) * (0.5f - 0.5f * std::cos(t * 2.0f * kPi / period));
+    const std::vector<glm::vec2> ring =
+        q.breathe >= 15 ? DiamondPoints(at, 30.0f * s) : CirclePoints(at, 27.0f * s, 36);
+    Outline(p, ring, 3.0f * s, WithAlpha(kTealLit, o));
   }
 }
 

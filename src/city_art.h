@@ -19,7 +19,8 @@
 
 // The city map's look (DESIGN.md §5, the approved mock): the tower at dawn with its rose window and the
 // lantern path, then the market square (World 2: the apothecary's shop window is its progress picture, lamps across
-// the cobbles, a fountain), the canal quarter and the sanctum asleep in mist.
+// the cobbles, a fountain), the canal quarter (World 3, seen from above: harbours down the Grand Canal, each level's
+// rooftops its neighbourhood, buoys in the lagoon) and the sanctum asleep in mist.
 //
 // What doesn't change while the map is open (the sky, the tower's stones, roofs, houses, canals, the
 // sanctum, the dark glass of the window, the pipes' iron) is drawn into a pooled column of screen-sized
@@ -67,17 +68,32 @@ struct CityFrame {
   struct Market {
     std::array<bool, city::kDistrictLamps> locked{};
     std::array<std::array<float, 3>, city::kDistrictLamps> lamp{}, lamp_flash{};  // its stars: solve, lean, swift
-    std::array<std::vector<Color>, city::kDistrictLamps> colors;                   // each level's cups
+    std::array<std::vector<Color>, city::kDistrictLamps> colors;                  // each level's cups
     // The shop window: per level its bottle filling, corked, labelled, sealed in gold (a challenge: its
     // globe lights with the first), and a flash as one shows.
     std::array<std::array<float, 4>, city::kDistrictLamps> bottle{};
     std::array<float, city::kDistrictLamps> bottle_flash{};
     int breathe = -1;  // the lamp that breathes
     bool pulse = false;
-    float bell = -1.0f;   // seconds since the door bell rang (< 0: it hangs still)
-    float awake = 0.0f;   // the shop awake (its gate open): the sign lit, the mist lifted
+    float bell = -1.0f;  // seconds since the door bell rang (< 0: it hangs still)
+    float awake = 0.0f;  // the shop awake (its gate open): the sign lit, the mist lifted
   } market;
   const wlw::ui::Font* hand = nullptr;  // the bottles' labels (Caveat)
+
+  // World 3's canal quarter as drawn: its harbour lamps and buoys like the market's lamps, each neighbourhood's
+  // light spreading out from its harbour (0..1), and how far down the Grand Canal the light has run.
+  struct Quarter {
+    std::array<bool, city::kDistrictLamps> locked{};
+    std::array<std::array<float, 3>, city::kDistrictLamps> lamp{}, lamp_flash{};  // its stars: solve, lean, swift
+    std::array<std::vector<Color>, city::kDistrictLamps> colors;                  // each level's cups
+    std::array<float, 15> hood{};
+    float trail = 0.0f;    // map units along the canal (city::CanalTrail)
+    bool running = false;  // the light still running down the canal: a glow at its head
+    int breathe = -1;      // the lamp that breathes
+    bool pulse = false;
+    float awake = 0.0f;  // the quarter awake (its gate open): the plate lit, the mist lifted
+  } quarter;
+  const wlw::ui::Font* street = nullptr;  // the quarter's plate (Cormorant SC)
 
   glm::vec2 ToCanvas(Vec2 p) const { return {p.x * scale, (p.y - scroll) * scale}; }
   float ViewHeight() const { return screen.y / scale; }  // map units
@@ -120,6 +136,12 @@ class CityArt {
   void DrawMarket(wlw::ui::Canvas& p, wlw::ui::Canvas& c, const Xf& x, const CityFrame& frame);
   void DrawBottle(wlw::ui::Canvas& p, wlw::ui::Canvas& c, const Xf& x, const CityFrame& frame, int level);
   void DrawMarketLamps(wlw::ui::Canvas& p, wlw::ui::Canvas& c, const Xf& x, const CityFrame& frame);
+  // World 3's district: rooftops, parks, the Grand Canal, its bridges, quay lamps and the lagoon (still); the lit
+  // neighbourhoods and skylights, the water's ripples, the light down the canal with its barges, the lamps (each
+  // frame).
+  void DrawQuarterStill(wlw::ui::Canvas& c, const Xf& x, float top, float bottom);
+  void DrawQuarter(wlw::ui::Canvas& p, wlw::ui::Canvas& c, const Xf& x, const CityFrame& frame);
+  void DrawQuarterLamps(wlw::ui::Canvas& p, wlw::ui::Canvas& c, const Xf& x, const CityFrame& frame);
 
   TilePool tiles_;
   std::shared_ptr<wlw::rendering::ShaderMaterial> sky_top_, sky_low_;  // ui_gradient: the sky's two halves
@@ -134,6 +156,7 @@ class CityArt {
   std::vector<Dot> sky_stars_;
   std::array<std::vector<Vec2>, city::kDistricts> lamp_paths_;
   std::vector<std::vector<Vec2>> trail_;
+  art::Path grand_canal_;  // the whole canal, bends rounded (map units)
 };
 
 }  // namespace threadlock

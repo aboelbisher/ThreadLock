@@ -674,6 +674,24 @@ TEST_SUITE("content") {
     CHECK(canal_maps == 18);
   }
 
+  TEST_CASE("a shipped canal map's city stays where it was (the map's canal quarter shares its rooftops)") {
+    // Pinned from MakeCity before its rooftop pass became canal::Rooftops.
+    const canal::City city = canal::MakeCity(Shipped("3-6"));
+    REQUIRE(city.roofs.size() == 472);
+    size_t windows = 0;
+    for (const canal::Roof& roof : city.roofs) windows += roof.windows.size();
+    CHECK(windows == 329);
+    CHECK(city.lamps.size() == 20);
+    CHECK(city.roofs[17].box.min.x == doctest::Approx(288.8289f));
+    CHECK(city.roofs[17].box.min.y == doctest::Approx(-184.2526f));
+    CHECK(city.roofs.back().box.max.x == doctest::Approx(432.2731f));
+    CHECK(city.roofs.back().box.max.y == doctest::Approx(854.0090f));
+    CHECK(city.roofs.back().tone == 1);
+    CHECK(city.park.min.x == doctest::Approx(173.0f));
+    CHECK(city.park.min.y == doctest::Approx(481.0f));
+    CHECK(city.trees[3].r == doctest::Approx(10.9681f));
+  }
+
   TEST_CASE("The Roundabout (3-8): barges meet coming round; a lock or a tank on the ring, and the ring empties") {
     const Level level = Shipped("3-8");
     const int m1 = NodeOf(level, "m1"), m2 = NodeOf(level, "m2");

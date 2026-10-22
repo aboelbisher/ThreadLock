@@ -98,8 +98,10 @@ void MapScreen::Build() {
   }
   for (size_t j = 0; j < city::kDistrictLamps; ++j) {
     if (lamps_[0][j]) frame_.market.colors[j] = city::LanternColors(*lamps_[0][j]);
+    if (lamps_[1][j]) frame_.quarter.colors[j] = city::LanternColors(*lamps_[1][j]);
   }
   frame_.hand = &app_.GetHand();
+  frame_.street = &app_.GetStreet();
   dev_stars_.reset();
   if (const std::string dev = cv_stars.Get(); !dev.empty()) {
     StarMap stars;
@@ -214,6 +216,7 @@ void MapScreen::Start(float view) {
   float planned = 0.0f;
   auto scroll_for = [&](const city::Reveal& r) {
     if (r.world == 1) return city::LanternScroll(r.index, view);
+    if (r.world == 3) return city::QuarterScroll(r.index, view);
     const Vec2 lamp = city::DistrictLamps(r.world)[static_cast<size_t>(r.index)];
     return city::ClampScroll(lamp.y - view * (560.0f / city::kMockView), view);
   };
@@ -272,6 +275,7 @@ void MapScreen::Start(float view) {
   }
   for (int j = 0; j < city::kDistrictLamps && current && next < 0; ++j) {
     if (lamps_[0][static_cast<size_t>(j)] == current) next = j, next_world = 2;
+    if (lamps_[1][static_cast<size_t>(j)] == current) next = j, next_world = 3;
   }
   if (y >= 0.0f) {
     const float before = t;
@@ -630,7 +634,7 @@ void MapScreen::Fill(CityFrame& frame, glm::vec2 screen, float scale) {
   const CityFrame::District& square = frame.districts[0];
   for (int j = 0; j < city::kDistrictLamps; ++j) {
     const size_t n = static_cast<size_t>(j);
-    market.locked[n] = !square.open || !lamps_[0][n] || LampLockedShown(j);
+    market.locked[n] = !square.open || !lamps_[0][n] || LampLockedShown(2, j);
     float latest = -kNever;
     for (size_t k = 0; k < 3; ++k) {
       market.lamp[n][k] = alpha(lamp_at_[0][n][k]);
@@ -652,10 +656,38 @@ void MapScreen::Fill(CityFrame& frame, glm::vec2 screen, float scale) {
   }
   market.bell = clock_ - bell_at_;
   market.awake = !square.open ? 0.0f : wake_at_[0] > 0.0f ? Clamp01((clock_ - wake_at_[0]) / 1.6f) : 1.0f;
+
+  // The canal quarter: its lamps light like the market's; a lit harbour's neighbourhood spreads out from it, and
+  // the canal is lit down to the next harbour to play (all of it once the main path is done).
+  CityFrame::Quarter& quarter = frame.quarter;
+  const CityFrame::District& canals = frame.districts[1];
+  int next = -1;
+  for (int j = 0; j < city::kDistrictLamps; ++j) {
+    const size_t n = static_cast<size_t>(j);
+    quarter.locked[n] = !canals.open || !lamps_[1][n] || LampLockedShown(3, j);
+    for (size_t k = 0; k < 3; ++k) {
+      quarter.lamp[n][k] = alpha(lamp_at_[1][n][k]);
+      quarter.lamp_flash[n][k] = flash(lamp_at_[1][n][k]);
+    }
+    if (j < 15) {
+      quarter.hood[n] = Clamp01((clock_ - lamp_at_[1][n][0]) / 1.4f);
+      if (next < 0 && lamp_at_[1][n][0] > clock_) next = j;
+    }
+  }
+  quarter.trail = canals.open ? city::CanalTrail(next) : 0.0f;
+  quarter.running = false;
+  quarter.breathe = canals.current;
+  quarter.pulse = false;
+  if (pulse_ >= 0 && pulse_world_ == 3 && clock_ < pulse_until_) {
+    quarter.breathe = pulse_;
+    quarter.pulse = true;
+  }
+  quarter.awake = !canals.open ? 0.0f : wake_at_[1] > 0.0f ? Clamp01((clock_ - wake_at_[1]) / 1.6f) : 1.0f;
 }
 
-bool MapScreen::LampLockedShown(int lamp) const {
-  auto shown = [&](int j) { return lamp_at_[0][static_cast<size_t>(j)][0] <= clock_; };
+bool MapScreen::LampLockedShown(int world, int lamp) const {
+  const auto& lamps = lamp_at_[static_cast<size_t>(world - 2)];
+  auto shown = [&](int j) { return lamps[static_cast<size_t>(j)][0] <= clock_; };
   if (shown(lamp)) return false;
   if (lamp < city::kDistrictLamps - city::kLobes) return lamp > 0 && !shown(lamp - 1);
   return !shown(city::kDistrictLamps - city::kLobes - 1);

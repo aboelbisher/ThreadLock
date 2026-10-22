@@ -9,6 +9,7 @@
 #include <optional>
 #include <utility>
 
+#include "canal_palette.h"
 #include "wlw/rendering/shader.h"
 
 namespace threadlock {
@@ -19,18 +20,10 @@ using wlw::ui::Align;
 using wlw::ui::Canvas;
 using wlw::ui::Rect;
 using wlw::ui::TextStyle;
+using namespace canal::color;  // the city at night (canal_palette.h)
 
-// The city at night: slate rooftops, a dark park, skylights and quay lamps.
-constexpr Rgba kRoofTones[] = {Hex(0x161E33), Hex(0x1A233C), Hex(0x1D2742), Hex(0x141B2E), Hex(0x1F2A47)};
-constexpr Rgba kRoofShade = Hex(0x000000, 0.22f), kRidge = Hex(0x2C3858), kChimney = Hex(0x0D1322);
-constexpr Rgba kSkylight = Hex(0xFFD58A, 0.5f);
-constexpr Rgba kTreeDark = Hex(0x10291C), kTreeLight = Hex(0x1A3D29);
-constexpr Rgba kLampLight = Hex(0xFFE2A8), kLampGlow = Hex(0xFFC870, 0.18f);
-// The canals: a stone bank, a quay inside it, the water; the current's faint dashes.
-constexpr Rgba kBank = Hex(0x2A3550), kQuay = Hex(0x3B4A6C), kWater = Hex(0x0B1F35);
+// A canal's layers (board units).
 constexpr float kBankWidth = 28.0f, kQuayWidth = 23.0f, kWaterWidth = 19.0f;
-constexpr Rgba kFlow = Hex(0x1D4A70);
-constexpr Rgba kBollard = Hex(0x55658A);
 constexpr Rgba kHarbourLamp = Hex(0x6A5A3A);  // dark until its district is served
 constexpr Rgba kLeaf = Hex(0xC9974E);         // a lock's brass gates
 constexpr float kJunction = 14.0f;            // half a junction's open basin
@@ -54,9 +47,8 @@ constexpr std::array<const char*, 3> kStreetNames{"Mill Lane", "Wheel Lane", "Ge
 // lamp at (12, 28) on a post. Red shut, green open.
 constexpr float kGateLeaf = 14.5f, kGateHinge = 13.0f;
 constexpr Rgba kHinge = Hex(0x8A6A40), kPost = Hex(0x55658A), kLampRed = Hex(0xFF4D4D), kLampGreen = Hex(0x5BE08A);
-// The payoff: a served harbour's lamps (lit), its warm glow, and the district's light: a ring from kDistrictNear out
-// to kDistrictFar (board units), the roofs nearest the harbour staying lit at kDistrictSteady.
-constexpr Rgba kLampLit = Hex(0xFFF0C8), kLampGlowLit = Hex(0xFFC870), kWarm = Hex(0xFFB347);
+// The payoff: a served harbour's lamps (kLampLit), its warm glow, and the district's light: a ring from kDistrictNear
+// out to kDistrictFar (board units), the roofs nearest the harbour staying lit at kDistrictSteady.
 constexpr float kDistrictNear = 40.0f, kDistrictFar = 340.0f, kDistrictRing = 30.0f, kDistrictSteady = 0.5f;
 // A grand machine's payoff: the city's light, a front kCityRing soft running out from the payoff point to the farthest
 // roof; every roof it passed glows, brightest while it runs, then settles at kCitySteady.

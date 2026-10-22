@@ -1,5 +1,6 @@
 // The city map (city_map.h): the layout, the lantern path and its taps, the rose window's panes, what is
 // lit and what's new since the last visit.
+#include <array>
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -170,8 +171,8 @@ TEST_SUITE("city map") {
       CHECK(d.plate < lamps[0].y);
       const Cubic gate = GatePipe(w);
       CHECK(gate.a.y == doctest::Approx(d.valve + 22.0f));
-      if (w == 2) {
-        CHECK(gate.d.y == doctest::Approx(d.plate - 4.0f));  // into the market's name plate
+      if (w <= 3) {
+        CHECK(gate.d.y == doctest::Approx(d.plate - 4.0f));  // into the market's or the quarter's name plate
       } else {
         CHECK(Distance(gate.d, {lamps[0].x, lamps[0].y - 10.0f}) < 0.01f);
       }
@@ -233,6 +234,116 @@ TEST_SUITE("city map") {
     CHECK(BellSwing(3.0f) == 0.0f);
     CHECK(ShopScroll(kMockView, false) == doctest::Approx(2522.0f));
     CHECK(ShopScroll(kMockView, true) == doctest::Approx(2462.0f));
+  }
+
+  TEST_CASE("the canal quarter: harbours down the Grand Canal, buoys in the lagoon, rooftops in the gaps") {
+    const District& d = Districts()[2];
+    CHECK(d.top == 3764.0f);
+    CHECK(d.bottom == 5008.0f);
+    CHECK(Districts()[3].valve == 4978.0f);
+    CHECK(kHeight == 5968.0f);
+    // The plate under the valve, the sluice under the plate, the canal from the sluice into the lagoon.
+    CHECK(kQuarterPlate.y0 == d.plate);
+    CHECK(kSluice.y0 > kQuarterPlate.y1);
+    const std::vector<Vec2>& canal = GrandCanal();
+    CHECK(canal.front().x == 195.0f);
+    CHECK(canal.front().y > kSluice.y0);
+    CHECK(canal.front().y < kSluice.y1);
+    CHECK(canal.back().y > kLagoon.y0);
+    CHECK(CanalLength() == doctest::Approx(2218.0f));
+    for (size_t k = 0; k + 1 < canal.size(); ++k) CHECK((canal[k].x == canal[k + 1].x || canal[k].y == canal[k + 1].y));
+    // Its rounded line keeps to its corners' length within the bends, and a part is as long as asked.
+    const std::vector<Vec2> whole = CanalPart(CanalLength(), 2.0f);
+    CHECK(Distance(whole.front(), canal.front()) < 0.01f);
+    CHECK(Distance(whole.back(), canal.back()) < 0.01f);
+    CHECK(CanalPart(0.0f, 2.0f).empty());
+    CHECK(Distance(CanalPart(68.0f, 2.0f).back(), canal[1]) < 0.01f);
+    // The harbours stand on the canal, in order down it; the buoys past its end, in the lagoon.
+    const auto lamps = DistrictLamps(3);
+    std::vector<glm::vec2> corners;
+    for (const Vec2 c : canal) corners.push_back({c.x, c.y});
+    const art::Path path = art::MakePath(corners);
+    for (int j = 0; j < kDistrictLamps; ++j) {
+      CAPTURE(j);
+      if (j > 0) CHECK(CanalAt(j) > CanalAt(j - 1));
+      if (j < 15) {
+        CHECK(CanalAt(j) < CanalLength());
+        const glm::vec2 on = path.PointAt(CanalAt(j));
+        CHECK(Distance({on.x, on.y}, lamps[j]) < 0.01f);
+      } else {
+        CHECK(CanalAt(j) > CanalLength());
+        CHECK(lamps[j].x > kLagoon.x0 + 30.0f);
+        CHECK(lamps[j].x < kLagoon.x1 - 30.0f);
+        CHECK(lamps[j].y > kLagoon.y0 + 30.0f);
+        CHECK(lamps[j].y < kLagoon.y1 - 30.0f);
+      }
+    }
+    CHECK(CanalAt(0) == doctest::Approx(278.0f));
+    CHECK(lamps[3].x == 315.0f);  // the second row runs right to left
+    CHECK(lamps[15].x > lamps[17].x);
+    // The lit canal runs down to the next lamp to play, all the way once the main path is done.
+    CHECK(CanalTrail(0) == doctest::Approx(CanalAt(0)));
+    CHECK(CanalTrail(16) == doctest::Approx(CanalLength()));
+    CHECK(CanalTrail(-1) == doctest::Approx(CanalLength()));
+    // The gate's stub runs into the plate; the lagoon feeds World 4's gate.
+    CHECK(LinkPipe(4).a.y == doctest::Approx(kLagoon.y1));
+    CHECK(LinkPipe(4).a.x == 195.0f);
+
+    // Rooftops: clear of the canal, the lamps' basins, the lagoon, the plate, the pipes and the parks; each between the
+    // plate and the lagoon in a neighbourhood that reaches it, every neighbourhood with roofs.
+    const auto& roofs = QuarterRoofs();
+    CHECK(roofs.size() > 150);
+    std::array<int, 15> per_hood{};
+    for (const QuarterRoof& q : roofs) {
+      const canal::Box& b = q.roof.box;
+      for (size_t k = 0; k + 1 < canal.size(); ++k) {
+        const canal::Box water{{std::min(canal[k].x, canal[k + 1].x) - 21, std::min(canal[k].y, canal[k + 1].y) - 21},
+                               {std::max(canal[k].x, canal[k + 1].x) + 21, std::max(canal[k].y, canal[k + 1].y) + 21}};
+        CHECK(!b.Overlaps(water));
+      }
+      for (const Vec2 lamp : lamps) CHECK(!b.Overlaps({{lamp.x - 30, lamp.y - 30}, {lamp.x + 30, lamp.y + 30}}));
+      CHECK(!b.Overlaps({{kLagoon.x0, kLagoon.y0}, {kLagoon.x1, kLagoon.y1}}));
+      CHECK(!b.Overlaps({{kQuarterPlate.x0, kQuarterPlate.y0}, {kQuarterPlate.x1, kQuarterPlate.y1}}));
+      CHECK(!b.Overlaps({{180, kFountain.y}, {210, kSluice.y1}}));  // the pipes down the middle
+      CHECK(!b.Overlaps({{180, kLagoon.y1}, {210, kHeight}}));
+      for (const Vec2 park : kParks)
+        CHECK(
+            !b.Overlaps({{park.x - kParkHalf.x, park.y - kParkHalf.y}, {park.x + kParkHalf.x, park.y + kParkHalf.y}}));
+      CHECK(b.min.y >= kMarketBottom);
+      CHECK(b.max.y < Districts()[3].top);
+      const float mid = (b.min.y + b.max.y) * 0.5f;
+      CHECK((q.hood >= 0) == (mid > kQuarterPlate.y1 && mid < kLagoon.y0));
+      if (q.hood < 0) continue;
+      CHECK(q.hood < 15);
+      CHECK(q.distance <= HoodReach(q.hood));
+      ++per_hood[static_cast<size_t>(q.hood)];
+    }
+    for (int h = 0; h < 15; ++h) CHECK(per_hood[static_cast<size_t>(h)] >= 3);
+    CHECK(QuarterRoofs().front().roof.box.min.x == roofs.front().roof.box.min.x);  // the same city every time
+    // The parks' trees, the bridges over the canal, the quay lamps beside it.
+    CHECK(QuarterTrees().size() == 18);
+    CHECK(QuarterBridges().size() == 7);
+    for (const Box& bridge : QuarterBridges()) {
+      const Vec2 mid{(bridge.x0 + bridge.x1) * 0.5f, (bridge.y0 + bridge.y1) * 0.5f};
+      bool on = false;
+      for (size_t k = 0; k + 1 < canal.size(); ++k) {
+        on = on ||
+             (canal[k].x == canal[k + 1].x && mid.x == canal[k].x && mid.y > std::min(canal[k].y, canal[k + 1].y) &&
+              mid.y < std::max(canal[k].y, canal[k + 1].y)) ||
+             (canal[k].y == canal[k + 1].y && mid.y == canal[k].y && mid.x > std::min(canal[k].x, canal[k + 1].x) &&
+              mid.x < std::max(canal[k].x, canal[k + 1].x));
+      }
+      CHECK(on);
+    }
+    CHECK(QuayLamps().size() > 25);
+    for (const Vec2 q : QuayLamps()) {
+      for (const Vec2 lamp : lamps) CHECK(Distance(q, lamp) >= 36.0f);
+    }
+    // A tap picks a harbour or a buoy; the scroll shows it just past the middle.
+    for (int j = 0; j < kDistrictLamps; ++j) CHECK(HitLamp(3, lamps[j]) == j);
+    CHECK(HitLamp(3, {195.0f, 4074.0f}) == -1);  // a park
+    CHECK(QuarterScroll(5, kMockView) == doctest::Approx(lamps[5].y - 470.0f));
+    CHECK(QuarterScroll(17, kMockView) == doctest::Approx(4788.0f - 470.0f));
   }
 
   TEST_CASE("scroll targets: a lantern two thirds down, the window, a gate") {

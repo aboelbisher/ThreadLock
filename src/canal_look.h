@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -151,6 +153,21 @@ struct City {
 };
 inline constexpr float kRoofClear = 17.0f;  // from a canal's middle line
 City MakeCity(const Level& level);
+
+// A small fast random sequence (mulberry32), the same on every device: a board's city is seeded with its level's
+// id, the map's canal quarter with its own name.
+class Random {
+ public:
+  explicit Random(const std::string& seed);
+  float Next();  // 0..1
+
+ private:
+  uint32_t state_ = 2166136261u;
+};
+// The rooftops on a grid of 38-unit blocks over `area` (top left first, a row at a time), each block whole or split
+// across or down into two; none where `blocked`. MakeCity's pass (after its park), and the map's canal quarter.
+void Rooftops(Random& random, const Box& area, const std::function<bool(const Box&)>& blocked,
+              std::vector<Roof>& roofs);
 // Every canal as the city draws it: each pipe's CanalPoints, a lock's stub first (pipe order).
 std::vector<std::vector<Vec2>> CityCanals(const Level& level);
 // What the rooftops keep clear of besides the canals: locks, basins + pills, mills' houses, rods, gate lamps.
