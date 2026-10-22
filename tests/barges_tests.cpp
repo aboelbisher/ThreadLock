@@ -101,6 +101,11 @@ TEST_SUITE("barges") {
     CHECK(barges::DistrictAt(barges::kDistrictLength / 2.0f) == doctest::Approx(0.75f));  // eased out
     CHECK(barges::DistrictAt(barges::kDistrictLength) == doctest::Approx(1.0f));
     CHECK(barges::DistrictAt(100.0f) == doctest::Approx(1.0f));
+    // A finale's city light runs out over every roof, a little slower than one district's.
+    CHECK(barges::kCityLength > barges::kDistrictLength);
+    CHECK(barges::CityAt(0.0f) == doctest::Approx(0.0f));
+    CHECK(barges::CityAt(barges::kCityLength / 2.0f) == doctest::Approx(0.75f));
+    CHECK(barges::CityAt(barges::kCityLength) == doctest::Approx(1.0f));
   }
 
   TEST_CASE("the barges of 3-6 stay in their canals, head along them, and land in order at Lantern Row") {

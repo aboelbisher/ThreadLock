@@ -46,4 +46,9 @@ float LampsAt(float age);     // 0..1
 float WarmAt(float age);      // 0..1, 0 at both ends
 float DistrictAt(float age);  // 0..1
 
+// A grand machine's payoff (the finale, two screens tall): once its last harbour is served, the whole city's light runs
+// out from the payoff point over every roof on both screens, over kCityLength (eased out), and the roofs stay lit.
+inline constexpr float kCityLength = 3.0f;
+float CityAt(float age);  // 0..1
+
 }  // namespace threadlock::barges

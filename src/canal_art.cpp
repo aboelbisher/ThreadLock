@@ -58,6 +58,9 @@ constexpr Rgba kHinge = Hex(0x8A6A40), kPost = Hex(0x55658A), kLampRed = Hex(0xF
 // to kDistrictFar (board units), the roofs nearest the harbour staying lit at kDistrictSteady.
 constexpr Rgba kLampLit = Hex(0xFFF0C8), kLampGlowLit = Hex(0xFFC870), kWarm = Hex(0xFFB347);
 constexpr float kDistrictNear = 40.0f, kDistrictFar = 340.0f, kDistrictRing = 30.0f, kDistrictSteady = 0.5f;
+// A grand machine's payoff: the city's light, a front kCityRing soft running out from the payoff point to the farthest
+// roof; every roof it passed glows, brightest while it runs, then settles at kCitySteady.
+constexpr float kCityRing = 60.0f, kCitySteady = 0.45f;
 constexpr float kSettled = 100.0f;  // seconds: long past any moment (Settle's own figure)
 // The failures' moments (seconds): the murk's cloud grows, its stain runs out along the canals, the short's ghost
 // berths fade in, the wrong colour and spill tags come up, the jam's circle is traced round once.
@@ -719,6 +722,43 @@ void CanalArt::DrawDistrict(Canvas& canvas, const ArtFrame& frame, int cup) cons
   }
 }
 
+void CanalArt::DrawCityLight(Canvas& canvas, const ArtFrame& frame) const {
+  const Level& level = *frame.level;
+  const Board& board = *frame.board;
+  if (level.look.height <= kBoardSize.y) return;  // one screen: each harbour's district is light enough
+  if (!board.Started() || board.Running() || !board.GetOutcome().solved) return;
+  // From the moment of the order that finished the run (the last harbour served).
+  float age = kSettled;
+  if (!frame.calm) {
+    for (const Marker& marker : frame.markers) {
+      if (marker.kind == Marker::Paid) age = std::min(age, marker.age);
+    }
+  }
+  const glm::vec2 centre{level.look.payoff.x, level.look.payoff.y};
+  float farthest = 0.0f;
+  for (const canal::Roof& roof : city_.roofs) {
+    const glm::vec2 at{(roof.box.min.x + roof.box.max.x) * 0.5f, (roof.box.min.y + roof.box.max.y) * 0.5f};
+    farthest = std::max(farthest, glm::length(at - centre));
+  }
+  const float reach = barges::CityAt(age);
+  const float front = (farthest + kCityRing) * reach;
+  const float strength = kCitySteady + (1.0f - kCitySteady) * (1.0f - reach);
+  // Only the rows on screen (board units).
+  const float top = frame.layout.ToBoard({0.0f, 0.0f}).y, bottom = frame.layout.ToBoard(canvas.Size()).y;
+  const float s = frame.Scale();
+  for (const canal::Roof& roof : city_.roofs) {
+    if (roof.box.max.y < top || roof.box.min.y > bottom) continue;
+    const glm::vec2 at{(roof.box.min.x + roof.box.max.x) * 0.5f, (roof.box.min.y + roof.box.max.y) * 0.5f};
+    const float light = strength * std::clamp((front - glm::length(at - centre)) / kCityRing, 0.0f, 1.0f);
+    if (light <= 0.0f) continue;
+    canvas.FillRect(ToCanvas(frame.layout, roof.box), WithAlpha(kWarm, 0.16f * light));
+    for (const Vec2 window : roof.windows) {
+      glow_.Draw(canvas, frame.layout.ToCanvas({window.x + 0.9f, window.y + 0.9f}), 3.0f * s,
+                 WithAlpha(kSkylight, light));
+    }
+  }
+}
+
 bool CanalArt::DrawMarker(Canvas& canvas, const ArtFrame& frame, const Marker& marker) const {
   if (level_ != frame.level) return false;  // the canals are laid out in Prepare, before the markers are drawn
   if (marker.kind == Marker::Jam) {
@@ -837,7 +877,9 @@ void CanalArt::DrawJam(Canvas& canvas, const ArtFrame& frame, const Marker& mark
 
 float CanalArt::MomentLength(const Marker& marker) const {
   switch (marker.kind) {
-    case Marker::Paid: return barges::kDistrictLength;
+    case Marker::Paid:
+      // A grand machine's last order lights the whole city (DrawCityLight).
+      return level_ && level_->look.height > kBoardSize.y ? barges::kCityLength : barges::kDistrictLength;
     case Marker::Mud: return kStainLength;
     case Marker::WrongCup:
     case Marker::Spill: return kFailLength;
@@ -852,6 +894,7 @@ void CanalArt::DrawFront(Canvas& canvas, const ArtFrame& frame) {
   const Level& level = *frame.level;
   const Layout& layout = frame.layout;
   const float s = frame.Scale();
+  DrawCityLight(canvas, frame);
   for (size_t n = 0; n < level.nodes.size(); ++n) {
     if (level.nodes[n].kind != NodeKind::Cup) continue;
     DrawDistrict(canvas, frame, static_cast<int>(n));

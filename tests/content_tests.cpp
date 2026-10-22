@@ -647,12 +647,14 @@ TEST_SUITE("content") {
     for (const World& world : LoadAll()) {
       if (world.number != 3) continue;
       for (const Level& level : world.levels) {
-        if (level.id == "3-15") continue;  // the finale, Rush Hour, comes in step d B
         INFO("level " << level.id);
+        const bool grand = level.look.height > 600.0f;  // the finale, Rush Hour: the whole city on two screens
         CHECK(canal::IsCanalMap(level));
         ++canal_maps;
-        // Each harbour serves a district of its own across the world (the map's neighbourhoods).
+        // Each harbour serves a district of its own across the world (the map's neighbourhoods); the finale comes back
+        // to the best-known ones.
         for (const canal::District& district : canal::Districts(level)) {
+          if (grand) continue;
           INFO("district " << district.name);
           CHECK(std::find(districts.begin(), districts.end(), district.name) == districts.end());
           districts.push_back(district.name);
@@ -666,10 +668,10 @@ TEST_SUITE("content") {
           longest = std::max(longest, outcome.ticks);
           return true;
         });
-        CHECK(longest < 400);
+        CHECK(longest < (grand ? 800 : 400));
       }
     }
-    CHECK(canal_maps == 17);
+    CHECK(canal_maps == 18);
   }
 
   TEST_CASE("The Roundabout (3-8): barges meet coming round; a lock or a tank on the ring, and the ring empties") {
@@ -715,6 +717,41 @@ TEST_SUITE("content") {
       CHECK(run.outcome.solved);
       CHECK(run.outcome.ticks == 100);
       CHECK(run.Count(EventType::Flip) == 12);
+    }
+  }
+
+  TEST_CASE("Rush Hour (3-15): one bridge for two crossings; the other waits, and the mill gate's queue mustn't") {
+    const Level level = Shipped("3-15");
+    CHECK(level.look.height == 1200.0f);
+    const int x1 = NodeOf(level, "x1"), x2 = NodeOf(level, "x2"), t = NodeOf(level, "t"), f = NodeOf(level, "f");
+    auto run = [&](int bridge, int turnstile) {
+      Board board(level);
+      REQUIRE(board.Place(PieceOf(board, PieceType::Bridge), bridge));
+      REQUIRE(board.Place(PieceOf(board, PieceType::Turnstile), turnstile));
+      REQUIRE(board.Place(PieceOf(board, PieceType::TankTall), t));
+      REQUIRE(board.Place(PieceOf(board, PieceType::Overflow), f));
+      return RunBoard(board);
+    };
+    {
+      // Nothing placed: blue and amber meet on the Old Bridge, on the first screen.
+      Board board(level);
+      const Run empty = RunBoard(board);
+      CHECK(empty.outcome.failure == Failure::Mud);
+      CHECK(empty.outcome.fail_node == x1);
+      CHECK(empty.outcome.fail_tick == 12);
+    }
+    {
+      // The bridge at the mill gate's crossing, the lock at the Old Bridge: the city's one Lean answer.
+      const Run lean = run(x2, x1);
+      CHECK(lean.outcome.solved);
+      CHECK(lean.outcome.ticks == 192);
+      CHECK(level.pars.pieces == 4);
+    }
+    {
+      // The other way round, blue's queue at the shut gate backs into the locked crossing: THREADLOCKED.
+      const Run swapped = run(x1, x2);
+      CHECK(swapped.outcome.jammed);
+      CHECK(swapped.outcome.fail_node == NodeOf(level, "g"));
     }
   }
 

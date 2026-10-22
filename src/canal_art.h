@@ -84,6 +84,9 @@ class CanalArt : public BoardArt {
   // skylights): a ring that runs out from the harbour once, and the roofs nearest it that stay lit.
   void DrawPayoff(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
   void DrawDistrict(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
+  // A grand machine's payoff (the finale): once the run is solved, the whole city's light runs out from look.payoff
+  // over every roof on the board, then the roofs stay lit.
+  void DrawCityLight(wlw::ui::Canvas& canvas, const ArtFrame& frame) const;
   void DrawHarbour(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
   // The current: faint dashes drifting along the canals (on the picture, each frame).
   void DrawFlow(wlw::ui::Canvas& picture, const ArtFrame& frame) const;

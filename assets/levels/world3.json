@@ -223,20 +223,31 @@
       "tray": ["tank4", "tank8", "tank8"]
     },
     {
-      "id": "3-15", "name": "Rush Hour", "intro": "Three crossings, one bridge, four pieces. Everything counts.",
+      "id": "3-15", "name": "Rush Hour", "intro": "Rush hour: every lock, every bridge, the whole city.", "height": 1200, "payoff": [180, 1100],
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [180, 36], "beads": "B+A*7", "beat": 8},
-        {"id": "f", "kind": "fork", "at": [180, 104], "socket": true},
-        {"id": "x1", "kind": "cross", "at": [180, 180], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [180, 302], "socket": true},
-        {"id": "x3", "kind": "cross", "at": [180, 424], "socket": true},
-        {"id": "p0l", "kind": "pass", "at": [65, 142]},
-        {"id": "p0r", "kind": "pass", "at": [250, 142]},
-        {"id": "cl", "kind": "cup", "at": [85, 512], "want": "B", "count": 7},
-        {"id": "cr", "kind": "cup", "at": [275, 512], "want": "A", "count": 7}
+        {"id": "sa", "kind": "spout", "at": [180, 40], "beads": "A*5", "beat": 4, "start": 3},
+        {"id": "sb", "kind": "spout", "at": [30, 160], "beads": "B*12", "beat": 3},
+        {"id": "sg", "kind": "spout", "at": [30, 550], "beads": "G*6", "beat": 4, "start": 13},
+        {"id": "pb", "kind": "pass", "at": [100, 160]},
+        {"id": "x1", "kind": "cross", "at": [180, 160], "socket": true},
+        {"id": "t", "kind": "merge", "at": [180, 280], "socket": true},
+        {"id": "l", "kind": "fork", "at": [140, 370], "socket": true},
+        {"id": "m", "kind": "merge", "at": [180, 460], "socket": true},
+        {"id": "r", "kind": "fork", "at": [220, 370], "socket": true},
+        {"id": "pg", "kind": "pass", "at": [100, 550]},
+        {"id": "pa2", "kind": "pass", "at": [270, 580]},
+        {"id": "x2", "kind": "cross", "at": [180, 780], "socket": true},
+        {"id": "g", "kind": "gate", "at": [110, 780], "open": false},
+        {"id": "mi", "kind": "mill", "at": [180, 850], "gears": [["g", [[110, 850]]]]},
+        {"id": "f", "kind": "fork", "at": [60, 960], "socket": true},
+        {"id": "cw", "kind": "cup", "at": [80, 370], "want": "G", "count": 6, "district": "Bell Wharf"},
+        {"id": "cl", "kind": "cup", "at": [300, 1000], "want": "A", "count": 5, "district": "Lantern Row"},
+        {"id": "cg", "kind": "cup", "at": [180, 1060], "want": "B", "count": 8, "district": "Grand Basin"},
+        {"id": "cq", "kind": "cup", "at": [60, 1060], "want": "B", "count": 4, "district": "Old Quay"}
       ],
-      "pipes": [["s", "f"], ["f", "p0l"], ["p0l", "x1"], ["f", "p0r"], ["p0r", "x1"], ["x1", "x2", [[80, 241]]], ["x1", "x2", [[233, 241]]], ["x2", "x3", [[134, 363]]], ["x2", "x3", [[253, 363]]], ["x3", "cl", [[85, 484]]], ["x3", "cr", [[275, 484]]]],
-      "tray": ["separator", "turnstile", "bridge", "tank8"]
+      "pipes": [["sa", "x1"], ["sb", "pb"], ["pb", "x1"], ["x1", "t"], ["x1", "x2", [[320, 160], [320, 780]]], ["t", "l", [[140, 280]]], ["l", "cw"], ["l", "m", [[140, 460]]], ["m", "r", [[220, 460]]], ["r", "pa2", [[270, 370]]], ["r", "t", [[220, 280]]], ["sg", "pg"], ["pg", "m", [[180, 550]]], ["pa2", "x2", [[270, 680], [180, 680]]], ["x2", "mi"], ["x2", "g"], ["mi", "cl", [[180, 890], [300, 890]]], ["g", "f", [[60, 780]]], ["f", "cg", [[180, 960]]], ["f", "cq"]],
+      "tray": ["bridge", "turnstile", "tank4", "tank8", {"type": "overflow", "n": 8}, "tank4"],
+      "placed": [{"piece": {"type": "separator", "a": "G", "b": "A"}, "at": "l", "locked": true}, {"piece": {"type": "separator", "a": "A", "b": "G"}, "at": "r", "locked": true}]
     },
     {
       "id": "3-C1", "name": "Gridlock", "intro": "Four crossings round one block. No bridges tonight.",

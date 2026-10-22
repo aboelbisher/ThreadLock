@@ -117,4 +117,9 @@ float DistrictAt(float age) {
   return 1.0f - (1.0f - t) * (1.0f - t);
 }
 
+float CityAt(float age) {
+  const float t = std::clamp(age / kCityLength, 0.0f, 1.0f);
+  return 1.0f - (1.0f - t) * (1.0f - t);
+}
+
 }  // namespace threadlock::barges
