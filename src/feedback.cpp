@@ -39,7 +39,7 @@ void Feedback::Vibrate(int milliseconds, float strength) {
 void Feedback::OnEvents(const std::vector<Event>& events, const Level& level, const Board& board,
                         const Listener& listener) {
   const Cues cues = CuesFor(events, level, board, set_, listener);
-  for (const Cue& cue : cues.sounds) Play(cue.sound, cue.volume, cue.pitch, cue.pan);
+  for (const Cue& cue : delay_.Tick(cues.sounds)) Play(cue.sound, cue.volume, cue.pitch, cue.pan);
   for (const Buzz& buzz : cues.buzzes) Vibrate(buzz.milliseconds, buzz.strength);
 }
 

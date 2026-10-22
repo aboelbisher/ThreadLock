@@ -30,7 +30,7 @@ float ListenerGain(const Listener& listener, float y) {
 Cues CuesFor(const std::vector<Event>& events, const Level& level, const Board& board, SoundSet set,
              const Listener& listener) {
   Cues cues;
-  const bool lantern = set == SoundSet::Lantern, shop = set == SoundSet::Shop;
+  const bool lantern = set == SoundSet::Lantern, canal = set == SoundSet::Canal;
   auto node_at = [&](int node) { return level.nodes[static_cast<size_t>(node)].at; };
   // A sound at a node: panned by its x, softer when it's off the view (failures are always heard in full).
   auto play = [&](Sound sound, float volume, float pitch, int node, bool failure = false) {
@@ -73,33 +73,37 @@ Cues CuesFor(const std::vector<Event>& events, const Level& level, const Board& 
         break;
       }
       case EventType::CupFull: play(synth::ChordFor(set, want_of(e)), 0.6f, 1.0f, e.node); break;
-      case EventType::Flip: play(Sound::Click, 0.55f, e.value ? 1.25f : 0.7f, e.node); break;
-      case EventType::Turn:
-        if (shop) {
-          play(Sound::RackClack, 0.3f, 1.0f, e.node);  // the lazy susan's notch
+      case EventType::Flip:
+        // A canal gate clanks when its leaves swing: the tick after the mill's flip (canal_art, GateOpenness).
+        if (canal) {
+          play(synth::GateFor(set), 0.6f, e.value ? 1.12f : 0.84f, e.node);
+          cues.sounds.back().ticks_later = 1;
         } else {
-          play(Sound::Click, 0.3f, 0.6f, e.node);
+          play(synth::GateFor(set), 0.55f, e.value ? 1.25f : 0.7f, e.node);
         }
         break;
+      case EventType::Turn: play(synth::TurnFor(set), 0.3f, set == SoundSet::Shop ? 1.0f : 0.6f, e.node); break;
       case EventType::Leave:
-        if (level.nodes[static_cast<size_t>(e.node)].kind == NodeKind::Mill)
-          play(Sound::Click, 0.4f, 0.5f, e.node);  // the wheel turns a notch
+        if (level.nodes[static_cast<size_t>(e.node)].kind == NodeKind::Mill) {  // the wheel turns a notch
+          play(synth::MillFor(set), canal ? 0.5f : 0.4f, canal ? 1.0f : 0.5f, e.node);
+        }
         break;
       case EventType::Collide:
         play(synth::MudFor(set), 0.9f, 1.0f, e.node, true);
         cues.buzzes.push_back({35, 0.85f});
         break;
       case EventType::NearMiss: play(Sound::Chime, 0.5f, 1.0f, e.node); break;
-      case EventType::Spill:
-        if (shop) {
-          play(Sound::SpillWood, 0.75f, 1.0f, e.node, true);
-        } else {
-          play(Sound::Splash, 0.7f, 0.8f, e.node, true);
-        }
+      case EventType::Spill: {
+        const Sound sound = synth::SpillFor(set);
+        const bool splash = sound == Sound::Splash;
+        play(sound, splash ? 0.7f : 0.75f, splash ? 0.8f : 1.0f, e.node, true);
         break;
+      }
       case EventType::Finished: {
-        // The shop: an order still short at the end (the bottle's ghost fill, its slip unpaid) sounds dull.
-        if (!shop || e.value) break;
+        // A cup still short at the end (the shop's ghost fill and unpaid slip, the canal's empty berths) sounds
+        // once for the run.
+        const Sound sound = synth::ShortFor(set);
+        if (sound == Sound::Count || e.value) break;
         int short_at = -1;
         for (size_t n = 0; n < level.nodes.size() && short_at < 0; ++n) {
           const Node& node = level.nodes[n];
@@ -109,15 +113,15 @@ Cues CuesFor(const std::vector<Event>& events, const Level& level, const Board& 
             if (board.Bottle(id, static_cast<int>(s)).count < node.slots[s].count) short_at = id;
           }
         }
-        if (short_at >= 0) play(Sound::ShortDull, 0.8f, 1.0f, short_at, true);
+        if (short_at >= 0) play(sound, 0.8f, 1.0f, short_at, true);
         break;
       }
       case EventType::Jammed:
-        play(Sound::Grind, 0.9f, 1.0f, -1, true);
+        play(synth::JamFor(set), 0.9f, 1.0f, -1, true);
         cues.buzzes.push_back({70, 1.0f});
         break;
       case EventType::Pour: play(synth::PourFor(set), 0.22f, 1.0f, e.node); break;
-      case EventType::Mix: play(Sound::NoteGreen, 0.45f, 0.75f, e.node); break;
+      case EventType::Mix: play(synth::NoteFor(set, Color::Green), 0.45f, 0.75f, e.node); break;
       case EventType::Enter: {
         const int piece = board.PieceAt(e.node);
         if (piece < 0 || board.RoleOf(piece) != PieceRole::Acts) break;  // an idle piece stays still and silent
@@ -156,6 +160,17 @@ Cues CuesFor(const std::vector<Event>& events, const Level& level, const Board& 
     }
   }
   return cues;
+}
+
+std::vector<Cue> CueDelay::Tick(const std::vector<Cue>& cues) {
+  std::vector<Cue> now;
+  std::erase_if(waiting_, [&](Cue& cue) {
+    if (--cue.ticks_later > 0) return false;
+    now.push_back(cue);
+    return true;
+  });
+  for (const Cue& cue : cues) (cue.ticks_later > 0 ? waiting_ : now).push_back(cue);
+  return now;
 }
 
 }  // namespace threadlock

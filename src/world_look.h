@@ -57,8 +57,8 @@ inline constexpr WorldLook kWorldLooks[] = {
      "Mud!", "Every cup full and pure"},
     // World 3, Rush Hour: the canal city at night. Its mud is murk, and its harbours fill as one.
     {ArtKind::Canal, "The Canal City", Hex(0x0B111D), Hex(0x0E1A2A, 0.9f), Hex(0xA8F2EA, 0.18f), Hex(0xE6F2FF),
-     Hex(0x9FB0D2), Hex(0x7FE3D8), Hex(0xA8F2EA), Hex(0x2FB5A8), Hex(0x14706A), Hex(0x06201E),
-     synth::SoundSet::Workshop, "Murk!", "Every harbour full"},
+     Hex(0x9FB0D2), Hex(0x7FE3D8), Hex(0xA8F2EA), Hex(0x2FB5A8), Hex(0x14706A), Hex(0x06201E), synth::SoundSet::Canal,
+     "Murk!", "Every harbour full"},
     // World 4, The Mixing Hall: the alchemists' sanctum.
     {ArtKind::Workshop, "The Sanctum", Hex(0x100C17), Hex(0x1A1426, 0.9f), Hex(0xDCC8FF, 0.18f), Hex(0xF2EEFF),
      Hex(0xB4A6D6), Hex(0xE6CC88), Hex(0xDCC8FF), Hex(0x9A6CF2), Hex(0x5A3AA8), Hex(0x1A0E33),

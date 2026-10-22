@@ -596,7 +596,39 @@ int Sounds(const std::string& dir) {
   play(synth::Sound::PaidAmber, 9.5f, 0.6f);
   play(synth::Sound::Till, 9.5f, 0.7f);  // the last order and the solved run start together
   WriteWav(dir + "/demo_shop_run.wav", run, kRate);
-  std::printf("wrote %s/*.wav (+ Ambience.wav, AmbienceShop.wav, demo_lantern_run.wav, demo_shop_run.wav)\n",
+
+  // 30 s of the canal's bed (World 3), and 3-6 The Mill Gate in miniature over it: the locks' brushes (blue every
+  // 3 ticks, amber every 6), vibes and bass climbing, the mill's clunk with its gate's clank a tick later, murk, the
+  // wash, both harbours served, last orders.
+  std::vector<float> canal_bed(kBedFrames * 2);
+  Ambience canal(kRate);
+  canal.SetBed(Ambience::Bed::Canal);
+  canal.SetTarget(1.0f, 2.0f);
+  for (size_t at = 0; at < kBedFrames; at += 512) {
+    canal.Render(canal_bed.data() + 2 * at, static_cast<uint32_t>(std::min<size_t>(512, kBedFrames - at)));
+  }
+  WriteWav(dir + "/AmbienceCanal.wav", canal_bed, kRate);
+  run.assign(canal_bed.begin(), canal_bed.begin() + 16 * kRate * 2);
+  for (float& s : run) s *= 0.6f;
+  constexpr float kTick = 0.125f;
+  for (int t = 0; t < 48; t += 3) play(synth::Sound::LockBrush, 0.5f + kTick * static_cast<float>(t), 0.22f);
+  for (int t = 0; t < 48; t += 6) play(synth::Sound::LockBrush, 0.5f + kTick * static_cast<float>(t), 0.22f, 0.8f);
+  for (int k = 0; k < 6; ++k) {
+    const float t = 1.5f + 0.75f * static_cast<float>(k);
+    play(synth::Sound::VibesNote, t, 0.55f, synth::ClimbPitch(k));
+    play(synth::Sound::BassNote, t + 0.375f, 0.55f, synth::ClimbPitch(k));
+    if (k % 2 == 0) {
+      play(synth::Sound::MillClunk, t + 0.25f, 0.5f);
+      play(synth::Sound::GateClank, t + 0.25f + kTick, 0.6f, k % 4 == 0 ? 1.12f : 0.84f);
+    }
+  }
+  play(synth::Sound::Murk, 6.5f, 0.9f);
+  play(synth::Sound::Wash, 8.0f, 0.75f);
+  play(synth::Sound::HarbourAmber, 9.0f, 0.6f);
+  play(synth::Sound::HarbourBlue, 10.5f, 0.6f);
+  play(synth::Sound::LastOrders, 10.5f, 0.7f);  // the last harbour and the solved run start together
+  WriteWav(dir + "/demo_canal_run.wav", run, kRate);
+  std::printf("wrote %s/*.wav (+ Ambience*.wav, demo_lantern_run.wav, demo_shop_run.wav, demo_canal_run.wav)\n",
               dir.c_str());
   return 0;
 }

@@ -23,6 +23,14 @@ constexpr float kBellAmp[] = {0.3f, 1.0f, 0.4f, 0.25f, 0.2f};
 constexpr float kBellDecay[] = {2.0f, 1.6f, 1.0f, 0.6f, 0.4f};
 constexpr float kBellNotes[] = {783.99f, 659.25f};
 constexpr float kBellRing = 4.5f, kBellFirst = 6.0f;  // how long one rings; when the first one rings
+// The canal: the water, the brushes, the plucked bass (harmonics 1..4, the high ones dying first) and the far horn
+// (D3 and C3 in turn, a reed's harmonics, already dulled by the distance).
+constexpr float kWaterGain = 0.045f, kTrickleGain = 0.012f, kBrushGain = 0.008f, kBassGain = 0.05f, kHornGain = 0.03f;
+constexpr float kBassAmp[] = {1.0f, 0.8f, 0.5f, 0.3f};
+constexpr float kBassDecay[] = {1.1f, 0.7f, 0.4f, 0.25f};
+constexpr float kHornNotes[] = {146.83f, 130.81f};
+constexpr float kHornAmp[] = {1.0f, 0.6f, 0.35f, 0.2f, 0.1f};
+constexpr float kHornLength = 2.6f;
 
 float Smooth(float x) {
   x = std::clamp(x, 0.0f, 1.0f);
@@ -78,6 +86,35 @@ float Ambience::Bell(uint64_t frame, int channel) const {
   return kBellGain * (channel == 0 ? 1.0f : 0.7f) * attack * fade * v;
 }
 
+// The canal's bass, `into` the chord: its root plucked as the chord starts, its fifth halfway through.
+float Ambience::Bass(float into, const float* notes) const {
+  const bool fifth = into >= 0.5f * kChordSeconds;
+  const float t = fifth ? into - 0.5f * kChordSeconds : into;
+  const float note = fifth ? notes[1] : notes[0];
+  float v = 0.0f;
+  for (int k = 0; k < 4; ++k) {
+    v += kBassAmp[k] * Sine(Wrap(note * static_cast<float>(k + 1) * t)) * std::exp(-t / kBassDecay[k]);
+  }
+  return kBassGain * std::min(1.0f, t / 0.006f) * v;
+}
+
+// The far horn at `frame` (silent between calls): a slow swell, held, let go.
+float Ambience::Horn(uint64_t frame) const {
+  const uint64_t period = static_cast<uint64_t>(kHornSeconds * static_cast<float>(rate_));
+  const uint64_t shifted = frame + period - static_cast<uint64_t>(kHornFirst * static_cast<float>(rate_));
+  const double t = static_cast<double>(shifted % period) / static_cast<double>(rate_);
+  if (t >= kHornLength) return 0.0f;
+  const float note = kHornNotes[(shifted / period) % 2];
+  const float s = static_cast<float>(t);
+  const float env = Smooth(s / 0.4f) * (1.0f - Smooth((s - (kHornLength - 0.9f)) / 0.9f));
+  float v = 0.0f;
+  for (int k = 0; k < 5; ++k) {
+    const double turns = t * static_cast<double>(note) * static_cast<double>(k + 1);
+    v += kHornAmp[k] * Sine(static_cast<float>(turns - std::floor(turns)));
+  }
+  return kHornGain * env * v;
+}
+
 void Ambience::Render(float* stereo, uint32_t frames) {
   const float target = target_.load(), step = step_.load();
   const Bed wanted = wanted_.load();
@@ -87,6 +124,9 @@ void Ambience::Render(float* stereo, uint32_t frames) {
   const float talk = 2.0f * std::numbers::pi_v<float> * 4.0f / rate;               // the murmur's flutter, ~4 Hz
   const float k_air = 2.0f * std::sin(std::numbers::pi_v<float> * 700.0f / rate);  // the noise bands' filters
   const float k_street = 2.0f * std::sin(std::numbers::pi_v<float> * 420.0f / rate);
+  const float k_water = 2.0f * std::sin(std::numbers::pi_v<float> * 320.0f / rate);
+  const float k_trickle = 2.0f * std::sin(std::numbers::pi_v<float> * 1500.0f / rate);
+  const float k_brush = 2.0f * std::sin(std::numbers::pi_v<float> * 3800.0f / rate);
   for (uint32_t i = 0; i < frames; ++i, ++frame_) {
     if (gain_ < target) gain_ = std::min(target, gain_ + step);
     if (gain_ > target) gain_ = std::max(target, gain_ - step);
@@ -97,17 +137,19 @@ void Ambience::Render(float* stereo, uint32_t frames) {
         bed_ = wanted;
         switch_ = gain_ <= 0.0f ? 1.0f : 0.0f;
         low_[0] = low_[1] = band_[0] = band_[1] = 0.0f;
+        trickle_low_[0] = trickle_low_[1] = trickle_band_[0] = trickle_band_[1] = 0.0f;
+        brush_low_[0] = brush_low_[1] = brush_band_[0] = brush_band_[1] = 0.0f;
       }
     } else if (switch_ < 1.0f) {
       switch_ = std::min(1.0f, switch_ + switch_step);
     }
-    const bool shop = bed_ == Bed::Shop;
+    const bool shop = bed_ == Bed::Shop, canal = bed_ == Bed::Canal;
     const uint64_t chord = frame_ / chord_frames;
     const float into = static_cast<float>(frame_ - chord * chord_frames) / rate;
     float out[2] = {0.0f, 0.0f};
     // Phases: [layer][voice][channel]; chords alternate between two layers, so the one fading out
     // keeps its phases while the next fades in.
-    for (int age = 0; age < 2; ++age) {  // the current chord and the one before it
+    for (int age = 0; age < 2 && !canal; ++age) {  // the current chord and the one before it (the canal: no pad)
       if (age == 1 && chord == 0) break;
       const uint64_t c = chord - static_cast<uint64_t>(age);
       const float env = Envelope(into + kChordSeconds * static_cast<float>(age));
@@ -147,13 +189,37 @@ void Ambience::Render(float* stereo, uint32_t frames) {
       const double turns7 = static_cast<double>(frame_) / (7.0 * static_cast<double>(rate_));
       swell = 0.45f + 0.3f * swell + 0.25f * Sine(static_cast<float>(turns7 - std::floor(turns7)));
     }
-    const float k = shop ? k_street : k_air;
+    // The canal: the bass and the far horn (from down the canal on the left), the brush's swirl (round once
+    // a second, a little push on each beat).
+    float canal_mono = 0.0f, swirl = 0.0f;
+    if (canal) {
+      canal_mono = Bass(into, kChords[chord % 4]) + Horn(frame_);
+      const double second = static_cast<double>(frame_) / static_cast<double>(rate_);
+      const float round = 0.5f + 0.5f * Sine(static_cast<float>(second - std::floor(second)));
+      const double beats = 2.0 * second;
+      const float push = 0.5f + 0.5f * Sine(static_cast<float>(beats - std::floor(beats)));
+      swirl = 0.3f + 0.4f * round + 0.3f * push * push * push * push;
+    }
+    const float k = canal ? k_water : shop ? k_street : k_air;
     for (int ch = 0; ch < 2; ++ch) {
       noise_[ch] = noise_[ch] * 1664525u + 1013904223u;
       const float n = static_cast<float>(noise_[ch] >> 8) / 8388608.0f - 1.0f;
       low_[ch] += k * band_[ch];
-      band_[ch] += k * (n - low_[ch] - (shop ? 0.9f : 1.2f) * band_[ch]);
-      if (shop) {
+      band_[ch] += k * (n - low_[ch] - (shop || canal ? 0.9f : 1.2f) * band_[ch]);
+      if (canal) {
+        // The water laps in two uneven slow rhythms (different on each side), a trickle riding the slaps.
+        const double t = static_cast<double>(frame_) / static_cast<double>(rate_);
+        const double la = t * 0.43 + 0.37 * ch, lb = t * 0.29 + 0.61 * ch + 0.2;
+        const float a = std::max(0.0f, Sine(static_cast<float>(la - std::floor(la))));
+        const float b = std::max(0.0f, Sine(static_cast<float>(lb - std::floor(lb))));
+        const float lap = 0.2f + 0.8f * std::min(1.0f, 0.7f * a * a * a + 0.5f * b * b * b);
+        trickle_low_[ch] += k_trickle * trickle_band_[ch];
+        trickle_band_[ch] += k_trickle * (n - trickle_low_[ch] - 0.6f * trickle_band_[ch]);
+        brush_low_[ch] += k_brush * brush_band_[ch];
+        brush_band_[ch] += k_brush * (n - brush_low_[ch] - 0.7f * brush_band_[ch]);
+        out[ch] += kWaterGain * lap * band_[ch] + kTrickleGain * lap * lap * trickle_band_[ch] +
+                   kBrushGain * swirl * brush_band_[ch] + (ch == 0 ? 1.0f : 0.8f) * canal_mono;
+      } else if (shop) {
         flutter_[ch] += talk * (n - flutter_[ch]);
         const float voices = std::clamp(0.65f + 35.0f * flutter_[ch], 0.2f, 1.2f);
         out[ch] += kMurmurGain * swell * voices * band_[ch] + Bell(frame_, ch);

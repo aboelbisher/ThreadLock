@@ -6,6 +6,7 @@
 #include <numbers>
 
 #include "apothecary_look.h"
+#include "barges.h"
 
 namespace threadlock::synth {
 namespace {
@@ -183,11 +184,15 @@ void PaneBell(Buffer& out, float freq, float start, float gain) {
 // A state-variable filter (Chamberlin): band-passed and low-passed noise for smoke, liquid and air.
 struct Svf {
   float low = 0.0f, band = 0.0f;
-  float Band(float in, float freq, float damping, uint32_t rate) {
-    const float k = 2.0f * std::sin(std::numbers::pi_v<float> * freq / static_cast<float>(rate));
+  float Band(float in, float freq, float damping, uint32_t rate) { return BandK(in, K(freq, rate), damping); }
+  // A fixed band: the coefficient worked out once (K), not a sine per sample.
+  float BandK(float in, float k, float damping) {
     low += k * band;
     band += k * (in - low - damping * band);
     return band;
+  }
+  static float K(float freq, uint32_t rate) {
+    return 2.0f * std::sin(std::numbers::pi_v<float> * freq / static_cast<float>(rate));
   }
 };
 
@@ -315,6 +320,187 @@ std::vector<float> Paid(Color color, uint32_t rate) {
   return out.samples;
 }
 
+// A grinding stop (a saw running down, rough noise), then a low organ chord (C minor): THREADLOCKED in
+// every world.
+void GrindStop(Buffer& out) {
+  Noise noise;
+  float phase = 0.0f, low = 0.0f;
+  for (size_t i = 0; i < out.At(0.55f); ++i) {
+    const float t = out.T(i);
+    const float f = 70.0f - 40.0f * t;
+    phase += f / static_cast<float>(out.rate);
+    const float saw = 2.0f * (phase - std::floor(phase)) - 1.0f;
+    low += 0.2f * (noise.Next() - low);
+    out.samples[i] += (0.6f * saw + 0.5f * low) * Decay(t, 0.005f, 0.25f);
+  }
+  const float organ[] = {65.41f, 98.0f, 130.81f, 155.56f};  // C2 G2 C3 Eb3
+  for (float f : organ) {
+    for (size_t i = out.At(0.35f); i < out.samples.size(); ++i) {
+      const float t = out.T(i - out.At(0.35f));
+      const float env = std::min(1.0f, t / 0.25f) * std::exp(-std::max(0.0f, t - 1.2f) / 0.35f);
+      const float v =
+          std::sin(kTau * f * t) + 0.5f * std::sin(2.0f * kTau * f * t) + 0.25f * std::sin(4.0f * kTau * f * t);
+      out.samples[i] += 0.3f * v * env;
+    }
+  }
+}
+
+// ---- The Canal set: a late-night jazz trio on the water ----
+
+constexpr float kC3 = 130.81f;
+// C6/9 from its root: C E G A D. It is the pentatonic itself, so it sits under anything the machine plays.
+constexpr float kSixNine[] = {1.0f, 1.25f, 1.5f, 1.6667f, 2.25f};
+
+float Ease(float x) {
+  x = std::clamp(x, 0.0f, 1.0f);
+  return x * x * (3.0f - 2.0f * x);
+}
+
+// A vibraphone: an aluminium bar tuned 1 : 4 : 10 that rings long, a soft yarn mallet, and the motor's
+// tremolo (discs turning in the resonators, ~5.5 Hz). Amplitude modulation is the note plus two sidebands
+// at f +- 5.5 Hz: three partials instead of a multiply per sample.
+void Vibes(Buffer& out, float freq, float start, float gain, float ring = 1.0f) {
+  constexpr float kMotor = 5.5f, kDepth = 0.35f;
+  const size_t from = out.At(start);
+  Partial(out, from, freq, gain, 0.002f, ring);
+  Partial(out, from, freq + kMotor, gain * 0.5f * kDepth, 0.002f, ring);
+  Partial(out, from, freq - kMotor, gain * 0.5f * kDepth, 0.002f, ring);
+  Partial(out, from, freq * 4.0f, gain * 0.18f, 0.0015f, 0.12f);
+  Partial(out, from, freq * 10.0f, gain * 0.05f, 0.001f, 0.03f);
+}
+
+// A plucked upright bass: Karplus-Strong like the pizzicato, but a fuller pluck that keeps more of its top
+// (a phone's speaker can't play C3's fundamental: the ear finds it from the harmonics), through the big
+// body's two resonances.
+void UprightBass(Buffer& out, float freq, float start, float gain, float ring = 0.6f) {
+  Noise noise;
+  const size_t period = std::max<size_t>(2, static_cast<size_t>(static_cast<float>(out.rate) / freq));
+  std::vector<float> line(period);
+  float soft = 0.0f, mean = 0.0f;
+  for (float& s : line) mean += s = soft += 0.35f * (noise.Next() - soft);
+  mean /= static_cast<float>(period);
+  for (float& s : line) s -= mean;  // no offset left ringing in the loop
+  size_t pos = 0;
+  float last = 0.0f;
+  Svf body_low, body_mid;
+  const float k_low = Svf::K(110.0f, out.rate), k_mid = Svf::K(600.0f, out.rate);
+  // The envelope: a 2 ms rise, then a fixed factor a sample (no exp per sample), stopped below hearing.
+  const size_t from = out.At(start), rise = out.At(0.002f);
+  const float fall = std::exp(-1.0f / (ring * static_cast<float>(out.rate)));
+  float env = 1.0f;
+  for (size_t i = from, n = 0; i < out.samples.size(); ++i, ++n) {
+    const float current = line[pos];
+    line[pos] = 0.5f * (current + last) * 0.997f;
+    last = current;
+    if (++pos == period) pos = 0;
+    const float body = 0.5f * body_low.BandK(current, k_low, 0.8f) + 0.4f * body_mid.BandK(current, k_mid, 1.0f);
+    float level = static_cast<float>(n) / static_cast<float>(rise);
+    if (n >= rise) {
+      level = env;
+      env *= fall;
+      if (env < 1e-4f) break;  // gone
+    }
+    out.samples[i] += gain * (0.8f * current + body) * level;
+  }
+}
+
+// A Rhodes: a hammer strikes a tine beside a pickup. The tone bar holds the fundamental with a little of
+// the 2nd and 3rd; the tine's own high mode (~7.1x) is the bell, gone in a few tens of milliseconds.
+void Rhodes(Buffer& out, float freq, float start, float gain, float ring = 0.9f) {
+  const size_t from = out.At(start);
+  Partial(out, from, freq, gain, 0.002f, ring);
+  Partial(out, from, freq * 2.0f, gain * 0.22f, 0.002f, 0.35f * ring);
+  Partial(out, from, freq * 3.0f, gain * 0.08f, 0.001f, 0.15f);
+  Partial(out, from, freq * 7.1f, gain * 0.25f, 0.0005f, 0.04f);
+}
+
+// A boat's horn: a reed-like tone (harmonics 1..6 falling off), a scoop up into the note, held for `length`,
+// let go over 0.25 s; `sag` is where the pitch has drooped to by the end (1 = steady). The fundamental is a
+// phasor whose turn per sample is updated every 32 samples (the pitch moves slowly); the harmonics are its powers.
+void Horn(Buffer& out, float freq, float start, float length, float gain, float sag = 1.0f) {
+  constexpr float kAmp[] = {1.0f, 0.55f, 0.45f, 0.25f, 0.18f, 0.08f};
+  constexpr float kRelease = 0.25f;
+  const size_t from = out.At(start), to = out.At(start + length + kRelease);
+  double re = 1.0, im = 0.0, c = 1.0, s = 0.0;
+  for (size_t i = from, n = 0; i < to; ++i, ++n) {
+    const float t = out.T(i - from);
+    if (n % 32 == 0) {
+      const float f = freq * (1.0f - 0.03f * std::exp(-t / 0.06f)) * (1.0f + (sag - 1.0f) * std::min(1.0f, t / length));
+      const double step = static_cast<double>(kTau) * f / static_cast<double>(out.rate);
+      c = std::cos(step);
+      s = std::sin(step);
+      const double size = std::sqrt(re * re + im * im);  // keep the phasor on the unit circle
+      re /= size;
+      im /= size;
+    }
+    double hr = re, hi = im, v = 0.0;
+    for (float amp : kAmp) {
+      v += amp * hi;
+      const double next = hr * re - hi * im;
+      hi = hr * im + hi * re;
+      hr = next;
+    }
+    const double next = re * c - im * s;
+    im = re * s + im * c;
+    re = next;
+    const float tail = t < length ? 1.0f : 1.0f - (t - length) / kRelease;
+    const float env = Ease(t / 0.08f) * tail * tail;
+    out.samples[i] += gain * 0.4f * static_cast<float>(v) * env;
+  }
+}
+
+// A wire brush on a snare: a swish of high noise (the wires), the drum's head barely touched under it.
+void Brush(Buffer& out, float start, float gain, float swish = 0.06f) {
+  Noise noise;
+  Svf wires;
+  const float k = Svf::K(4200.0f, out.rate);
+  const size_t from = out.At(start);
+  for (size_t i = from; i < out.At(start + 6.0f * swish); ++i) {
+    out.samples[i] += gain * wires.BandK(noise.Next(), k, 0.7f) * Decay(out.T(i - from), 0.004f, swish);
+  }
+  Sine(out, start, 0.08f, 190.0f, 170.0f, gain * 0.25f, 0.002f, 0.025f);
+}
+
+// A brushed ride cymbal: a wash of very high noise swelling from `start` to `peak` and gone by `end` (times in
+// the buffer), with the plate's faint inharmonic ring.
+void Cymbal(Buffer& out, float start, float peak, float end, float gain) {
+  Noise noise;
+  Svf a, b;
+  const float ka = Svf::K(6500.0f, out.rate), kb = Svf::K(9500.0f, out.rate);
+  for (size_t i = out.At(start); i < out.At(end); ++i) {
+    const float t = out.T(i);
+    const float env = t < peak ? Ease((t - start) / (peak - start)) : 1.0f - Ease((t - peak) / (end - peak));
+    const float n = noise.Next();
+    out.samples[i] += gain * env * (0.6f * a.BandK(n, ka, 0.5f) + 0.4f * b.BandK(n, kb, 0.5f));
+  }
+  const size_t from = out.At(start);
+  for (float r : {1.0f, 1.47f, 2.09f, 2.56f}) {
+    Partial(out, from, 3100.0f * r, gain * 0.03f / r, peak - start, 0.3f * (end - peak) / r);
+  }
+}
+
+// A harbour served, timed like its light (barges.h): the harbour's horn as its lamps come on and its glow
+// swells (over kWarmLength), the colour's 6/9 rolled under it, a brushed cymbal swelling with the district's
+// light and gone when the light has run out (kDistrictLength).
+std::vector<float> Harbour(Color color, uint32_t rate) {
+  Buffer out(rate, barges::kDistrictLength + 0.5f);
+  const float horn = color == Color::Amber ? 293.66f : color == Color::Green ? 220.0f : 196.0f;  // G3, D4, A3
+  Horn(out, horn, 0.0f, barges::kWarmLength - 0.25f, 0.55f);
+  for (int k = 0; k < 5; ++k) {
+    const float at = 0.12f + 0.05f * static_cast<float>(k);
+    if (color == Color::Amber) {
+      UprightBass(out, kC3 * kSixNine[k], at, 0.4f, 0.5f);
+    } else if (color == Color::Green) {
+      Rhodes(out, kC4 * kSixNine[k], at, 0.3f, 0.6f);
+    } else {
+      Vibes(out, kC4 * kSixNine[k], at, 0.3f, 0.6f);
+    }
+  }
+  Cymbal(out, 0.0f, 0.45f * barges::kDistrictLength, barges::kDistrictLength, 0.35f);
+  Normalize(out.samples, 0.85f);
+  return out.samples;
+}
+
 void Normalize(std::vector<float>& samples, float peak) {
   float most = 0.0f;
   for (float s : samples) most = std::max(most, std::fabs(s));
@@ -404,28 +590,9 @@ std::vector<float> Make(Sound sound, uint32_t rate) {
       Normalize(out.samples, 0.55f);
       return out.samples;
     }
-    case Sound::Grind: {  // a grinding stop, then a low organ chord
+    case Sound::Grind: {
       Buffer out(rate, 2.4f);
-      Noise noise;
-      float phase = 0.0f, low = 0.0f;
-      for (size_t i = 0; i < out.At(0.55f); ++i) {
-        const float t = out.T(i);
-        const float f = 70.0f - 40.0f * t;
-        phase += f / static_cast<float>(rate);
-        const float saw = 2.0f * (phase - std::floor(phase)) - 1.0f;
-        low += 0.2f * (noise.Next() - low);
-        out.samples[i] += (0.6f * saw + 0.5f * low) * Decay(t, 0.005f, 0.25f);
-      }
-      const float organ[] = {65.41f, 98.0f, 130.81f, 155.56f};  // C2 G2 C3 Eb3
-      for (float f : organ) {
-        for (size_t i = out.At(0.35f); i < out.samples.size(); ++i) {
-          const float t = out.T(i - out.At(0.35f));
-          const float env = std::min(1.0f, t / 0.25f) * std::exp(-std::max(0.0f, t - 1.2f) / 0.35f);
-          const float v =
-              std::sin(kTau * f * t) + 0.5f * std::sin(2.0f * kTau * f * t) + 0.25f * std::sin(4.0f * kTau * f * t);
-          out.samples[i] += 0.3f * v * env;
-        }
-      }
+      GrindStop(out);
       Normalize(out.samples, 0.85f);
       return out.samples;
     }
@@ -694,6 +861,142 @@ std::vector<float> Make(Sound sound, uint32_t rate) {
       Normalize(out.samples, 0.7f);
       return out.samples;
     }
+    case Sound::VibesNote: {
+      Buffer out(rate, 2.8f);
+      Vibes(out, kC4, 0.0f, 1.0f);
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::BassNote: {
+      Buffer out(rate, 1.6f);
+      UprightBass(out, kC3, 0.0f, 1.0f, 0.4f);
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::RhodesNote: {
+      Buffer out(rate, 2.2f);
+      Rhodes(out, kC4, 0.0f, 1.0f);
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::HarbourBlue: return Harbour(Color::Blue, rate);
+    case Sound::HarbourAmber: return Harbour(Color::Amber, rate);
+    case Sound::HarbourGreen: return Harbour(Color::Green, rate);
+    case Sound::LockBrush: {
+      Buffer out(rate, 0.4f);
+      Brush(out, 0.0f, 1.0f);
+      Normalize(out.samples, 0.35f);
+      return out.samples;
+    }
+    case Sound::MillClunk: {  // a heavy wooden clunk, then the iron pawl dropping into the next tooth
+      Buffer out(rate, 0.35f);
+      Knock(out, 0.0f, 210.0f, 1.0f);
+      Knock(out, 0.0f, 140.0f, 0.5f);
+      Partial(out, out.At(0.045f), 2400.0f, 0.25f, 0.0003f, 0.012f);
+      Partial(out, out.At(0.045f), 3700.0f, 0.15f, 0.0003f, 0.008f);
+      Normalize(out.samples, 0.5f);
+      return out.samples;
+    }
+    case Sound::GateClank: {  // two iron leaves meeting: a struck plate's inharmonic partials, twice, on a thud
+      Buffer out(rate, 0.6f);
+      const float ratio[] = {1.0f, 2.32f, 3.86f, 5.4f}, amp[] = {1.0f, 0.6f, 0.35f, 0.2f};
+      const float time[] = {0.16f, 0.1f, 0.06f, 0.035f};
+      for (int leaf = 0; leaf < 2; ++leaf) {
+        const size_t from = out.At(0.05f * static_cast<float>(leaf));
+        const float f = leaf == 0 ? 340.0f : 362.0f, g = leaf == 0 ? 1.0f : 0.6f;
+        for (int k = 0; k < 4; ++k) Partial(out, from, f * ratio[k], g * amp[k], 0.0008f, time[k]);
+      }
+      Knock(out, 0.0f, 150.0f, 0.6f);
+      Normalize(out.samples, 0.5f);
+      return out.samples;
+    }
+    case Sound::Murk: {  // two hulls bump (hollow knocks), then the water churns murky and settles (the stain's 1.4 s)
+      Buffer out(rate, 1.6f);
+      Knock(out, 0.0f, 95.0f, 1.0f);
+      Knock(out, 0.11f, 80.0f, 0.7f);
+      Noise noise;
+      Svf filter;
+      for (size_t i = 0; i < out.At(1.5f); ++i) {
+        const float t = out.T(i);
+        const float churn =
+            Decay(t, 0.12f, 0.45f) * (1.0f + 0.5f * std::sin(kTau * 3.2f * t)) * (1.0f - Ease((t - 1.1f) / 0.4f));
+        out.samples[i] += 0.7f * churn * filter.Band(noise.Next(), 260.0f - 120.0f * t / 1.5f, 0.5f, rate);
+      }
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
+    case Sound::Wash: {  // the overflowing harbour's wake slaps the quay: a low splash, then smaller slaps
+      Buffer out(rate, 1.4f);
+      Noise noise;
+      Svf filter;
+      const float at[] = {0.0f, 0.32f, 0.6f, 0.85f}, gain[] = {1.0f, 0.55f, 0.35f, 0.2f};
+      for (int k = 0; k < 4; ++k) {
+        const size_t from = out.At(at[k]);
+        for (size_t i = from; i < out.At(at[k] + 0.4f); ++i) {
+          const float t = out.T(i - from);
+          out.samples[i] += gain[k] * Decay(t, 0.015f, 0.07f) *
+                            filter.Band(noise.Next(), 900.0f * std::exp(-t * 7.0f) + 180.0f, 0.35f, rate);
+        }
+      }
+      Knock(out, 0.0f, 110.0f, 0.4f);  // the quay's stone
+      Normalize(out.samples, 0.75f);
+      return out.samples;
+    }
+    case Sound::ShortQuay: {  // a lonely horn sagging a tone, then two bass notes falling (E3, C3): not enough
+      Buffer out(rate, 2.2f);
+      Horn(out, 329.63f, 0.0f, 0.6f, 0.6f, 0.89f);
+      UprightBass(out, kC3 * 1.25f, 0.55f, 0.6f, 0.4f);
+      UprightBass(out, kC3, 0.85f, 0.7f, 0.4f);
+      Normalize(out.samples, 0.75f);
+      return out.samples;
+    }
+    case Sound::Gridlock: {  // horns honking into each other (a tritone, a minor second) over the grinding stop
+      Buffer out(rate, 2.8f);
+      GrindStop(out);
+      const float at[] = {0.0f, 0.07f, 0.19f, 0.3f, 0.42f}, freq[] = {261.63f, 369.99f, 233.08f, 392.0f, 277.18f};
+      for (int k = 0; k < 5; ++k) Horn(out, freq[k], at[k], 0.12f + 0.05f * static_cast<float>(k % 2), 0.32f);
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
+    case Sound::LastOrders: {  // after the last harbour's horn: a vibes run, the bass walking, brushes, the 6/9
+      const float start = barges::kWarmLength;
+      Buffer out(rate, start + 4.4f);
+      for (int k = 0; k < 7; ++k) Vibes(out, kC4 * ClimbPitch(k), start + 0.125f * static_cast<float>(k), 0.35f, 0.5f);
+      const float walk[] = {1.0f, 1.125f, 1.25f, 1.5f};  // C D E G, a quarter note each
+      for (int k = 0; k < 4; ++k) {
+        UprightBass(out, kC3 * walk[k], start + 0.25f * static_cast<float>(k), 0.45f, 0.35f);
+        Brush(out, start + 0.25f * static_cast<float>(k), k % 2 ? 0.35f : 0.2f);
+      }
+      const float chord = start + 1.0f;
+      for (int k = 0; k < 5; ++k) Vibes(out, kC4 * kSixNine[k], chord + 0.03f * static_cast<float>(k), 0.3f, 1.0f);
+      UprightBass(out, kC3, chord, 0.6f, 0.6f);
+      Brush(out, chord, 0.4f, 0.1f);
+      Cymbal(out, chord, chord + 0.05f, chord + 2.2f, 0.2f);
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
+    case Sound::RushHour: {  // the city's light runs out: horns answer across it, the bass walks up, the chord at
+                             // kCityLength
+      const float full = barges::kCityLength;
+      Buffer out(rate, full + 3.8f);
+      // Near horns first, then farther and softer (pentatonic, so the answers are in key).
+      const float horn_at[] = {0.15f, 0.6f, 1.0f, 1.4f, 1.75f, 2.1f, 2.4f};
+      const float horn_freq[] = {196.0f, 293.66f, 220.0f, 329.63f, 261.63f, 392.0f, 293.66f};
+      for (int k = 0; k < 7; ++k) Horn(out, horn_freq[k], horn_at[k], 0.32f, 0.32f - 0.025f * static_cast<float>(k));
+      for (int k = 0; k < 12; ++k) {  // eighths up the pentatonic, the brushes building under them
+        const float at = 0.25f * static_cast<float>(k);
+        UprightBass(out, kC3 * ClimbPitch(k), at, 0.3f, 0.3f);
+        Brush(out, at, 0.08f + 0.025f * static_cast<float>(k));
+      }
+      for (int k = 0; k < 5; ++k) Vibes(out, kC4 * kSixNine[k], full + 0.02f * static_cast<float>(k), 0.35f, 1.2f);
+      for (float f : {1.0f, 1.25f, 1.5f}) Rhodes(out, kC5 * f, full, 0.2f, 1.0f);
+      UprightBass(out, kC3, full, 0.6f, 0.7f);
+      UprightBass(out, kC3 * 1.5f, full, 0.4f, 0.7f);
+      for (float f : {261.63f, 329.63f, 392.0f}) Horn(out, f, full, 0.9f, 0.22f);  // every horn together
+      Cymbal(out, full, full + 0.01f, full + 2.6f, 0.45f);
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
     case Sound::Tap:
     case Sound::Count: {
       Buffer out(rate, 0.06f);
@@ -710,6 +1013,9 @@ Sound NoteFor(SoundSet set, Color color) {
   if (set == SoundSet::Lantern && color == Color::Amber) return Sound::CelestaNote;
   if (set == SoundSet::Shop && color == Color::Blue) return Sound::MarimbaNote;
   if (set == SoundSet::Shop && color == Color::Amber) return Sound::PizzNote;
+  if (set == SoundSet::Canal && color == Color::Blue) return Sound::VibesNote;
+  if (set == SoundSet::Canal && color == Color::Amber) return Sound::BassNote;
+  if (set == SoundSet::Canal && color == Color::Green) return Sound::RhodesNote;
   switch (color) {
     case Color::Blue: return Sound::NoteBlue;
     case Color::Amber: return Sound::NoteAmber;
@@ -724,6 +1030,9 @@ Sound ChordFor(SoundSet set, Color color) {
   if (set == SoundSet::Lantern && color == Color::Amber) return Sound::LanternAmber;
   if (set == SoundSet::Shop && color == Color::Blue) return Sound::PaidBlue;
   if (set == SoundSet::Shop && color == Color::Amber) return Sound::PaidAmber;
+  if (set == SoundSet::Canal && color == Color::Blue) return Sound::HarbourBlue;
+  if (set == SoundSet::Canal && color == Color::Amber) return Sound::HarbourAmber;
+  if (set == SoundSet::Canal && color == Color::Green) return Sound::HarbourGreen;
   switch (color) {
     case Color::Blue: return Sound::ChordBlue;
     case Color::Amber: return Sound::ChordAmber;
@@ -735,13 +1044,15 @@ Sound ChordFor(SoundSet set, Color color) {
 
 const char* SoundName(Sound sound) {
   static constexpr const char* kNames[] = {
-      "NoteBlue",      "NoteAmber",   "NoteGreen",    "NoteRose",     "NotePearl",   "ChordBlue", "ChordAmber",
-      "ChordGreen",    "ChordRose",   "ChordPearl",   "Thud",         "Splash",      "Chime",     "Grind",
-      "Fanfare",       "Star",        "Pour",         "Click",        "Place",       "Lift",      "Tap",
-      "HarmonicaNote", "CelestaNote", "LanternBlue",  "LanternAmber", "PaneChime",   "Heart",     "RoseWindow",
-      "Smoke",         "Drip",        "CruciblePour", "Ascent",       "MarimbaNote", "PizzNote",  "PaidBlue",
-      "PaidAmber",     "Sludge",      "JarTap",       "SpillWood",    "ShortDull",   "RackClack", "Till",
-      "MarketDay",     "CorkPop",     "ShopBell"};
+      "NoteBlue",      "NoteAmber",    "NoteGreen",    "NoteRose",     "NotePearl",   "ChordBlue",  "ChordAmber",
+      "ChordGreen",    "ChordRose",    "ChordPearl",   "Thud",         "Splash",      "Chime",      "Grind",
+      "Fanfare",       "Star",         "Pour",         "Click",        "Place",       "Lift",       "Tap",
+      "HarmonicaNote", "CelestaNote",  "LanternBlue",  "LanternAmber", "PaneChime",   "Heart",      "RoseWindow",
+      "Smoke",         "Drip",         "CruciblePour", "Ascent",       "MarimbaNote", "PizzNote",   "PaidBlue",
+      "PaidAmber",     "Sludge",       "JarTap",       "SpillWood",    "ShortDull",   "RackClack",  "Till",
+      "MarketDay",     "CorkPop",      "ShopBell",     "VibesNote",    "BassNote",    "RhodesNote", "HarbourBlue",
+      "HarbourAmber",  "HarbourGreen", "LockBrush",    "MillClunk",    "GateClank",   "Murk",       "Wash",
+      "ShortQuay",     "Gridlock",     "LastOrders",   "RushHour"};
   static_assert(std::size(kNames) == static_cast<size_t>(Sound::Count));
   return sound < Sound::Count ? kNames[static_cast<size_t>(sound)] : "?";
 }
@@ -750,6 +1061,7 @@ Sound MudFor(SoundSet set) {
   switch (set) {
     case SoundSet::Lantern: return Sound::Smoke;
     case SoundSet::Shop: return Sound::Sludge;
+    case SoundSet::Canal: return Sound::Murk;
     default: return Sound::Thud;
   }
 }
@@ -758,15 +1070,39 @@ Sound PourFor(SoundSet set) {
   switch (set) {
     case SoundSet::Lantern: return Sound::CruciblePour;
     case SoundSet::Shop: return Sound::JarTap;
+    case SoundSet::Canal: return Sound::LockBrush;
     default: return Sound::Pour;
   }
 }
 
 Sound SolvedFor(SoundSet set, bool grand) {
   if (set == SoundSet::Shop) return grand ? Sound::MarketDay : Sound::Till;
+  if (set == SoundSet::Canal) return grand ? Sound::RushHour : Sound::LastOrders;
   if (set != SoundSet::Lantern) return Sound::Fanfare;
   return grand ? Sound::RoseWindow : Sound::Heart;
 }
+
+Sound JamFor(SoundSet set) { return set == SoundSet::Canal ? Sound::Gridlock : Sound::Grind; }
+
+Sound SpillFor(SoundSet set) {
+  switch (set) {
+    case SoundSet::Shop: return Sound::SpillWood;
+    case SoundSet::Canal: return Sound::Wash;
+    default: return Sound::Splash;
+  }
+}
+
+Sound ShortFor(SoundSet set) {
+  switch (set) {
+    case SoundSet::Shop: return Sound::ShortDull;
+    case SoundSet::Canal: return Sound::ShortQuay;
+    default: return Sound::Count;
+  }
+}
+
+Sound TurnFor(SoundSet set) { return set == SoundSet::Shop ? Sound::RackClack : Sound::Click; }
+Sound MillFor(SoundSet set) { return set == SoundSet::Canal ? Sound::MillClunk : Sound::Click; }
+Sound GateFor(SoundSet set) { return set == SoundSet::Canal ? Sound::GateClank : Sound::Click; }
 
 float HeartOnset(int j) { return -std::log(1.0f - 0.98f * static_cast<float>(std::clamp(j, 0, 11)) / 12.0f) / 3.5f; }
 

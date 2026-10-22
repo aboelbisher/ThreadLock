@@ -238,6 +238,7 @@ void LevelScreen::OnEnter() {
 void LevelScreen::OnExit() {
   view_.Art().Release();
   app_.GetFeedback().SetSoundSet(synth::SoundSet::Workshop);
+  app_.GetFeedback().ClearPending();
   app_.GetFeedback().SetAmbience(false, false);
   wlw::platform::KeepScreenOn(false);
   app_.Services().Window().GetScreen().SetClearColor(ui_color::kBackground);
@@ -273,6 +274,7 @@ void LevelScreen::StartRun() {
   hint_node_ = -1;
   fail_focused_ = false;
   camera_.StartRide();
+  app_.GetFeedback().ClearPending();
   app_.GetProgress().Count("runs");
 }
 
@@ -282,12 +284,16 @@ void LevelScreen::StopRun() {
   phase_ = Phase::Edit;
   dialog_ = Dialog::None;
   camera_.Release();  // the view stays where it is
+  app_.GetFeedback().ClearPending();
 }
 
 void LevelScreen::Step(bool quiet) {
   const std::vector<Event>& events = board_.Tick();
   view_.OnEvents(events, board_);  // quiet too: a bottle filled before Show me's replay stays corked
-  if (quiet) return;
+  if (quiet) {
+    app_.GetFeedback().ClearPending();  // a gate's clank held from a skipped tick isn't heard later
+    return;
+  }
   // On a tall board the camera is the listener: what happens off the view is softer.
   const Listener listener = camera_.Scrolls() ? Listener{camera_.Y(), camera_.Visible()} : Listener{};
   app_.GetFeedback().OnEvents(events, *level_, board_, listener);
@@ -411,10 +417,12 @@ void LevelScreen::Update(float dt) {
     if (dev_clock_ >= cv_autoplay.Get()) StartRun();
   }
   // The world's ambience while the level is open (World 1: the tower at dawn, World 2: the street outside the
-  // shop), ducked while the machine runs (or replays for Show me).
+  // shop, World 3: the canals at night), ducked while the machine runs (or replays for Show me).
+  const Ambience::Bed bed = look_.sounds == synth::SoundSet::Shop    ? Ambience::Bed::Shop
+                            : look_.sounds == synth::SoundSet::Canal ? Ambience::Bed::Canal
+                                                                     : Ambience::Bed::Lantern;
   app_.GetFeedback().SetAmbience(look_.sounds != synth::SoundSet::Workshop,
-                                 phase_ == Phase::Run || phase_ == Phase::ShowMe,
-                                 look_.sounds == synth::SoundSet::Shop ? Ambience::Bed::Shop : Ambience::Bed::Lantern);
+                                 phase_ == Phase::Run || phase_ == Phase::ShowMe, bed);
   // The player watches a run without touching, and a grand machine's run outlasts a 30 s screen timeout.
   wlw::platform::KeepScreenOn(phase_ == Phase::Run || phase_ == Phase::ShowMe);
   view_.Update(dt, board_);

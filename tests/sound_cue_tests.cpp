@@ -154,3 +154,118 @@ TEST_SUITE("sound cues") {
     CHECK(Count(RunCues(level, SoundSet::Workshop), Sound::RackClack) == 0);
   }
 }
+
+namespace {
+
+// A run on a board already set up, tick by tick: the cues each tick asks for, and which tick each was heard on
+// through a CueDelay (as Feedback plays them).
+struct Heard {
+  std::vector<Cue> cues;
+  std::vector<int> ticks;  // parallel to cues: the tick it played on
+  std::vector<int> flips;  // the ticks a gate flipped on
+};
+Heard HearRun(Board& board, const Level& level, SoundSet set) {
+  Heard heard;
+  CueDelay delay;
+  board.Start();
+  int tick = 0;
+  while (board.Running()) {
+    const std::vector<Event>& events = board.Tick();
+    ++tick;
+    for (const Event& e : events) {
+      if (e.type == EventType::Flip) heard.flips.push_back(tick);
+    }
+    for (const Cue& cue : delay.Tick(CuesFor(events, level, board, set).sounds)) {
+      heard.cues.push_back(cue);
+      heard.ticks.push_back(tick);
+    }
+  }
+  return heard;
+}
+
+}  // namespace
+
+TEST_SUITE("sound cues") {
+  TEST_CASE("the Canal set: vibes, a harbour served, the locks' brushes") {
+    const std::vector<Cue> cues = RunCues(LanternLevel("B*4"), SoundSet::Canal);
+    CHECK(Count(cues, Sound::VibesNote) == 4);
+    CHECK(Count(cues, Sound::HarbourBlue) == 1);  // one sound: horn, chord, cymbal with the light
+    CHECK(Count(cues, Sound::LockBrush) == 4);
+    CHECK(Count(cues, Sound::NoteBlue) == 0);
+    CHECK(Count(cues, Sound::ShortQuay) == 0);
+  }
+
+  TEST_CASE("a canal gate clanks a tick after its mill turns, when its leaves swing") {
+    const Level level = MakeLevel(kMillGate);
+    Board board(level);
+    const Heard heard = HearRun(board, level, SoundSet::Canal);
+    CHECK(Count(heard.cues, Sound::MillClunk) == 2);
+    CHECK(Count(heard.cues, Sound::Click) == 0);
+    REQUIRE(heard.flips.size() == 2);
+    std::vector<int> clanks;
+    for (size_t i = 0; i < heard.cues.size(); ++i) {
+      if (heard.cues[i].sound == Sound::MillClunk) CHECK(heard.ticks[i] == heard.flips[clanks.size()]);
+      if (heard.cues[i].sound == Sound::GateClank) clanks.push_back(heard.ticks[i]);
+    }
+    REQUIRE(clanks.size() == 2);
+    CHECK(clanks[0] == heard.flips[0] + 1);
+    CHECK(clanks[1] == heard.flips[1] + 1);
+
+    // Elsewhere the gate clicks at once, the mill a low click.
+    Board workshop(level);
+    const Heard plain = HearRun(workshop, level, SoundSet::Workshop);
+    CHECK(Count(plain.cues, Sound::Click) == 4);
+    CHECK(Count(plain.cues, Sound::GateClank) == 0);
+    for (const Cue& cue : plain.cues) CHECK(cue.ticks_later == 0);
+  }
+
+  TEST_CASE("held cues play when due; Clear drops them") {
+    CueDelay delay;
+    const Cue clank{.sound = Sound::GateClank, .ticks_later = 1};
+    const Cue tap{.sound = Sound::Tap};
+    std::vector<Cue> now = delay.Tick({clank, tap});
+    REQUIRE(now.size() == 1);
+    CHECK(now[0].sound == Sound::Tap);
+    CHECK(delay.Waiting() == 1);
+    now = delay.Tick({});
+    REQUIRE(now.size() == 1);
+    CHECK(now[0].sound == Sound::GateClank);
+    CHECK(delay.Waiting() == 0);
+    // Two ticks later.
+    delay.Tick({{.sound = Sound::GateClank, .ticks_later = 2}});
+    CHECK(delay.Tick({}).empty());
+    CHECK(delay.Tick({}).size() == 1);
+    // A run stopped while one waits: it's never heard.
+    delay.Tick({clank});
+    delay.Clear();
+    CHECK(delay.Waiting() == 0);
+    CHECK(delay.Tick({}).empty());
+  }
+
+  TEST_CASE("the Canal set: murk, the wash, a short harbour, gridlock") {
+    CHECK(Count(RunCues(LanternLevel("B*5"), SoundSet::Canal), Sound::Wash) == 1);
+    CHECK(Count(RunCues(LanternLevel("B*5"), SoundSet::Canal), Sound::Splash) == 0);
+    const std::vector<Cue> short_run = RunCues(LanternLevel("B*3"), SoundSet::Canal, {0.0f, 100.0f});
+    REQUIRE(Count(short_run, Sound::ShortQuay) == 1);
+    for (const Cue& cue : short_run) {
+      if (cue.sound == Sound::ShortQuay) CHECK(cue.volume == doctest::Approx(0.8f));
+    }
+    {
+      const Level level = LanternLevel("B*4");
+      Board board(level);
+      board.Start();
+      const Cues mud =
+          CuesFor({{.type = EventType::Collide, .node = NodeOf(level, "c")}}, level, board, SoundSet::Canal);
+      REQUIRE(mud.sounds.size() == 1);
+      CHECK(mud.sounds[0].sound == Sound::Murk);
+    }
+    // 3-6 with a lock alone: THREADLOCKED. The horns over the grind, once; no short horn as well.
+    const Level level = MakeLevel(kMillGateCanals);
+    Board board(level);
+    REQUIRE(board.Place(PieceOf(board, PieceType::Turnstile), NodeOf(level, "x")));
+    const Heard heard = HearRun(board, level, SoundSet::Canal);
+    CHECK(Count(heard.cues, Sound::Gridlock) == 1);
+    CHECK(Count(heard.cues, Sound::Grind) == 0);
+    CHECK(Count(heard.cues, Sound::ShortQuay) == 0);
+  }
+}

@@ -8,6 +8,7 @@
 #include "../src/ambience.h"
 #include "../src/apothecary_look.h"
 #include "../src/audio_synth.h"
+#include "../src/barges.h"
 #include "../src/rose_window.h"
 #include "doctest.h"
 
@@ -227,6 +228,89 @@ TEST_SUITE("audio") {
     CHECK(bed.finite);
     CHECK(bed.step < 0.02f);
     // Near silence where one bed hands over to the other (0.4 s in).
+    const float handover = Rms(bed.left, Ambience::kSwitchSeconds - 0.01f, Ambience::kSwitchSeconds + 0.01f);
+    CHECK(handover < 0.25f * Rms(bed.left, 2.0f, 3.0f));
+  }
+}
+
+TEST_SUITE("audio") {
+  TEST_CASE("the Canal set's voices") {
+    using synth::Sound;
+    using synth::SoundSet;
+    CHECK(synth::NoteFor(SoundSet::Canal, Color::Blue) == Sound::VibesNote);
+    CHECK(synth::NoteFor(SoundSet::Canal, Color::Amber) == Sound::BassNote);
+    CHECK(synth::NoteFor(SoundSet::Canal, Color::Green) == Sound::RhodesNote);  // World 3 has green harbours
+    CHECK(synth::NoteFor(SoundSet::Canal, Color::Rose) == Sound::NoteRose);
+    CHECK(synth::ChordFor(SoundSet::Canal, Color::Blue) == Sound::HarbourBlue);
+    CHECK(synth::ChordFor(SoundSet::Canal, Color::Amber) == Sound::HarbourAmber);
+    CHECK(synth::ChordFor(SoundSet::Canal, Color::Green) == Sound::HarbourGreen);
+    CHECK(synth::MudFor(SoundSet::Canal) == Sound::Murk);
+    CHECK(synth::PourFor(SoundSet::Canal) == Sound::LockBrush);
+    CHECK(synth::SolvedFor(SoundSet::Canal, false) == Sound::LastOrders);
+    CHECK(synth::SolvedFor(SoundSet::Canal, true) == Sound::RushHour);
+    CHECK(synth::JamFor(SoundSet::Canal) == Sound::Gridlock);
+    CHECK(synth::SpillFor(SoundSet::Canal) == Sound::Wash);
+    CHECK(synth::ShortFor(SoundSet::Canal) == Sound::ShortQuay);
+    CHECK(synth::MillFor(SoundSet::Canal) == Sound::MillClunk);
+    CHECK(synth::GateFor(SoundSet::Canal) == Sound::GateClank);
+    // The other sets keep theirs.
+    CHECK(synth::JamFor(SoundSet::Shop) == Sound::Grind);
+    CHECK(synth::SpillFor(SoundSet::Shop) == Sound::SpillWood);
+    CHECK(synth::SpillFor(SoundSet::Lantern) == Sound::Splash);
+    CHECK(synth::ShortFor(SoundSet::Shop) == Sound::ShortDull);
+    CHECK(synth::ShortFor(SoundSet::Workshop) == Sound::Count);
+    CHECK(synth::TurnFor(SoundSet::Shop) == Sound::RackClack);
+    CHECK(synth::MillFor(SoundSet::Lantern) == Sound::Click);
+    CHECK(synth::GateFor(SoundSet::Shop) == Sound::Click);
+  }
+
+  TEST_CASE("a harbour served: the horn as its lamps come on, quiet once the district's light has run") {
+    for (synth::Sound sound : {synth::Sound::HarbourBlue, synth::Sound::HarbourAmber, synth::Sound::HarbourGreen}) {
+      const std::string name = synth::SoundName(sound);
+      CAPTURE(name);
+      const std::vector<float> harbour = synth::Make(sound, kRate);
+      CHECK(Rms(harbour, 0.0f, 0.1f) > 0.05f);  // the horn, at once
+      CHECK(Rms(harbour, barges::kDistrictLength + 0.15f, 99.0f) < 0.1f * Rms(harbour, 0.1f, 1.0f));
+      CHECK(synth::Make(sound, kRate) == harbour);
+    }
+  }
+
+  TEST_CASE("the canal's solved runs: after the last horn, and Rush Hour's chord with the city's light") {
+    const std::vector<float> last = synth::Make(synth::Sound::LastOrders, kRate);
+    CHECK(Peak(std::vector<float>(last.begin(), last.begin() + static_cast<long>(barges::kWarmLength * kRate))) ==
+          0.0f);
+    const std::vector<float> rush = synth::Make(synth::Sound::RushHour, kRate);
+    const float full = barges::kCityLength;
+    CHECK(Rms(rush, full + 0.01f, full + 0.2f) > 1.5f * Rms(rush, full - 0.3f, full - 0.05f));
+    CHECK(Rms(rush, 0.0f, 0.5f) > 0.02f);  // the city answers at once
+    CHECK(rush.size() > last.size());
+  }
+
+  TEST_CASE("the canal's ambience: quiet, finite, click-free, a far horn") {
+    Ambience ambience(kRate);
+    ambience.SetBed(Ambience::Bed::Canal);
+    ambience.SetTarget(1.0f, 2.0f);
+    const Bed bed = RenderBed(ambience, 40.0f);
+    CHECK(bed.finite);
+    CHECK(bed.peak > 0.02f);
+    CHECK(bed.peak <= 0.3f);
+    CHECK(bed.step < 0.02f);
+    // The horn sounds at 11 s and 35 s: louder while it holds than just before.
+    for (float at : {Ambience::kHornFirst, Ambience::kHornFirst + Ambience::kHornSeconds}) {
+      CAPTURE(at);
+      CHECK(Rms(bed.left, at + 0.5f, at + 1.5f) > 1.3f * Rms(bed.left, at - 0.8f, at - 0.05f));
+    }
+  }
+
+  TEST_CASE("switching to the canal's bed fades through, without a click") {
+    Ambience ambience(kRate);
+    ambience.SetBed(Ambience::Bed::Shop);
+    ambience.SetTarget(1.0f, 0.5f);
+    RenderBed(ambience, 4.0f);
+    ambience.SetBed(Ambience::Bed::Canal);
+    const Bed bed = RenderBed(ambience, 4.0f);
+    CHECK(bed.finite);
+    CHECK(bed.step < 0.02f);
     const float handover = Rms(bed.left, Ambience::kSwitchSeconds - 0.01f, Ambience::kSwitchSeconds + 0.01f);
     CHECK(handover < 0.25f * Rms(bed.left, 2.0f, 3.0f));
   }

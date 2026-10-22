@@ -26,9 +26,11 @@ class Feedback {
   void SetSoundSet(synth::SoundSet set) { set_ = set; }
   synth::SoundSet GetSoundSet() const { return set_; }
 
-  // Sounds and vibrations for one tick's events, heard from the camera on a tall board.
+  // Sounds and vibrations for one tick's events, heard from the camera on a tall board (a cue held for later
+  // ticks plays on a later call: one call per tick).
   void OnEvents(const std::vector<Event>& events, const Level& level, const Board& board,
                 const Listener& listener = {});
+  void ClearPending() { delay_.Clear(); }  // a run stopped, restarted or stepped quietly: held cues go
 
   // The ambience bed: on while a level that has one is open, ducked to 60% while a run plays. Applied
   // once a frame by Update, so leaving one level for the next doesn't stop and restart it.
@@ -56,6 +58,7 @@ class Feedback {
   wlw::audio::Audio* audio_ = nullptr;
   std::array<wlw::audio::Audio::SoundId, static_cast<size_t>(synth::Sound::Count)> ids_{};
   synth::SoundSet set_ = synth::SoundSet::Workshop;
+  CueDelay delay_;
   bool sound_on_ = true, haptics_on_ = true, music_on_ = true;
   std::unique_ptr<AmbienceStream> ambience_;  // never freed while the mixer may read it (lives with the app)
   Ambience::Bed ambience_bed_ = Ambience::Bed::Lantern;

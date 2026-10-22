@@ -20,9 +20,14 @@
 // World 2, the Apothecary, is wood and brass: blue = a marimba, amber = a pizzicato string; a filled
 // order is one baked sound timed like its moment on screen (apothecary_look.h: the cork drops, the shop
 // bell rings, the PAID stamp thumps), mud a glop on wood, a spill a splash and drips off the counter.
+// World 3, the Canal City, is a late-night jazz set: blue = a vibraphone, amber = a plucked upright bass,
+// green = a Rhodes, chords are 6/9 voicings (C6/9 is the pentatonic itself: nothing clashes), the locks' pours
+// a brush on a snare; a served harbour is one baked sound timed like its light (barges.h: the horn as the
+// lamps come on, the chord, a brushed cymbal swelling with the district's light), a gate clanks when its
+// leaves swing (a tick after the mill), murk is two hulls bumping, a gridlock horns over the grinding stop.
 namespace threadlock::synth {
 
-enum class SoundSet : uint8_t { Workshop, Lantern, Shop };
+enum class SoundSet : uint8_t { Workshop, Lantern, Shop, Canal };
 
 enum class Sound : uint8_t {
   NoteBlue,
@@ -73,6 +78,22 @@ enum class Sound : uint8_t {
   // The city map's market square.
   CorkPop,   // a bottle in the shop window corked (Lean)
   ShopBell,  // the shop's door bell: a level's bottle done, the shop waking
+  // The Canal set (World 3).
+  VibesNote,     // blue: a vibraphone, C4, its motor's tremolo on
+  BassNote,      // amber: a plucked upright bass, C3
+  RhodesNote,    // green: a Rhodes, C4 (the tine and its quick bell)
+  HarbourBlue,   // a harbour served: the horn as its lamps come on, a vibes 6/9, a brushed cymbal with the light
+  HarbourAmber,  // the same on the bass, the horn a fifth up
+  HarbourGreen,  // the same on the Rhodes, the horn a tone up
+  LockBrush,     // a lock's pour: a brush on a snare (the locks' beats are the groove)
+  MillClunk,     // a mill's wheel turns a notch: a wooden clunk and an iron pawl
+  GateClank,     // a gate's leaves swing (pitched up open, down shut)
+  Murk,          // two hulls bump, the water churns murky
+  Wash,          // a harbour runs over: the wake slaps the quay
+  ShortQuay,     // a harbour short at the end: a lonely horn sagging, two falling bass notes
+  Gridlock,      // THREADLOCKED: horns honking into each other over the grinding stop
+  LastOrders,    // solved: a vibes run, the bass walking, brushes, the 6/9
+  RushHour,      // 3-15 solved: horns answer across the city as its light runs, the full chord at kCityLength
   Count,
 };
 
@@ -88,6 +109,12 @@ Sound ChordFor(SoundSet set, Color color);
 Sound MudFor(SoundSet set);
 Sound PourFor(SoundSet set);
 Sound SolvedFor(SoundSet set, bool grand);  // the payoff (grand = a two-screen finale)
+Sound JamFor(SoundSet set);                 // THREADLOCKED
+Sound SpillFor(SoundSet set);               // a cup runs over
+Sound ShortFor(SoundSet set);               // a cup short at the end of a run; Sound::Count = no sound
+Sound TurnFor(SoundSet set);                // a rack turns a notch
+Sound MillFor(SoundSet set);                // a mill's drop leaves (the wheel turns)
+Sound GateFor(SoundSet set);                // a gate flips
 inline Sound NoteFor(Color color) { return NoteFor(SoundSet::Workshop, color); }
 inline Sound ChordFor(Color color) { return ChordFor(SoundSet::Workshop, color); }
 float ClimbPitch(int step);
