@@ -42,9 +42,12 @@ src/level_io.{h,cpp}          level files (JSON) + the pars file; WriteLevel (to
 src/apothecary_look.{h,cpp}   World 2's shop in board units (tool + art): orders, the cork board and its slips, the counter,
                               jars + slates, the bell, rack bottles + clock, the moments' timing (paid, spill, short)
 src/canal_look.{h,cpp}        World 3's canal city in board units (tool + art): districts (harbours), canal width + round bends,
-                              the canal map's look checks (canal::Problems: bends, locks on straight stretches, crossings, rods)
+                              the canal map's look checks (canal::Problems: bends, locks on straight stretches, crossings, rods),
+                              the still city's generator (MakeCity; Rooftops, shared with the map's canal quarter)
 src/canal_art.{h,cpp}         World 3, The Canal City: the still city in tiles (roofs, canals, locks, harbours), the barges on
-                              the picture, the harbours' pills and berths, the lock leaves (shut, or swung as it pours)
+                              the picture, the harbours' pills and berths, the lock leaves (shut, or swung as it pours), the
+                              mill (wheel, rods' pulse) and gates, the payoff light and the moments (murk, gridlock, short, spill)
+src/canal_palette.h           World 3's night colours, shared by canal_art and the map's canal quarter
 src/barges.{h,cpp}            World 3's barges (plain C++, tested): a drop's pose along its canal, the landed barges' glides,
                               a lock's leaves
 src/polyline.{h,cpp}          paths (glm, header-only): round bends (RoundCorners), points by distance; the canals use it
@@ -61,10 +64,12 @@ src/map_screen.{h,cpp}        the city map (level select): input, camera, HUD (s
                               World 2's bottles, World 3's neighbourhoods and the light running down the canal), the top
                               bar + ambience following the district in view
 src/city_map.{h,cpp}          the map in plain C++ (tested): every position (lantern path, window panes, districts, lamps,
-                              pipes, the market square's bottles, globes and bell), hit tests, scroll targets, lights
-                              from progress, the seen record and WhatsNew
+                              pipes, the market square's bottles, globes and bell, the canal quarter's Grand Canal, harbours,
+                              roofs + neighbourhoods, bridges, quay lamps), hit tests, scroll targets, lights from progress,
+                              the seen record and WhatsNew
 src/city_art.{h,cpp}          the map's look: still art in pooled tiles, lit panes / lanterns / lamps / mist each frame;
-                              the market square (shop front, window bottles, globes, bell, cobbles, stalls, fountain)
+                              the market square (shop front, window bottles, globes, bell, cobbles, stalls, fountain); the
+                              canal quarter (plate, sluice, canal + lagoon, roofs lit by neighbourhood, harbours, buoys, barges)
 src/tile_pool.{h,cpp}         a tall still picture as a pool of screen-sized offscreen tiles (LanternArt, CityArt)
 src/stars.h                   StarBits + StarMap (level id -> bits)
 src/menus.{h,cpp}             overlays: settings (palettes), achievements, daily (streak, archive), Lab
@@ -82,7 +87,7 @@ src/apothecary_art.{h,cpp}    World 2, The Apothecary: still tiles (planked wall
                               shelves + stock, counter, cork board, jars, sink); overlay: copper lines with portholes, bottles,
                               the lazy-susan rack + clock, slips (Caveat), bell, the moments (cork, label, PAID stamp,
                               spill puddle, short ghost fill, unpaid) and the sludge mud
-src/workshop_art.{h,cpp}      the v2 look (worlds 3-4 until their art, the daily, the Lab) + shared machine parts
+src/workshop_art.{h,cpp}      the v2 look (World 4 until its art, the daily, the Lab) + shared machine parts
 src/art_shapes.{h,cpp}        drawing helpers: paths with round bends, Ribbon (seamless translucent bands), strokes,
                               glyphs, glows, brass (medallion, plate, bar)
 src/liquid.{h,cpp}            metaball liquid: blobs per drop from the rules' state -> SpriteBatch -> RGBA16F viewport
@@ -214,5 +219,6 @@ open everything, hints, wipe, ads).
 - Research competitors before pitching new game ideas.
 
 ## Next steps
-DESIGN.md §11 is the build order (worlds 1 and 2 are done, each with its district on the map). Next: World 3,
-the same steps as World 2 (mock, format, art, levels, sounds, district, docs), then World 4, the playtest and launch.
+DESIGN.md §11 is the build order (worlds 1, 2 and 3 are done, each with its district on the map). Next: World 4,
+The Mixing Hall, the same steps as worlds 2 and 3 (mock, format, art, levels, sounds, district, docs), then the
+playtest and launch.

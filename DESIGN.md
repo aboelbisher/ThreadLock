@@ -167,7 +167,7 @@ piece learnt in World 1 reads the same in World 4.
 quarter, the sanctum). Solving a level lights its corner of its district, so progress shows as the city
 waking up.
 
-**The map as built (the level select).** One tall picture read top to bottom, ~6.7 screens, drawn from the
+**The map as built (the level select).** One tall picture read top to bottom, ~7 screens, drawn from the
 approved mock (390 map units wide, scaled to the screen; `city_map.h` has every position): the tower at
 dawn (the sky brightens with your stars, 0-45), the great rose window, then a path of numbered lanterns
 winding down the tower face, one per level, 1-1 under the window and 1-15 at the bottom, with the three
@@ -177,8 +177,9 @@ number; the next level to play breathes. **The window is not a button, it's the 
 lights when level n is solved, its big pane in that level's colours, its two small panes for Lean and
 Swift, gold leading at 3 stars; the heart's three lobes light with the challenges. Its light spills onto
 the roofs at the tower's foot. Below, a pipe fills with stars toward World 2's brass valve ("20 ★"), then
-the market square (World 2, below); worlds 3-4 sleep in mist, each with a name plate and its levels as 18
-small lamps (playable once the gate is open, until each world gets its own art). **What's new since the last visit plays as an animation**
+the market square (World 2) and the canal quarter (World 3), both below; World 4 sleeps in mist with a name
+plate and its levels as 18 small lamps (playable once the gate is open, until it gets its own art). **What's
+new since the last visit plays as an animation**
 (the "seen" record in device.json): the view glides to the lantern, it lights and its stars pop with
 chimes, then glides up while the petal's panes light, and back down to the next lantern, which pulses; a
 gate's valve turns, light pours down the pipe (the view rides with it) and the district wakes. A tap
@@ -198,6 +199,22 @@ four-note run), corks (a pop), labels, gilds, and the bell rings; a challenge li
 the valve turns, light pours into the plate and the shop wakes (the sign lights, the mist lifts, the bell
 rings). While the open market fills the view, the top bar turns from night blue to the shop's dark wood
 and the ambience crossfades to the shop's.
+
+**The canal quarter (World 3's district, built 22 October from the approved mock).** The quarter from
+above at night, under its plate (Cormorant SC, "The Canal Quarter", "3 · Rush Hour" in teal). A sluice
+lets the Grand Canal in; it winds down in round bends, five rows of three harbours (every other row right
+to left), into the lagoon, where the three challenges are buoys (diamonds). Between the canal's rows:
+rooftops from the board's own city generator, two parks, bridges, quay lamps. A harbour is the level's
+button: a basin with the level's colours on its water once solved, its number, its stars under it. **The
+quarter is World 3's progress picture:** every roof belongs to its nearest harbour's neighbourhood, which
+lights when the level is solved (the roofs warm, the skylights glow), so the whole quarter is lit when the
+district is done; the canal is lit down to the next harbour to play (to the lagoon once 3-15 is solved),
+barges of both colours moving on it. News: the harbour's stars pop (a vibes note each), its neighbourhood
+lights out from it to the level's harbour chord, then the light runs on down the canal to the next
+harbour, the view riding its head; that harbour opens as the light reaches it and pulses. A buoy lights on
+its own. The gate: the valve turns, light pours into the plate, the mist lifts, then the light comes in at
+the sluice and runs to the first harbour, a harbour horn. The canal ambience plays while the open quarter
+fills the view (the top bar stays night blue). The map grew ~284 units for it (rows 160 apart, the lagoon).
 
 ### World 1 · First Light · The Lantern Works
 - **Place:** the glassworks at the top of the tower, at dawn.
@@ -269,18 +286,41 @@ and the ambience crossfades to the shop's.
 - **Sound:** late-night jazz, double bass, harbour horns. **Finale:** Rush Hour, the whole city.
 - **Palette:** night #0B111D, canal #0A2230, slate roofs #46526C, lamp #FFC46A, red lamp #FF5A4A; accent
   #7FE3D8, EDIT #A8F2EA → #2FB5A8; street and district names in Cormorant SC.
-- **Level shapes:** Old Bridge (two canals cross once: bridge it or time it); The Roundabout (a ring
-  where traffic can meet itself coming round); Two Mills (each mill opens the other's gate: who goes
-  first?); Harbour Mouth (three canals funnel into one harbour). Drawn: 3-6 The Mill Gate, "Each amber
-  barge turns the mill. The mill flips the blue gate.", districts Lantern Row and Old Quay, ≤ 2 pieces,
-  ≤ 0:30.
-- **Board grammar** (format built 21 October; the art comes next): each harbour (cup) names its
-  `"district"`, which makes the level a canal map: canals run straight across or up and down with round
-  bends (28 wide, bends of 16), locks, mills and gates sit on straight stretches, canals never run
-  through a node, alongside each other or across one another except at a crossing (an aqueduct = a
-  crossing with a locked bridge); a mill's rods run along the streets to its gates, with optional bends
-  (`"gears": [["g", [[250, 360]]]]`). 3-6 The Mill Gate is in: one solution (a lock on the crossing + a short
-  tank on amber's lock), Lean 2, 0:14; nothing = murk, a lock alone = gridlock.
+- **Board grammar** (built 21-22 October): each harbour (cup) names its `"district"`, which makes the
+  level a canal map: canals run straight across or up and down with round bends (28 wide, bends of 16),
+  locks, mills and gates sit on straight stretches, canals never run through a node, alongside each other
+  or across one another except at a crossing (an aqueduct = a crossing with a locked bridge); a mill's
+  rods run along the streets to its gates, with optional bends (`"gears": [["g", [[250, 360]]]]`). District
+  names are unique across the world and at most 14 letters. The still city (rooftops, a park, quay lamps,
+  canals with banks, locks, harbour basins, junctions with bollards, aqueducts) is drawn once in tiles;
+  each drop is a barge of light on its canal, a harbour's barges glide into their berths, a lock's queue
+  moors in it and its leaves swing as it pours; the mill's wheel turns a notch a barge, a pulse runs down
+  its rods and the gates' leaves swing with their lamps red or green. District pills: glyph, name, count.
+- **Moments:** a served harbour lights its lamps and a warm glow, and the district's light runs out from
+  it over the roofs nearest it; murk = a cloud and a stain at the junction; gridlock (THREADLOCKED) = red
+  lamps and the loop of waiting traced; short = ghost berths; spill = a raft at the mouth; a wrong barge
+  gets a red edge. A solved finale lights every roof on both screens from its payoff point.
+- **Sound (built 22 October):** a late-night jazz set: blue = a vibraphone, amber = a plucked upright
+  bass, green = a Rhodes, 6/9 chords; a lock's pour is a brush on a snare; a served harbour = a horn as its
+  lamps come on, the chord, a brushed cymbal with the light; the mill clunks and its gate clanks a tick
+  later. The canal ambience: water at the quays, brushes, a bass root and fifth, a far horn every 24 s.
+- **Levels (built 22 October):** the idea is traffic: who goes first, and when waiting turns into
+  gridlock. 3-1 Old Bridge (two canals cross: a bridge lifts one over the other); 3-2 Bridge or Wait (two
+  crossings, one bridge: the other is timed); 3-3 Merge Lane (two canals become one, then each barge home:
+  a lock on the merge, a separator after it); 3-4 Harbour Mouth (three canals, one harbour, the rest sail
+  on: an overflow); 3-5 The Narrows (two crossings close together: lock both and see); 3-6 The Mill Gate
+  (each amber barge turns the mill, the mill flips the blue gate; one solution, Lean 2, 0:14; nothing =
+  murk, a lock alone = gridlock); 3-7 Every Other Barge (a blue barge opens the gate, the next shuts it);
+  3-8 The Roundabout (a ring: who gives way?); 3-9 Two Mills (each mill works the other's gate: who goes
+  first?); 3-10 The Long Queue (a queue at a shut gate grows: how far back?); 3-11 The Harbourmaster (a
+  repair: two locks set, traffic stands still, move one); 3-12 Interchange (three canals, three crossings,
+  one bridge; one solution); 3-13 Three Locks (three crossings in a ring, each waiting for the next); 3-14 Signal Box (blue works amber's gate, amber works green's; one solution).
+  **Finale 3-15 Rush Hour**, two screens: three locks, the Old Bridge and the Roundabout with Bell Wharf on
+  the first; the Mill Gate and the Harbour Mouth (an overflow into the Grand Basin and Old Quay) on the
+  second. One bridge for two crossings; Lean 4 (the other way round, blue's queue at the shut gate locks
+  the city). Challenges: 3-C1 Gridlock (four crossings round one block, no bridges; one solution), 3-C2
+  Zipper (a fast lane and a slow one share a lock: blue, amber, blue...), 3-C3 Clockwork (amber starts the
+  clock, each mill opens the next gate round). Every placement of every level is tested to end.
 
 ### World 4 · The Mixing Hall · The Sanctum
 - **Place:** the alchemists' sanctum, an obsidian table lit by candles.
@@ -380,7 +420,10 @@ committed after the owner's OK, in small commits:
    board art, the levels, the sounds, the district on the map, these docs. **World 2 done (20 October):**
    the Apothecary (shelves grammar, copper lines with portholes, rack + clock, the paid / spill / short
    moments), 14 levels + 3 challenges + Market Day, its marimba / pizzicato / bell sounds and shop
-   ambience, the market square district. Next: World 3.
+   ambience, the market square district. **World 3 done (22 October):** the Canal City (canal maps with
+   districts, barges, locks, mills with rods and gates; murk, gridlock, short, spill, wrong-colour moments),
+   14 levels + 3 challenges + Rush Hour, its late-night jazz sounds and canal ambience, the canal quarter
+   district. Next: World 4.
 4. Playtest World 1 with 5–10 people; adjust levels with the tool.
 5. Launch: Threadlock's own AdMob app and units, analytics, store page, closed test. Then worlds 5–8 as
    live updates.
