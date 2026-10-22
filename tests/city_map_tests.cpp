@@ -285,6 +285,13 @@ TEST_SUITE("city map") {
     CHECK(CanalTrail(0) == doctest::Approx(CanalAt(0)));
     CHECK(CanalTrail(16) == doctest::Approx(CanalLength()));
     CHECK(CanalTrail(-1) == doctest::Approx(CanalLength()));
+    // The light's head runs down the canal through each harbour in turn, at an even pace.
+    for (int j = 0; j < 15; ++j) CHECK(Distance(CanalPoint(CanalAt(j)), lamps[j]) < 0.01f);
+    CHECK(Distance(CanalPoint(0.0f), canal.front()) < 0.01f);
+    CHECK(Distance(CanalPoint(CanalLength() + 50.0f), canal.back()) < 0.01f);
+    CHECK(PourSeconds(0.0f, CanalAt(0)) == doctest::Approx(0.4f + 0.0022f * 278.0f));
+    CHECK(PourSeconds(CanalAt(2), CanalAt(3)) == doctest::Approx(0.4f + 0.0022f * 160.0f));
+    CHECK(PourSeconds(CanalAt(14), CanalTrail(15)) < 1.0f);
     // The gate's stub runs into the plate; the lagoon feeds World 4's gate.
     CHECK(LinkPipe(4).a.y == doctest::Approx(kLagoon.y1));
     CHECK(LinkPipe(4).a.x == 195.0f);

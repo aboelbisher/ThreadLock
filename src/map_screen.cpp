@@ -47,6 +47,10 @@ float Clamp01(float v) { return std::clamp(v, 0.0f, 1.0f); }
 float Midi(int note) { return std::exp2(static_cast<float>(note - 60) / 12.0f); }
 float EaseInOut(float k) { return k < 0.5f ? 2.0f * k * k : 1.0f - std::pow(-2.0f * k + 2.0f, 2.0f) / 2.0f; }
 bool Inside(const Rect& r, glm::vec2 p) { return p.x >= r.min.x && p.x <= r.max.x && p.y >= r.min.y && p.y <= r.max.y; }
+// The view riding the light down the canal: its head where a harbour's news plays (city::QuarterScroll).
+float RideScroll(float along, float view) {
+  return city::ClampScroll(city::CanalPoint(along).y - view * (470.0f / city::kMockView), view);
+}
 
 void Pill(wlw::ui::Canvas& c, const Rect& r, const Rgba& fill, const Rgba& border) {
   const float corner = r.Size().y * 0.5f;
@@ -179,6 +183,7 @@ void MapScreen::Start(float view) {
     for (auto& lamp : lamps) lamp.fill(kNever);
   }
   for (auto& bottle : bottle_at_) bottle.fill(kNever);
+  hood_at_.fill(kNever);
   stars_shown_ = 0;
   for (const city::WorldLevels& w : levels_) {
     auto lit = [&](const std::string& id, int index) {
@@ -192,12 +197,12 @@ void MapScreen::Start(float view) {
     for (size_t i = 0; i < w.challenges.size(); ++i) lit(w.challenges[i], first_challenge + static_cast<int>(i));
   }
   for (int w = 2; w <= 4; ++w) gate_shown_[static_cast<size_t>(w - 2)] = seen.gates >= w;
+  CanalRest();
 
   const Level* current = CurrentLevel();
   const Level* target = focus_ && !dev_stars_ ? focus_ : current;
   if (news.Empty()) {
-    SnapTo(cv_scroll.Get() >= 0.0f ? city::ClampScroll(cv_scroll.Get(), view)
-                                   : LanternY(target) - view * (560.0f / city::kMockView));
+    SnapTo(cv_scroll.Get() >= 0.0f ? city::ClampScroll(cv_scroll.Get(), view) : ScrollFor(target));
     return;
   }
 
@@ -210,6 +215,7 @@ void MapScreen::Start(float view) {
       Show(reveal.world, reveal.index, reveal.fresh, kLongAgo);
     }
     news.reveals.erase(news.reveals.begin(), news.reveals.begin() + static_cast<long>(quiet));
+    CanalRest();
   }
 
   // Where the view starts: the window on the first visit, else the first news.
@@ -242,7 +248,8 @@ void MapScreen::Start(float view) {
     if (std::find(news.gates.begin(), news.gates.end(), world) != news.gates.end()) {
       glide(city::GateScroll(world, view), 1.0f, 0.3f);
       t = OpenGate(world, t);
-      planned = -1.0f;  // the pour moved the view
+      // The pour moved the view (in the canal quarter, down to the first harbour to play).
+      planned = world == 3 ? RideScroll(city::CanalTrail(NextLamp()), view) : -1.0f;
     }
     for (const city::Reveal& r : news.reveals) {
       if (r.world != world) continue;
@@ -264,6 +271,9 @@ void MapScreen::Start(float view) {
       } else {
         glide(scroll_for(r), 0.8f, 0.2f);
         t = LightLamp(r.world, r.index, r.fresh, t);
+        // A harbour's solve ran the light on down the canal, the view with it.
+        if (r.world == 3 && (r.fresh & kSolveStar) && r.index < 15)
+          planned = RideScroll(city::CanalTrail(r.index + 1), view);
       }
     }
   }
@@ -279,7 +289,7 @@ void MapScreen::Start(float view) {
   }
   if (y >= 0.0f) {
     const float before = t;
-    glide(y - view * (560.0f / city::kMockView), 0.9f, 0.05f);
+    glide(ScrollFor(current), 0.9f, 0.05f);
     if (t == before) t += 0.3f;
   }
   if (next >= 0) {
@@ -331,7 +341,7 @@ float MapScreen::LightPanes(int lantern, int fresh, float start) {
 }
 
 float MapScreen::LightLamp(int world, int lamp, int fresh, float start) {
-  if (world != 2) {
+  if (world != 2 && world != 3) {
     At(start, [this, world, lamp, fresh] {
       Show(world, lamp, fresh, clock_);
       stars_shown_ += StarsIn(fresh);
@@ -339,22 +349,78 @@ float MapScreen::LightLamp(int world, int lamp, int fresh, float start) {
     });
     return start + 0.7f;
   }
-  // The market's lamp lights with its first star, then its stars pop, a marimba note each (its bottle
-  // waits for FillBottle).
+  // The lamp lights with its first star, then its stars pop, a note each: the market's on the marimba (its
+  // bottle waits for FillBottle), the quarter's on the vibes.
+  const synth::Sound note = world == 2 ? synth::Sound::MarimbaNote : synth::Sound::VibesNote;
   float t = start;
   int j = 0;
   for (int k = 0; k < 3; ++k) {
     if (!(fresh & (1 << k))) continue;
     const float pitch = Midi(64 + 3 * j + (k == 0 ? 0 : 4));
-    At(t, [this, lamp, k, pitch] {
-      Show(2, lamp, 1 << k, clock_, false);
+    At(t, [this, world, lamp, k, note, pitch] {
+      Show(world, lamp, 1 << k, clock_, false);
       ++stars_shown_;
-      app_.GetFeedback().Play(synth::Sound::MarimbaNote, 0.6f, pitch);
+      app_.GetFeedback().Play(note, 0.6f, pitch);
     });
     t += 0.26f;
     ++j;
   }
-  return t + 0.4f;
+  if (world == 2 || !(fresh & kSolveStar) || lamp >= 15) return t + 0.4f;  // a buoy: its own light only
+
+  // A harbour's solve: its neighbourhood lights out from it (the level's harbour sound, by its first colour), then
+  // the light runs on down the canal to the next harbour (from the last one, into the lagoon), which pulses.
+  const size_t n = static_cast<size_t>(lamp);
+  const std::vector<Color>& colors = frame_.quarter.colors[n];
+  const synth::Sound harbour = synth::ChordFor(synth::SoundSet::Canal, colors.empty() ? Color::Blue : colors.front());
+  t += 0.04f;
+  At(t, [this, n, harbour] {
+    hood_at_[n] = clock_;
+    app_.GetFeedback().Play(harbour, 0.7f);
+  });
+  t += 1.4f;
+  t += PourCanal(city::CanalAt(lamp), city::CanalTrail(lamp + 1), t);
+  const size_t next = n + 1;
+  At(t, [this, next] {
+    app_.GetFeedback().Play(synth::Sound::VibesNote, 0.6f, Midi(72));
+    if (lamps_[1][next]) {
+      pulse_ = static_cast<int>(next);
+      pulse_world_ = 3;
+      pulse_until_ = clock_ + 1.8f;
+    }
+  });
+  return t + 0.5f;
+}
+
+float MapScreen::PourCanal(float from, float to, float delay) {
+  const float seconds = city::PourSeconds(from, to);
+  At(delay, [this, from, to, seconds] {
+    canal_ = {from, to, clock_, seconds};
+    // The view rides the light's head, easing in from wherever it was.
+    const float offset = camera_.Y() - RideScroll(from, view_), t0 = clock_;
+    glide_ = {};
+    glide_.on = true;
+    glide_.follow = [this, offset, t0](float now) {
+      return RideScroll(CanalShown(), view_) + offset * std::max(0.0f, 1.0f - (now - t0) / 0.6f);
+    };
+  });
+  At(delay + seconds, [this] { glide_ = {}; });
+  return seconds;
+}
+
+void MapScreen::CanalRest() {
+  const float lit = gate_shown_[1] ? city::CanalTrail(NextLamp()) : 0.0f;
+  canal_ = {lit, lit, 0.0f, 1.0f};
+}
+
+float MapScreen::CanalShown() const {
+  return canal_.from + (canal_.to - canal_.from) * Clamp01((clock_ - canal_.t0) / canal_.seconds);
+}
+
+int MapScreen::NextLamp() const {
+  for (int j = 0; j < 15; ++j) {
+    if (lamp_at_[1][static_cast<size_t>(j)][0] > clock_) return j;
+  }
+  return -1;
 }
 
 // In the shop window: the bottle fills in the level's colours (a marimba run), Lean corks it, Swift labels
@@ -432,10 +498,27 @@ float MapScreen::OpenGate(int world, float start) {
     if (world == 2) {  // the shop wakes: its sign lights, the mist lifts, the door bell rings
       bell_at_ = clock_;
       app_.GetFeedback().Play(synth::Sound::ShopBell, 0.7f);
-    } else {
+    } else if (world != 3) {
       app_.GetFeedback().Play(synth::Sound::Chime, 0.7f, 1.0f);
     }
   });
+  if (world == 3) {
+    // The quarter wakes (its plate lights, the mist lifts), then the light runs in at the sluice and down the
+    // canal to the first harbour to play, which pulses to a horn.
+    t += 0.6f;
+    const int next = NextLamp();
+    t += PourCanal(0.0f, city::CanalTrail(next), t);
+    const size_t pulse = next < 0 ? 15 : static_cast<size_t>(next);
+    At(t, [this, pulse] {
+      app_.GetFeedback().Play(synth::Sound::HarbourBlue, 0.7f);
+      if (lamps_[1][pulse]) {
+        pulse_ = static_cast<int>(pulse);
+        pulse_world_ = 3;
+        pulse_until_ = clock_ + 1.8f;
+      }
+    });
+    return t + 0.6f;
+  }
   return t + (world == 2 ? 1.6f : 0.9f);
 }
 
@@ -485,6 +568,7 @@ void MapScreen::Show(int world, int index, int bits, float when, bool window) {
       float& lamp = lamp_at_[static_cast<size_t>(world - 2)][i][k];
       lamp = std::min(lamp, when);
       if (world == 2 && window) bottle_at_[i][k] = std::min(bottle_at_[i][k], when);
+      if (world == 3 && window && k == 0 && i < hood_at_.size()) hood_at_[i] = std::min(hood_at_[i], when);
     }
   }
   // All three stars seal the bottle in gold, with the last of them.
@@ -500,8 +584,15 @@ void MapScreen::Skip() {
   busy_until_ = 0.0f;
   pulse_ = -1;
   ShowAll();
-  const Level* current = CurrentLevel();
-  SnapTo(LanternY(current) - view_ * (560.0f / city::kMockView));
+  CanalRest();
+  SnapTo(ScrollFor(CurrentLevel()));
+}
+
+float MapScreen::ScrollFor(const Level* level) const {
+  for (int j = 0; j < city::kDistrictLamps && level; ++j) {
+    if (lamps_[1][static_cast<size_t>(j)] == level) return city::QuarterScroll(j, view_);
+  }
+  return city::ClampScroll(LanternY(level) - view_ * (560.0f / city::kMockView), view_);
 }
 
 // ---- Frames ----
@@ -541,10 +632,16 @@ void MapScreen::Update(float dt) {
   // The sound and the top bar follow the district in view.
   if (!started_) return;
   shop_tint_ = std::clamp(shop_tint_ + (MarketInView() ? dt : -dt) * 2.5f, 0.0f, 1.0f);
-  app_.GetFeedback().SetAmbience(true, true, shop_tint_ > 0.5f ? Ambience::Bed::Shop : Ambience::Bed::Lantern);
+  // (The canal quarter keeps the night-blue bar; only its sound changes.)
+  const Ambience::Bed bed = shop_tint_ > 0.5f ? Ambience::Bed::Shop
+                            : QuarterInView() ? Ambience::Bed::Canal
+                                              : Ambience::Bed::Lantern;
+  app_.GetFeedback().SetAmbience(true, true, bed);
 }
 
 bool MapScreen::MarketInView() const { return gate_shown_[0] && city::DistrictAt(camera_.Y() + view_ * 0.5f) == 2; }
+
+bool MapScreen::QuarterInView() const { return gate_shown_[1] && city::DistrictAt(camera_.Y() + view_ * 0.5f) == 3; }
 
 bool MapScreen::LockedShown(int lantern) const {
   // Locked as drawn: the lantern before it hasn't lit yet (so a solve unlocks the next one as it lights).
@@ -658,10 +755,10 @@ void MapScreen::Fill(CityFrame& frame, glm::vec2 screen, float scale) {
   market.awake = !square.open ? 0.0f : wake_at_[0] > 0.0f ? Clamp01((clock_ - wake_at_[0]) / 1.6f) : 1.0f;
 
   // The canal quarter: its lamps light like the market's; a lit harbour's neighbourhood spreads out from it, and
-  // the canal is lit down to the next harbour to play (all of it once the main path is done).
+  // the canal is lit down to the next harbour to play (all of it once the main path is done), the light running on
+  // after a solve.
   CityFrame::Quarter& quarter = frame.quarter;
   const CityFrame::District& canals = frame.districts[1];
-  int next = -1;
   for (int j = 0; j < city::kDistrictLamps; ++j) {
     const size_t n = static_cast<size_t>(j);
     quarter.locked[n] = !canals.open || !lamps_[1][n] || LampLockedShown(3, j);
@@ -669,13 +766,10 @@ void MapScreen::Fill(CityFrame& frame, glm::vec2 screen, float scale) {
       quarter.lamp[n][k] = alpha(lamp_at_[1][n][k]);
       quarter.lamp_flash[n][k] = flash(lamp_at_[1][n][k]);
     }
-    if (j < 15) {
-      quarter.hood[n] = Clamp01((clock_ - lamp_at_[1][n][0]) / 1.4f);
-      if (next < 0 && lamp_at_[1][n][0] > clock_) next = j;
-    }
+    if (j < 15) quarter.hood[n] = Clamp01((clock_ - hood_at_[n]) / 1.4f);
   }
-  quarter.trail = canals.open ? city::CanalTrail(next) : 0.0f;
-  quarter.running = false;
+  quarter.trail = canals.open ? CanalShown() : 0.0f;
+  quarter.running = canal_.to != canal_.from && clock_ >= canal_.t0 && clock_ < canal_.t0 + canal_.seconds;
   quarter.breathe = canals.current;
   quarter.pulse = false;
   if (pulse_ >= 0 && pulse_world_ == 3 && clock_ < pulse_until_) {
@@ -689,6 +783,8 @@ bool MapScreen::LampLockedShown(int world, int lamp) const {
   const auto& lamps = lamp_at_[static_cast<size_t>(world - 2)];
   auto shown = [&](int j) { return lamps[static_cast<size_t>(j)][0] <= clock_; };
   if (shown(lamp)) return false;
+  // The canal quarter's next harbour opens as the light down the canal reaches it (the buoys: the lagoon).
+  if (world == 3 && CanalShown() + 0.5f < (lamp < 15 ? city::CanalAt(lamp) : city::CanalLength())) return true;
   if (lamp < city::kDistrictLamps - city::kLobes) return lamp > 0 && !shown(lamp - 1);
   return !shown(city::kDistrictLamps - city::kLobes - 1);
 }

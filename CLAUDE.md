@@ -58,7 +58,8 @@ src/threadlock_app.{h,cpp}    the one System: services (catalog, progress, feedb
 src/level_screen.{h,cpp}      the level screen: drag/tap/long-press, run loop (1x/2x/4x), result card, Show me, hints
 src/map_screen.{h,cpp}        the city map (level select): input, camera, HUD (stars, hints, trophies, settings; Daily +
                               Lab round buttons), the news since the last visit as animations (glides, lights, gates,
-                              World 2's bottles), the top bar + ambience following the district in view
+                              World 2's bottles, World 3's neighbourhoods and the light running down the canal), the top
+                              bar + ambience following the district in view
 src/city_map.{h,cpp}          the map in plain C++ (tested): every position (lantern path, window panes, districts, lamps,
                               pipes, the market square's bottles, globes and bell), hit tests, scroll targets, lights
                               from progress, the seen record and WhatsNew

@@ -22,7 +22,8 @@
 // What's new since the map was last seen (city::WhatsNew against the record in device.json) plays as
 // an animation: the view glides to the lantern, it lights and its stars pop, the window's petal lights
 // (a glide up to it if it's off screen), then the next lantern breathes; a gate's valve turns and light
-// pours down to the district's first lamp. A tap skips it.
+// pours down to the district's first lamp. In the canal quarter a solve lights the harbour's neighbourhood,
+// then the light runs on down the canal to the next harbour, the view riding it. A tap skips it.
 namespace threadlock {
 
 class MapScreen : public wlw::app::Screen {
@@ -52,13 +53,22 @@ class MapScreen : public wlw::app::Screen {
   void Skip();  // a tap during an animation: everything as it ends
   void ShowAll();
   // A level's stars `bits` shown from `when` on (its lantern and panes, or its lamp and, in the market, its bottle).
-  void Show(int world, int index, int bits, float when, bool window = true);  // window: World 2's bottle too
+  // window: World 2's bottle, World 3's neighbourhood too.
+  void Show(int world, int index, int bits, float when, bool window = true);
   bool Busy() const { return clock_ < busy_until_; }
   float Chime();  // the next note up the scale (a pitch)
+  // World 3's canal: the light runs from `from` to `to` (along it) starting at clock_ + `delay`, the view riding its
+  // head; returns its seconds. CanalRest: the canal lit down to the next lamp shown (none while the gate is shut).
+  float PourCanal(float from, float to, float delay);
+  void CanalRest();
+  float CanalShown() const;                   // how far the canal is lit now
+  int NextLamp() const;                       // World 3's first harbour not lit yet, -1 if all are
+  float ScrollFor(const Level* level) const;  // the view that shows a level's lantern or lamp
 
   bool LockedShown(int lantern) const;
-  bool LampLockedShown(int world, int lamp) const;  // worlds 2 and 3, the same way
+  bool LampLockedShown(int world, int lamp) const;  // worlds 2 and 3, the same way (World 3: once the canal reaches it)
   bool MarketInView() const;                        // the open market square fills the middle of the view
+  bool QuarterInView() const;                       // and the canal quarter
   const StarMap& Stars() const;                     // the saved stars, or tl.stars' (dev)
   const Level* CurrentLevel() const;                // the next level to play, by Stars()
   float LanternY(const Level* level) const;         // map y of a level's lantern or lamp, < 0 if none
@@ -98,6 +108,10 @@ class MapScreen : public wlw::app::Screen {
   // The market's shop window: per level its bottle filled, corked, labelled, sealed in gold (a challenge: its globe).
   std::array<std::array<float, 4>, city::kDistrictLamps> bottle_at_{};
   float bell_at_ = kLongAgo;
+  std::array<float, 15> hood_at_{};  // the canal quarter: when each harbour's neighbourhood began to light
+  struct CanalPour {
+    float from = 0.0f, to = 0.0f, t0 = 0.0f, seconds = 1.0f;  // at rest: from == to
+  } canal_;
   std::array<bool, 3> gate_shown_{};
   float shop_tint_ = 0.0f;  // the top bar and the ambience follow the district in view: 1 = the market's
   std::array<float, 3> valve_at_{}, pour_at_{}, wake_at_{};

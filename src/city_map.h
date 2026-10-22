@@ -170,6 +170,10 @@ float CanalAt(int lamp);
 // How far the canal is lit while `lamp` is the next to play: down to it (-1, or a challenge: all the way to the
 // lagoon).
 float CanalTrail(int lamp);
+// The point `length` along the canal's corners (a harbour stands at its CanalAt); past the end: the end.
+Vec2 CanalPoint(float length);
+// Seconds for the light to run down the canal from `from` to `to` (map units along it).
+float PourSeconds(float from, float to);
 
 struct QuarterRoof {
   canal::Roof roof;

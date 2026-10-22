@@ -430,6 +430,13 @@ float CanalTrail(int lamp) {
   return std::min(CanalLength(), CanalAt(lamp));
 }
 
+Vec2 CanalPoint(float length) {
+  const glm::vec2 p = CanalPath().PointAt(std::clamp(length, 0.0f, CanalLength()));
+  return {p.x, p.y};
+}
+
+float PourSeconds(float from, float to) { return 0.4f + 0.0022f * std::fabs(to - from); }
+
 const std::vector<QuarterRoof>& QuarterRoofs() {
   static const std::vector<QuarterRoof> roofs = [] {
     const std::vector<Vec2>& canal = GrandCanal();
