@@ -4,71 +4,72 @@
   "accent": "R",
   "levels": [
     {
-      "id": "3-1", "name": "Overpass", "intro": "A bridge lifts one lane over the other.",
+      "id": "3-1", "name": "Old Bridge", "intro": "Two canals cross. Lift one over the other.",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [90, 50], "beads": "B*6", "beat": 6},
-        {"id": "sa", "kind": "spout", "at": [270, 50], "beads": "A*6", "beat": 6},
-        {"id": "x", "kind": "cross", "at": [180, 260], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [270, 490], "want": "B", "count": 6},
-        {"id": "ca", "kind": "cup", "at": [90, 490], "want": "A", "count": 6}
+        {"id": "sb", "kind": "spout", "at": [60, 40], "beads": "B*6", "beat": 4},
+        {"id": "sa", "kind": "spout", "at": [180, 40], "beads": "A*6", "beat": 4, "start": 3},
+        {"id": "x", "kind": "cross", "at": [180, 250], "socket": true},
+        {"id": "cb", "kind": "cup", "at": [300, 480], "want": "B", "count": 6, "district": "Bridge Street"},
+        {"id": "ca", "kind": "cup", "at": [60, 480], "want": "A", "count": 6, "district": "Chapel Yard"}
       ],
-      "pipes": [["sb", "x", [[90, 160]]], ["sa", "x", [[270, 160]]], ["x", "cb", [[270, 380]]], ["x", "ca", [[90, 380]]]],
+      "pipes": [["sb", "x", [[60, 250]]], ["x", "cb", [[300, 250]]], ["sa", "x"], ["x", "ca", [[180, 380], [60, 380]]]],
       "tray": ["bridge"]
     },
     {
-      "id": "3-2", "name": "One Bridge", "intro": "Two crossings, one bridge.",
+      "id": "3-2", "name": "Bridge or Wait", "intro": "Two crossings, one bridge.",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [90, 40], "beads": "B*6", "beat": 12},
-        {"id": "sa", "kind": "spout", "at": [270, 40], "beads": "A*6", "beat": 12},
-        {"id": "t", "kind": "pass", "at": [270, 100]},
-        {"id": "x1", "kind": "cross", "at": [180, 190], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [180, 380], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [80, 505], "want": "B", "count": 6},
-        {"id": "ca", "kind": "cup", "at": [280, 505], "want": "A", "count": 6}
+        {"id": "sb", "kind": "spout", "at": [120, 40], "beads": "B*6", "beat": 4},
+        {"id": "sa", "kind": "spout", "at": [330, 180], "beads": "A*6", "beat": 3},
+        {"id": "pb", "kind": "pass", "at": [120, 110]},
+        {"id": "pa", "kind": "pass", "at": [260, 180]},
+        {"id": "x1", "kind": "cross", "at": [120, 180], "socket": true},
+        {"id": "x2", "kind": "cross", "at": [120, 300], "socket": true},
+        {"id": "cb", "kind": "cup", "at": [120, 490], "want": "B", "count": 6, "district": "Ropewalk"},
+        {"id": "ca", "kind": "cup", "at": [270, 490], "want": "A", "count": 6, "district": "Tanners Row"}
       ],
-      "pipes": [["sb", "x1", [[90, 110]]], ["sa", "t"], ["t", "x1"], ["x1", "x2", [[280, 285]]], ["x1", "x2", [[80, 285]]], ["x2", "cb", [[80, 455]]], ["x2", "ca", [[280, 455]]]],
+      "pipes": [["sb", "pb"], ["pb", "x1"], ["x1", "x2"], ["x2", "cb"], ["sa", "pa"], ["pa", "x1"], ["x1", "x2", [[50, 180], [50, 300]]], ["x2", "ca", [[270, 300]]]],
       "tray": ["bridge", "tank4"]
     },
     {
-      "id": "3-3", "name": "Merge Lane", "intro": "Two pipes become one. Different colours must take turns.",
+      "id": "3-3", "name": "Merge Lane", "intro": "Two canals become one. Then each barge home.",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [80, 40], "beads": "B*5", "beat": 12},
-        {"id": "sa", "kind": "spout", "at": [280, 40], "beads": "A*5", "beat": 12},
+        {"id": "sb", "kind": "spout", "at": [90, 40], "beads": "B*6", "beat": 3},
+        {"id": "sa", "kind": "spout", "at": [270, 40], "beads": "A*6", "beat": 3, "start": 2},
         {"id": "m", "kind": "merge", "at": [180, 200], "socket": true},
-        {"id": "f", "kind": "fork", "at": [180, 425], "socket": true},
-        {"id": "cl", "kind": "cup", "at": [90, 512], "want": "B", "count": 5},
-        {"id": "cr", "kind": "cup", "at": [270, 512], "want": "A", "count": 5}
+        {"id": "f", "kind": "fork", "at": [180, 380], "socket": true},
+        {"id": "cb", "kind": "cup", "at": [90, 490], "want": "B", "count": 6, "district": "Fishmarket"},
+        {"id": "ca", "kind": "cup", "at": [270, 490], "want": "A", "count": 6, "district": "Salt Lane"}
       ],
-      "pipes": [["sb", "m", [[80, 140]]], ["sa", "m", [[280, 140]]], ["m", "f", [[180, 250], [120, 290], [240, 340], [180, 385]]], ["f", "cl", [[90, 470]]], ["f", "cr", [[270, 470]]]],
+      "pipes": [["sb", "m", [[90, 200]]], ["sa", "m", [[270, 200]]], ["m", "f"], ["f", "cb", [[90, 380]]], ["f", "ca", [[270, 380]]]],
       "tray": ["turnstile", "separator"]
     },
     {
-      "id": "3-4", "name": "Shared Pipe", "intro": "One pipe can carry two colours if they take turns.",
+      "id": "3-4", "name": "Harbour Mouth", "intro": "Three canals, one harbour. The rest sail on.",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [80, 40], "beads": "B*4", "beat": 8},
-        {"id": "sa", "kind": "spout", "at": [280, 40], "beads": "A*4", "beat": 8},
-        {"id": "pb", "kind": "pass", "at": [80, 120]},
-        {"id": "pa", "kind": "pass", "at": [280, 120]},
-        {"id": "m", "kind": "merge", "at": [180, 225]},
-        {"id": "f", "kind": "fork", "at": [180, 430], "socket": true},
-        {"id": "cl", "kind": "cup", "at": [90, 515], "want": "B", "count": 4},
-        {"id": "cr", "kind": "cup", "at": [270, 515], "want": "A", "count": 4}
+        {"id": "s1", "kind": "spout", "at": [60, 40], "beads": "B*4", "beat": 4},
+        {"id": "s2", "kind": "spout", "at": [180, 40], "beads": "B*4", "beat": 4, "start": 2},
+        {"id": "s3", "kind": "spout", "at": [300, 40], "beads": "B*4", "beat": 4, "start": 3},
+        {"id": "m1", "kind": "merge", "at": [120, 180], "socket": true},
+        {"id": "m2", "kind": "merge", "at": [180, 280], "socket": true},
+        {"id": "f", "kind": "fork", "at": [180, 380], "socket": true},
+        {"id": "c1", "kind": "cup", "at": [90, 490], "want": "B", "count": 8, "district": "Custom House"},
+        {"id": "c2", "kind": "cup", "at": [270, 490], "want": "B", "count": 4, "district": "Pier Head"}
       ],
-      "pipes": [["sb", "pb"], ["sa", "pa"], ["pb", "m", [[80, 180]]], ["pa", "m", [[280, 180]]], ["m", "f", [[180, 265], [115, 305], [245, 350], [180, 390]]], ["f", "cl", [[90, 475]]], ["f", "cr", [[270, 475]]]],
-      "tray": ["separator", "tank4"]
+      "pipes": [["s1", "m1", [[60, 180]]], ["s2", "m1", [[180, 120], [120, 120]]], ["m1", "m2", [[120, 280]]], ["s3", "m2", [[300, 280]]], ["m2", "f"], ["f", "c1", [[90, 380]]], ["f", "c2", [[270, 380]]]],
+      "tray": [{"type": "overflow", "n": 8}, "tank4"]
     },
     {
-      "id": "3-5", "name": "Slow and Fast", "intro": "One spout pours twice as fast as the other.",
+      "id": "3-5", "name": "The Narrows", "intro": "Two crossings, close together. Lock both and see.",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [90, 40], "beads": "B*10", "beat": 6},
-        {"id": "sa", "kind": "spout", "at": [270, 40], "beads": "A*5", "beat": 12},
-        {"id": "pa", "kind": "pass", "at": [270, 130]},
-        {"id": "x", "kind": "cross", "at": [180, 290], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [270, 500], "want": "B", "count": 10},
-        {"id": "ca", "kind": "cup", "at": [90, 500], "want": "A", "count": 5}
+        {"id": "sb", "kind": "spout", "at": [30, 280], "beads": "B*10", "beat": 4, "start": 9},
+        {"id": "sa", "kind": "spout", "at": [190, 560], "beads": "A*10", "beat": 2},
+        {"id": "x1", "kind": "cross", "at": [150, 280], "socket": true},
+        {"id": "x2", "kind": "cross", "at": [190, 280], "socket": true},
+        {"id": "cb", "kind": "cup", "at": [300, 480], "want": "B", "count": 10, "district": "Coopers Yard"},
+        {"id": "ca", "kind": "cup", "at": [60, 480], "want": "A", "count": 10, "district": "Glassworks"}
       ],
-      "pipes": [["sb", "x", [[90, 190]]], ["sa", "pa"], ["pa", "x", [[270, 200]]], ["x", "cb", [[270, 400]]], ["x", "ca", [[90, 400]]]],
-      "tray": ["tank4", "tank8", "turnstile"]
+      "pipes": [["sa", "x2"], ["sb", "x1"], ["x1", "x2"], ["x2", "cb", [[300, 280]]], ["x2", "x1", [[190, 240], [150, 240]]], ["x1", "ca", [[150, 380], [60, 380]]]],
+      "tray": ["turnstile", "turnstile", "bridge"]
     },
     {
       "id": "3-6", "name": "The Mill Gate", "intro": "Each amber barge turns the mill. The mill flips the blue gate.",
@@ -87,121 +88,139 @@
       "tray": ["turnstile", "tank4"]
     },
     {
-      "id": "3-7", "name": "Fast Lane", "intro": "Locks are safe, but traffic piles up behind them.",
+      "id": "3-7", "name": "Every Other Barge", "intro": "One blue barge opens the gate. The next one shuts it.",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [90, 40], "beads": "B*10", "beat": 3},
-        {"id": "sa", "kind": "spout", "at": [270, 40], "beads": "A*10", "beat": 3},
-        {"id": "x", "kind": "cross", "at": [180, 270], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [270, 500], "want": "B", "count": 10},
-        {"id": "ca", "kind": "cup", "at": [90, 500], "want": "A", "count": 10}
+        {"id": "sb", "kind": "spout", "at": [180, 40], "beads": "B*6", "beat": 3},
+        {"id": "sa", "kind": "spout", "at": [30, 200], "beads": "A*6", "beat": 4, "start": 9},
+        {"id": "pb", "kind": "pass", "at": [180, 110]},
+        {"id": "pa", "kind": "pass", "at": [90, 200]},
+        {"id": "x", "kind": "cross", "at": [180, 200], "socket": true},
+        {"id": "m", "kind": "mill", "at": [180, 320], "gears": ["g"]},
+        {"id": "g", "kind": "gate", "at": [270, 320], "open": false},
+        {"id": "cb", "kind": "cup", "at": [80, 490], "want": "B", "count": 6, "district": "Weavers Lane"},
+        {"id": "ca", "kind": "cup", "at": [270, 490], "want": "A", "count": 6, "district": "St Agnes"}
       ],
-      "pipes": [["sb", "x", [[90, 170]]], ["sa", "x", [[270, 170]]], ["x", "cb", [[270, 390]]], ["x", "ca", [[90, 390]]]],
-      "tray": ["turnstile", "bridge"]
+      "pipes": [["sb", "pb"], ["pb", "x"], ["x", "m"], ["m", "cb", [[180, 400], [80, 400]]], ["sa", "pa"], ["pa", "x"], ["x", "g", [[270, 200]]], ["g", "ca"]],
+      "tray": ["tank4", "tank8", "turnstile"]
     },
     {
-      "id": "3-8", "name": "Two Locks", "intro": "A lock on each crossing. What could go wrong?",
+      "id": "3-8", "name": "The Roundabout", "intro": "Round and round. Who gives way?",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [70, 42], "beads": "B*8", "beat": 3},
-        {"id": "sa", "kind": "spout", "at": [180, 536], "beads": "A*8", "beat": 3, "start": 6},
-        {"id": "x1", "kind": "cross", "at": [180, 260], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [180, 300], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [70, 500], "want": "B", "count": 8},
-        {"id": "ca", "kind": "cup", "at": [300, 70], "want": "A", "count": 8}
+        {"id": "sb", "kind": "spout", "at": [180, 40], "beads": "B*6", "beat": 4},
+        {"id": "sa", "kind": "spout", "at": [180, 560], "beads": "A*6", "beat": 4, "start": 3},
+        {"id": "m1", "kind": "merge", "at": [180, 200], "socket": true},
+        {"id": "fa", "kind": "fork", "at": [220, 290], "socket": true},
+        {"id": "m2", "kind": "merge", "at": [180, 380], "socket": true},
+        {"id": "fb", "kind": "fork", "at": [140, 290], "socket": true},
+        {"id": "ca", "kind": "cup", "at": [280, 290], "want": "A", "count": 6, "district": "Bell Wharf"},
+        {"id": "cb", "kind": "cup", "at": [80, 290], "want": "B", "count": 6, "district": "Clock Square"}
       ],
-      "pipes": [["sb", "x1", [[70, 200]]], ["x1", "x2", [[190, 280]]], ["x2", "cb", [[70, 360]]], ["sa", "x2"], ["x2", "x1", [[170, 280]]], ["x1", "ca", [[180, 30], [300, 30]]]],
-      "tray": ["turnstile", "turnstile", "bridge"]
+      "pipes": [["sb", "m1"], ["sa", "m2"], ["m1", "fa", [[220, 200]]], ["fa", "ca"], ["fa", "m2", [[220, 380]]], ["m2", "fb", [[140, 380]]], ["fb", "cb"], ["fb", "m1", [[140, 200]]]],
+      "tray": ["turnstile", "tank4", "tank8"],
+      "placed": [{"piece": "separator", "at": "fa", "set": 1, "locked": true}, {"piece": "separator", "at": "fb", "locked": true}]
     },
     {
-      "id": "3-9", "name": "Interchange", "type": "spectacle", "intro": "Bridges everywhere. Finish it off.",
+      "id": "3-9", "name": "Two Mills", "intro": "Each mill works the other's gate. Who goes first?",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [80, 40], "beads": "B*10", "beat": 4},
-        {"id": "sa", "kind": "spout", "at": [280, 40], "beads": "A*10", "beat": 4},
-        {"id": "x1", "kind": "cross", "at": [180, 170], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [180, 300], "socket": true},
-        {"id": "x3", "kind": "cross", "at": [180, 430], "socket": true},
-        {"id": "ca", "kind": "cup", "at": [80, 512], "want": "A", "count": 10},
-        {"id": "cb", "kind": "cup", "at": [280, 512], "want": "B", "count": 10}
+        {"id": "sb", "kind": "spout", "at": [90, 40], "beads": "B*6", "beat": 2},
+        {"id": "sa", "kind": "spout", "at": [270, 40], "beads": "A*6", "beat": 6, "start": 11},
+        {"id": "pb", "kind": "pass", "at": [90, 130]},
+        {"id": "pa", "kind": "pass", "at": [270, 130]},
+        {"id": "gb", "kind": "gate", "at": [90, 220]},
+        {"id": "ga", "kind": "gate", "at": [270, 220], "open": false},
+        {"id": "mb", "kind": "mill", "at": [90, 300], "gears": [["ga", [[200, 300], [200, 220]]]]},
+        {"id": "ma", "kind": "mill", "at": [270, 360], "gears": [["gb", [[160, 360], [160, 220]]]]},
+        {"id": "cb", "kind": "cup", "at": [90, 480], "want": "B", "count": 6, "district": "Mill End"},
+        {"id": "ca", "kind": "cup", "at": [270, 480], "want": "A", "count": 6, "district": "Brewers Quay"}
       ],
-      "pipes": [["sb", "x1", [[80, 110]]], ["sa", "x1", [[280, 110]]], ["x1", "x2", [[290, 235]]], ["x1", "x2", [[70, 235]]], ["x2", "x3", [[290, 365]]], ["x2", "x3", [[70, 365]]], ["x3", "ca", [[80, 475]]], ["x3", "cb", [[280, 475]]]],
+      "pipes": [["sb", "pb"], ["pb", "gb"], ["gb", "mb"], ["mb", "cb"], ["sa", "pa"], ["pa", "ga"], ["ga", "ma"], ["ma", "ca"]],
+      "tray": ["tank4", "tank8", "turnstile"]
+    },
+    {
+      "id": "3-10", "name": "The Long Queue", "intro": "A queue at a shut gate grows. How far back?",
+      "nodes": [
+        {"id": "sb", "kind": "spout", "at": [60, 40], "beads": "B*8", "beat": 2},
+        {"id": "sa", "kind": "spout", "at": [150, 40], "beads": "A*6", "beat": 4, "start": 3},
+        {"id": "pb", "kind": "pass", "at": [60, 130]},
+        {"id": "pa", "kind": "pass", "at": [150, 130]},
+        {"id": "x", "kind": "cross", "at": [150, 270], "socket": true},
+        {"id": "g", "kind": "gate", "at": [230, 270], "open": false},
+        {"id": "m", "kind": "mill", "at": [150, 380], "gears": [["g", [[230, 380]]]]},
+        {"id": "cb", "kind": "cup", "at": [300, 480], "want": "B", "count": 8, "district": "Corn Exchange"},
+        {"id": "ca", "kind": "cup", "at": [60, 500], "want": "A", "count": 6, "district": "Ferry Steps"}
+      ],
+      "pipes": [["sb", "pb"], ["pb", "x", [[60, 270]]], ["x", "g"], ["g", "cb", [[300, 270]]], ["sa", "pa"], ["pa", "x"], ["x", "m"], ["m", "ca", [[150, 430], [60, 430]]]],
+      "tray": ["tank4", "tank8", "turnstile"]
+    },
+    {
+      "id": "3-11", "name": "The Harbourmaster", "intro": "The harbourmaster set two locks. Traffic stands still. Move one.",
+      "nodes": [
+        {"id": "sb", "kind": "spout", "at": [30, 300], "beads": "B*10", "beat": 6, "start": 17},
+        {"id": "sa", "kind": "spout", "at": [220, 40], "beads": "A*10", "beat": 2},
+        {"id": "x3", "kind": "cross", "at": [90, 300], "socket": true},
+        {"id": "x1", "kind": "cross", "at": [180, 300], "socket": true},
+        {"id": "x2", "kind": "cross", "at": [220, 300], "socket": true},
+        {"id": "cb", "kind": "cup", "at": [300, 490], "want": "B", "count": 10, "district": "Admiralty"},
+        {"id": "ca", "kind": "cup", "at": [90, 490], "want": "A", "count": 10, "district": "Nuns Bridge"}
+      ],
+      "pipes": [["sa", "x2"], ["sb", "x3"], ["x3", "x1"], ["x1", "x2"], ["x2", "cb", [[300, 300]]], ["x2", "x1", [[220, 340], [180, 340]]], ["x1", "x3", [[180, 160], [90, 160]]], ["x3", "ca"]],
       "tray": ["bridge"],
-      "placed": [{"piece": "bridge", "at": "x1", "locked": true}, {"piece": "bridge", "at": "x3", "locked": true}]
+      "placed": [{"piece": "turnstile", "at": "x1"}, {"piece": "turnstile", "at": "x2"}]
     },
     {
-      "id": "3-10", "name": "Back-Up", "intro": "A queue can grow back across another crossing.",
+      "id": "3-12", "name": "Interchange", "intro": "Three canals, three crossings, one bridge.",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [180, 40], "beads": "B*8", "beat": 6},
-        {"id": "s1", "kind": "spout", "at": [40, 150], "beads": "A*4", "beat": 12},
-        {"id": "x1", "kind": "cross", "at": [180, 150]},
-        {"id": "pb", "kind": "pass", "at": [180, 180]},
-        {"id": "s2", "kind": "spout", "at": [320, 330], "beads": "A*4", "beat": 12, "start": 4},
-        {"id": "x2", "kind": "cross", "at": [180, 330], "socket": true},
-        {"id": "c1", "kind": "cup", "at": [320, 250], "want": "A", "count": 4},
-        {"id": "c2", "kind": "cup", "at": [40, 440], "want": "A", "count": 4},
-        {"id": "cb", "kind": "cup", "at": [180, 500], "want": "B", "count": 8}
+        {"id": "sb", "kind": "spout", "at": [30, 200], "beads": "B*6", "beat": 3},
+        {"id": "sa", "kind": "spout", "at": [150, 40], "beads": "A*6", "beat": 3, "start": 5},
+        {"id": "sg", "kind": "spout", "at": [240, 40], "beads": "G*6", "beat": 4, "start": 3},
+        {"id": "pb", "kind": "pass", "at": [90, 200]},
+        {"id": "pa", "kind": "pass", "at": [150, 120]},
+        {"id": "pg", "kind": "pass", "at": [240, 120]},
+        {"id": "xab", "kind": "cross", "at": [150, 200], "socket": true},
+        {"id": "xbg", "kind": "cross", "at": [240, 200], "socket": true},
+        {"id": "xag", "kind": "cross", "at": [150, 380], "socket": true},
+        {"id": "cb", "kind": "cup", "at": [300, 500], "want": "B", "count": 6, "district": "Silk Market"},
+        {"id": "ca", "kind": "cup", "at": [150, 500], "want": "A", "count": 6, "district": "Candle Wharf"},
+        {"id": "cg", "kind": "cup", "at": [50, 500], "want": "G", "count": 6, "district": "Green Gardens"}
       ],
-      "pipes": [["sb", "x1"], ["s1", "x1"], ["x1", "pb"], ["x1", "c1", [[320, 150]]], ["pb", "x2"], ["s2", "x2"], ["x2", "cb"], ["x2", "c2", [[40, 330]]]],
-      "tray": ["tank8", "turnstile"]
+      "pipes": [["sb", "pb"], ["pb", "xab"], ["xab", "xbg"], ["xbg", "cb", [[300, 200]]], ["sa", "pa"], ["pa", "xab"], ["xab", "xag"], ["xag", "ca"], ["sg", "pg"], ["pg", "xbg"], ["xbg", "xag", [[240, 380]]], ["xag", "cg", [[50, 380]]]],
+      "tray": ["bridge", "turnstile", "tank4"]
     },
     {
-      "id": "3-11", "name": "Fix It", "type": "repair", "intro": "It locks up. Swap one piece.",
+      "id": "3-13", "name": "Three Locks", "intro": "Three crossings in a ring. Each waits for the next.",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [70, 42], "beads": "B*10", "beat": 2},
-        {"id": "sa", "kind": "spout", "at": [180, 536], "beads": "A*10", "beat": 2, "start": 6},
-        {"id": "x1", "kind": "cross", "at": [180, 260], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [180, 300], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [70, 500], "want": "B", "count": 10},
-        {"id": "ca", "kind": "cup", "at": [300, 70], "want": "A", "count": 10}
+        {"id": "sb", "kind": "spout", "at": [30, 240], "beads": "B*10", "beat": 2},
+        {"id": "sa", "kind": "spout", "at": [200, 40], "beads": "A*10", "beat": 4},
+        {"id": "sg", "kind": "spout", "at": [330, 280], "beads": "G*10", "beat": 4},
+        {"id": "x1", "kind": "cross", "at": [160, 240], "socket": true},
+        {"id": "x2", "kind": "cross", "at": [200, 240], "socket": true},
+        {"id": "x3", "kind": "cross", "at": [200, 280], "socket": true},
+        {"id": "cb", "kind": "cup", "at": [290, 130], "want": "B", "count": 10, "district": "Gas Lane"},
+        {"id": "ca", "kind": "cup", "at": [200, 490], "want": "A", "count": 10, "district": "Printers Row"},
+        {"id": "cg", "kind": "cup", "at": [100, 140], "want": "G", "count": 10, "district": "Rope Garden"}
       ],
-      "pipes": [["sb", "x1", [[70, 200]]], ["x1", "x2", [[190, 280]]], ["x2", "cb", [[70, 360]]], ["sa", "x2"], ["x2", "x1", [[170, 280]]], ["x1", "ca", [[180, 30], [300, 30]]]],
-      "tray": ["bridge"],
-      "placed": [{"piece": "turnstile", "at": "x1"}, {"piece": "turnstile", "at": "x2", "set": 1}]
+      "pipes": [["sa", "x2"], ["sb", "x1"], ["x1", "x2"], ["x2", "cb", [[290, 240]]], ["x2", "x3"], ["x3", "ca"], ["sg", "x3"], ["x3", "x1", [[160, 280]]], ["x1", "cg", [[160, 140]]]],
+      "tray": ["turnstile", "turnstile", "turnstile"]
     },
     {
-      "id": "3-12", "name": "Zip", "intro": "Three streams, one pipe.",
+      "id": "3-14", "name": "Signal Box", "intro": "Blue works amber's gate. Amber works green's.",
       "nodes": [
-        {"id": "s1", "kind": "spout", "at": [60, 40], "beads": "B*4", "beat": 12},
-        {"id": "s2", "kind": "spout", "at": [180, 40], "beads": "A*4", "beat": 12},
-        {"id": "s3", "kind": "spout", "at": [300, 40], "beads": "B*4", "beat": 12},
-        {"id": "p1", "kind": "pass", "at": [60, 120]},
-        {"id": "p2", "kind": "pass", "at": [180, 120]},
-        {"id": "p3", "kind": "pass", "at": [300, 120]},
-        {"id": "m1", "kind": "merge", "at": [120, 220]},
-        {"id": "m2", "kind": "merge", "at": [180, 300]},
-        {"id": "f", "kind": "fork", "at": [180, 440], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [90, 515], "want": "B", "count": 8},
-        {"id": "ca", "kind": "cup", "at": [270, 515], "want": "A", "count": 4}
+        {"id": "sb", "kind": "spout", "at": [60, 40], "beads": "B*6", "beat": 2},
+        {"id": "sa", "kind": "spout", "at": [180, 40], "beads": "A*6", "beat": 3, "start": 9},
+        {"id": "sg", "kind": "spout", "at": [300, 40], "beads": "G*6", "beat": 6, "start": 17},
+        {"id": "pb", "kind": "pass", "at": [60, 120]},
+        {"id": "pa", "kind": "pass", "at": [180, 120]},
+        {"id": "pg", "kind": "pass", "at": [300, 120]},
+        {"id": "ga", "kind": "gate", "at": [180, 200], "open": false},
+        {"id": "gg", "kind": "gate", "at": [300, 260], "open": false},
+        {"id": "mb", "kind": "mill", "at": [60, 240], "gears": [["ga", [[120, 240], [120, 200]]]]},
+        {"id": "ma", "kind": "mill", "at": [180, 320], "gears": [["gg", [[240, 320], [240, 260]]]]},
+        {"id": "cb", "kind": "cup", "at": [60, 490], "want": "B", "count": 6, "district": "Signal Hill"},
+        {"id": "ca", "kind": "cup", "at": [180, 490], "want": "A", "count": 6, "district": "Tollgate"},
+        {"id": "cg", "kind": "cup", "at": [300, 490], "want": "G", "count": 6, "district": "Ironworks"}
       ],
-      "pipes": [["s1", "p1"], ["s2", "p2"], ["s3", "p3"], ["p1", "m1", [[60, 170]]], ["p2", "m1", [[180, 170]]], ["m1", "m2"], ["p3", "m2", [[300, 240]]], ["m2", "f", [[180, 340], [130, 370], [180, 400]]], ["f", "cb", [[90, 480]]], ["f", "ca", [[270, 480]]]],
-      "tray": ["separator", "tank4", "tank8", "tank4"]
-    },
-    {
-      "id": "3-13", "name": "Three Locks", "intro": "Three locks in a row. One of them must go.",
-      "nodes": [
-        {"id": "sb", "kind": "spout", "at": [70, 42], "beads": "B*8", "beat": 3},
-        {"id": "sa", "kind": "spout", "at": [180, 540], "beads": "A*8", "beat": 3, "start": 2},
-        {"id": "x1", "kind": "cross", "at": [180, 240], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [180, 280], "socket": true},
-        {"id": "x3", "kind": "cross", "at": [180, 320], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [70, 500], "want": "B", "count": 8},
-        {"id": "ca", "kind": "cup", "at": [300, 70], "want": "A", "count": 8}
-      ],
-      "pipes": [["sb", "x1", [[70, 180]]], ["x1", "x2", [[190, 260]]], ["x2", "x3", [[170, 300]]], ["x3", "cb", [[70, 380]]], ["sa", "x3"], ["x3", "x2", [[190, 300]]], ["x2", "x1", [[170, 260]]], ["x1", "ca", [[180, 30], [300, 30]]]],
-      "tray": ["turnstile", "turnstile", "turnstile", "bridge"]
-    },
-    {
-      "id": "3-14", "name": "Rush", "intro": "Everything at once.",
-      "nodes": [
-        {"id": "sb", "kind": "spout", "at": [90, 40], "beads": "B*8", "beat": 6},
-        {"id": "sa", "kind": "spout", "at": [270, 40], "beads": "A*8", "beat": 6},
-        {"id": "pa", "kind": "pass", "at": [270, 110]},
-        {"id": "x1", "kind": "cross", "at": [180, 190], "socket": true},
-        {"id": "m", "kind": "merge", "at": [180, 330], "socket": true},
-        {"id": "f", "kind": "fork", "at": [180, 440], "socket": true},
-        {"id": "cl", "kind": "cup", "at": [90, 515], "want": "A", "count": 8},
-        {"id": "cr", "kind": "cup", "at": [270, 515], "want": "B", "count": 8}
-      ],
-      "pipes": [["sb", "x1", [[90, 110]]], ["sa", "pa"], ["pa", "x1"], ["x1", "m", [[280, 260]]], ["x1", "m", [[80, 260]]], ["m", "f", [[180, 380], [140, 410]]], ["f", "cl", [[90, 480]]], ["f", "cr", [[270, 480]]]],
-      "tray": ["separator", "bridge", "turnstile", "tank4"]
+      "pipes": [["sb", "pb"], ["pb", "mb"], ["mb", "cb"], ["sa", "pa"], ["pa", "ga"], ["ga", "ma"], ["ma", "ca"], ["sg", "pg"], ["pg", "gg"], ["gg", "cg"]],
+      "tray": ["tank4", "tank8", "tank8"]
     },
     {
       "id": "3-15", "name": "Rush Hour", "intro": "Three crossings, one bridge, four pieces. Everything counts.",
@@ -220,51 +239,64 @@
       "tray": ["separator", "turnstile", "bridge", "tank8"]
     },
     {
-      "id": "3-C1", "name": "Gridlock", "type": "challenge", "intro": "One machine, one answer.",
+      "id": "3-C1", "name": "Gridlock", "intro": "Four crossings round one block. No bridges tonight.",
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [180, 36], "beads": "B+A*4", "beat": 8},
-        {"id": "f", "kind": "fork", "at": [180, 104], "socket": true},
-        {"id": "x1", "kind": "cross", "at": [180, 180], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [180, 302]},
-        {"id": "x3", "kind": "cross", "at": [180, 424], "socket": true},
-        {"id": "p0r", "kind": "pass", "at": [276, 142]},
-        {"id": "cl", "kind": "cup", "at": [85, 512], "want": "B", "count": 4},
-        {"id": "cr", "kind": "cup", "at": [275, 512], "want": "A", "count": 4}
+        {"id": "s1", "kind": "spout", "at": [30, 220], "beads": "B*6", "beat": 2},
+        {"id": "s2", "kind": "spout", "at": [220, 40], "beads": "A*6", "beat": 3},
+        {"id": "s3", "kind": "spout", "at": [330, 320], "beads": "B*6", "beat": 3, "start": 5},
+        {"id": "s4", "kind": "spout", "at": [140, 560], "beads": "A*6", "beat": 3, "start": 13},
+        {"id": "p1", "kind": "pass", "at": [80, 220]},
+        {"id": "p3", "kind": "pass", "at": [280, 320]},
+        {"id": "nw", "kind": "cross", "at": [140, 220], "socket": true},
+        {"id": "ne", "kind": "cross", "at": [220, 220], "socket": true},
+        {"id": "se", "kind": "cross", "at": [220, 320], "socket": true},
+        {"id": "sw", "kind": "cross", "at": [140, 320], "socket": true},
+        {"id": "c1", "kind": "cup", "at": [300, 130], "want": "B", "count": 6, "district": "Four Winds"},
+        {"id": "c2", "kind": "cup", "at": [220, 490], "want": "A", "count": 6, "district": "North Basin"},
+        {"id": "c3", "kind": "cup", "at": [60, 490], "want": "B", "count": 6, "district": "Tannery"},
+        {"id": "c4", "kind": "cup", "at": [140, 130], "want": "A", "count": 6, "district": "Weighhouse"}
       ],
-      "pipes": [["s", "f"], ["f", "x1", [[64, 142]]], ["f", "p0r"], ["p0r", "x1"], ["x1", "x2", [[116, 241]]], ["x1", "x2", [[282, 241]]], ["x2", "x3", [[69, 363]]], ["x2", "x3", [[293, 363]]], ["x3", "cl", [[85, 484]]], ["x3", "cr", [[275, 484]]]],
-      "tray": ["separator", "turnstile", "bridge", "tank4", "tank8"]
+      "pipes": [["s1", "p1"], ["p1", "nw"], ["nw", "ne"], ["ne", "c1", [[300, 220]]], ["s2", "ne"], ["ne", "se"], ["se", "c2"], ["s3", "p3"], ["p3", "se"], ["se", "sw"], ["sw", "c3", [[60, 320]]], ["s4", "sw"], ["sw", "nw"], ["nw", "c4"]],
+      "tray": ["turnstile", "turnstile", "tank8"]
     },
     {
-      "id": "3-C2", "name": "Zipper", "type": "challenge", "intro": "Three streams, one lane, no locks.",
+      "id": "3-C2", "name": "Zipper", "intro": "A fast lane and a slow one share a lock. Zip them: blue, amber, blue...",
       "nodes": [
-        {"id": "s1", "kind": "spout", "at": [60, 40], "beads": "B*4", "beat": 12},
-        {"id": "s2", "kind": "spout", "at": [180, 40], "beads": "A*4", "beat": 12},
-        {"id": "s3", "kind": "spout", "at": [300, 40], "beads": "B*4", "beat": 12},
-        {"id": "p1", "kind": "pass", "at": [60, 120]},
-        {"id": "p2", "kind": "pass", "at": [180, 120]},
-        {"id": "p3", "kind": "pass", "at": [300, 120]},
-        {"id": "m1", "kind": "merge", "at": [120, 220]},
-        {"id": "m2", "kind": "merge", "at": [180, 300]},
-        {"id": "f", "kind": "fork", "at": [180, 440], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [90, 515], "want": "B", "count": 8},
-        {"id": "ca", "kind": "cup", "at": [270, 515], "want": "A", "count": 4}
+        {"id": "sb", "kind": "spout", "at": [60, 40], "beads": "B*5", "beat": 4},
+        {"id": "sa", "kind": "spout", "at": [300, 40], "beads": "A*5", "beat": 8, "start": 9},
+        {"id": "pb", "kind": "pass", "at": [60, 120]},
+        {"id": "pa", "kind": "pass", "at": [300, 120]},
+        {"id": "pq", "kind": "pass", "at": [180, 300]},
+        {"id": "m", "kind": "merge", "at": [180, 200], "socket": true},
+        {"id": "f", "kind": "fork", "at": [180, 400], "socket": true},
+        {"id": "cb", "kind": "cup", "at": [80, 500], "want": "B", "count": 5, "district": "Needle Quay"},
+        {"id": "ca", "kind": "cup", "at": [280, 500], "want": "A", "count": 5, "district": "Button Row"}
       ],
-      "pipes": [["s1", "p1"], ["s2", "p2"], ["s3", "p3"], ["p1", "m1", [[60, 170]]], ["p2", "m1", [[180, 170]]], ["m1", "m2"], ["p3", "m2", [[300, 240]]], ["m2", "f", [[180, 340], [130, 370], [180, 400]]], ["f", "cb", [[90, 480]]], ["f", "ca", [[270, 480]]]],
-      "tray": ["separator", "tank4", "tank8"]
+      "pipes": [["sb", "pb"], ["pb", "m", [[60, 200]]], ["sa", "pa"], ["pa", "m", [[300, 200]]], ["m", "pq"], ["pq", "f"], ["f", "cb", [[80, 400]]], ["f", "ca", [[280, 400]]]],
+      "tray": ["tank4", "tank4", "tank8"],
+      "placed": [{"piece": "turnstile", "at": "m", "locked": true}, {"piece": "flipper", "at": "f", "locked": true}]
     },
     {
-      "id": "3-C3", "name": "Crossroads", "type": "challenge", "intro": "Three crossings: which one gets the bridge?",
+      "id": "3-C3", "name": "Clockwork", "intro": "Amber starts the clock. Each mill opens the next gate round.",
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [180, 36], "beads": "B+A*7", "beat": 8},
-        {"id": "f", "kind": "fork", "at": [180, 104], "socket": true},
-        {"id": "x1", "kind": "cross", "at": [180, 180], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [180, 302]},
-        {"id": "x3", "kind": "cross", "at": [180, 424], "socket": true},
-        {"id": "cl", "kind": "cup", "at": [85, 512], "want": "B", "count": 7},
-        {"id": "cr", "kind": "cup", "at": [275, 512], "want": "A", "count": 7}
+        {"id": "sb", "kind": "spout", "at": [60, 40], "beads": "B*8", "beat": 2},
+        {"id": "sa", "kind": "spout", "at": [180, 40], "beads": "A*4", "beat": 2},
+        {"id": "sg", "kind": "spout", "at": [300, 40], "beads": "G*6", "beat": 6},
+        {"id": "pb", "kind": "pass", "at": [60, 110]},
+        {"id": "pa", "kind": "pass", "at": [180, 110]},
+        {"id": "pg", "kind": "pass", "at": [300, 110]},
+        {"id": "gb", "kind": "gate", "at": [60, 180], "open": false},
+        {"id": "ga", "kind": "gate", "at": [180, 220]},
+        {"id": "gg", "kind": "gate", "at": [300, 260], "open": false},
+        {"id": "mb", "kind": "mill", "at": [60, 300], "gears": [["ga", [[120, 300], [120, 220]]]]},
+        {"id": "ma", "kind": "mill", "at": [180, 340], "gears": [["gg", [[240, 340], [240, 260]]]]},
+        {"id": "mg", "kind": "mill", "at": [300, 380], "gears": [["gb", [[250, 380], [250, 420], [20, 420], [20, 180]]]]},
+        {"id": "cb", "kind": "cup", "at": [60, 500], "want": "B", "count": 8, "district": "Clockmakers"},
+        {"id": "ca", "kind": "cup", "at": [180, 500], "want": "A", "count": 4, "district": "Spring Lane"},
+        {"id": "cg", "kind": "cup", "at": [300, 500], "want": "G", "count": 6, "district": "Gear Street"}
       ],
-      "pipes": [["s", "f"], ["f", "x1", [[69, 142]]], ["f", "x1", [[287, 142]]], ["x1", "x2", [[77, 241]]], ["x1", "x2", [[244, 241]]], ["x2", "x3", [[70, 363]]], ["x2", "x3", [[235, 363]]], ["x3", "cl", [[85, 484]]], ["x3", "cr", [[275, 484]]]],
-      "tray": ["separator", "turnstile", "bridge"]
+      "pipes": [["sb", "pb"], ["pb", "gb"], ["gb", "mb"], ["mb", "cb"], ["sa", "pa"], ["pa", "ga"], ["ga", "ma"], ["ma", "ca"], ["sg", "pg"], ["pg", "gg"], ["gg", "mg"], ["mg", "cg"]],
+      "tray": ["tank4", "tank8", "tank8"]
     }
   ]
 }

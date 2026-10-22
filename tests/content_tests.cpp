@@ -49,6 +49,17 @@ std::vector<World> LoadAll() {
   return worlds;
 }
 
+// A shipped level by id, with its pars.
+Level Shipped(const std::string& id) {
+  for (const World& world : LoadAll()) {
+    for (const Level& level : world.levels) {
+      if (level.id == id) return level;
+    }
+  }
+  FAIL("no level " << id);
+  return {};
+}
+
 bool Has(const std::vector<std::string>& problems, const std::string& problem) {
   return std::find(problems.begin(), problems.end(), problem) != problems.end();
 }
@@ -627,6 +638,83 @@ TEST_SUITE("content") {
         CHECK(bottles > 0);
         CHECK(static_cast<int>(apothecary::Orders(level).size()) == bottles);
       }
+    }
+  }
+
+  TEST_CASE("every World 3 level is a canal map: its own districts, and every run ends") {
+    std::vector<std::string> districts;
+    int canal_maps = 0;
+    for (const World& world : LoadAll()) {
+      if (world.number != 3) continue;
+      for (const Level& level : world.levels) {
+        if (level.id == "3-15") continue;  // the finale, Rush Hour, comes in step d B
+        INFO("level " << level.id);
+        CHECK(canal::IsCanalMap(level));
+        ++canal_maps;
+        // Each harbour serves a district of its own across the world (the map's neighbourhoods).
+        for (const canal::District& district : canal::Districts(level)) {
+          INFO("district " << district.name);
+          CHECK(std::find(districts.begin(), districts.end(), district.name) == districts.end());
+          districts.push_back(district.name);
+        }
+        // A ring of canals could carry barges round forever (a run that ends only at the safety net, ~40 minutes
+        // on screen): every placement the solver tries ends, failed or not, well before that.
+        int longest = 0;
+        ForEachPlacement(level, [&](const Placement& placement) {
+          const Outcome outcome = Simulate(level, placement, false);
+          CHECK(outcome.over);
+          longest = std::max(longest, outcome.ticks);
+          return true;
+        });
+        CHECK(longest < 400);
+      }
+    }
+    CHECK(canal_maps == 17);
+  }
+
+  TEST_CASE("The Roundabout (3-8): barges meet coming round; a lock or a tank on the ring, and the ring empties") {
+    const Level level = Shipped("3-8");
+    const int m1 = NodeOf(level, "m1"), m2 = NodeOf(level, "m2");
+    {
+      Board board(level);
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.failure == Failure::Mud);
+      CHECK(run.outcome.fail_node == m2);
+      CHECK(run.outcome.fail_tick == 39);
+    }
+    {
+      Board board(level);
+      REQUIRE(board.Place(PieceOf(board, PieceType::Turnstile), m2));
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.solved);
+      CHECK(run.outcome.ticks == 84);
+    }
+    {
+      Board board(level);
+      REQUIRE(board.Place(PieceOf(board, PieceType::TankShort), m1));
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.solved);
+      CHECK(run.outcome.ticks == 88);
+    }
+  }
+
+  TEST_CASE("Two Mills (3-9): a fast blue shuts amber's gate for good; a tall tank on blue lets them take turns") {
+    const Level level = Shipped("3-9");
+    const int ga = NodeOf(level, "ga"), pb = NodeOf(level, "pb");
+    {
+      Board board(level);
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.jammed);
+      CHECK(run.outcome.fail_node == ga);
+      CHECK(run.outcome.fail_tick == 67);
+    }
+    {
+      Board board(level);
+      REQUIRE(board.Place(PieceOf(board, PieceType::TankTall), pb));
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.solved);
+      CHECK(run.outcome.ticks == 100);
+      CHECK(run.Count(EventType::Flip) == 12);
     }
   }
 
