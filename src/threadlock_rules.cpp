@@ -38,7 +38,7 @@ constexpr PieceInfoRow kPieceRows[] = {
 
 constexpr const char* kNodeKinds[] = {"spout", "fork",  "pass", "cross", "merge",
                                       "cup",   "drain", "rack", "mill",  "gate"};
-constexpr const char* kLevelTypes[] = {"build", "repair", "spectacle", "challenge", "daily", "lab"};
+constexpr const char* kLevelTypes[] = {"build", "repair", "spectacle", "challenge", "lab"};
 constexpr const char* kFailures[] = {"none", "mud", "wrong_cup", "spill", "dry", "jam"};
 constexpr const char* kRoles[] = {"acts", "idle", "trap"};
 
@@ -388,7 +388,7 @@ std::vector<std::string> Level::Finalize() {
 
   // Pipes: the drawn line runs from the edge of one node to the edge of the next; its cells come
   // from that length (one speed everywhere). The cells must come out the same on every device (the
-  // pars are baked on a PC, the daily puzzle is generated on each phone), so they're measured in
+  // pars are baked on a PC, the Lab's puzzles are generated on each phone), so they're measured in
   // doubles with plain sqrt, which IEEE 754 rounds exactly everywhere (std::hypot and float sums
   // differ between math libraries, and a length near half a cell would round differently).
   for (Pipe& pipe : pipes) {

@@ -356,21 +356,7 @@ void LevelScreen::RunEnded() {
         if (result_.ticks <= level_->pars.ticks) earned_.bits |= kSwiftStar;
       }
       earned_.fresh = earned_.bits;
-      if (source_.kind == LevelSource::Daily) {
-        const int today = app_.Today();
-        if (!source_.archive) {
-          if (progress.MarkDaily(source_.date)) {
-            progress.AddHints(1);
-            app_.Toast("Daily solved: +1 hint");
-          }
-        } else if (progress.CanMendStreak(today) && !progress.Daily().Marked(source_.date)) {
-          progress.MendStreak(source_.date, today);
-          app_.Toast("Streak mended");
-        }
-        progress.Count("daily_solved");
-      } else {
-        progress.Count("lab_solved");
-      }
+      progress.Count("lab_solved");
     }
     progress.Count("solves");
     app_.LevelSolved();
@@ -498,7 +484,6 @@ void LevelScreen::Next() {
       break;
     }
     case LevelSource::Lab: app.BetweenLevels(!hard_won, [&app] { app.OpenLab(); }); break;
-    case LevelSource::Daily: app.OpenMap(); break;
   }
 }
 
@@ -944,7 +929,6 @@ void LevelScreen::DrawTopBar(UIContext& ui) {
   // "1-6 · First Light" (the font has no middle dot: it's drawn).
   std::string code = level_->id;
   std::string place;
-  if (source_.kind == LevelSource::Daily) code = source_.archive ? "Daily (archive)" : "Daily";
   if (source_.kind == LevelSource::Lab) code = "Lab";
   if (source_.kind == LevelSource::Main) {
     if (const World* world = app_.GetCatalog().GetWorld(level_->world)) place = world->name;
@@ -1179,9 +1163,7 @@ void LevelScreen::DrawResult(UIContext& ui) {
   canvas.Text(font, note, {r.Center().x, r.min.y + 128.0f}, 14.0f, Align::Center, Outlined(ui_color::kMuted));
 
   const float by = r.max.y - 58.0f;
-  const char* next_label = source_.kind == LevelSource::Lab     ? "Next puzzle"
-                           : source_.kind == LevelSource::Daily ? "Done"
-                                                                : "Next";
+  const char* next_label = source_.kind == LevelSource::Lab ? "Next puzzle" : "Next";
   if (wlw::ui::Button(ui, next_label, {{r.min.x + 10.0f, by - 52.0f}, {r.max.x - 10.0f, by - 6.0f}}, Variant::Primary,
                       Icon::Next)) {
     Next();

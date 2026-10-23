@@ -4,7 +4,7 @@
 #include "board_art.h"
 
 // The workshop look (v2): dark pipes with faint cell ticks, plain cups and spouts. Worlds whose own
-// art isn't built yet use it, and so do the daily puzzle and the Lab (DESIGN.md §11).
+// art isn't built yet use it, and so does the Lab (DESIGN.md §11).
 namespace threadlock {
 
 class WorkshopArt : public BoardArt {

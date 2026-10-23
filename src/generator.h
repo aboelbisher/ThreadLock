@@ -5,8 +5,7 @@
 
 #include "threadlock_rules.h"
 
-// Generated levels: the daily puzzle (the same for everyone on a date, easy on Monday, hard on
-// Sunday) and the Lab (endless, at a chosen difficulty). DESIGN.md §7.
+// Generated levels for the Lab (endless, at a chosen difficulty). DESIGN.md §7.
 //
 // Each comes from a template (a race of crossing lanes, a fair-shares tree of forks, a mixer, a
 // shared pipe) with random lengths, beats, counts, sockets and tray, and is kept only if the solver
@@ -19,10 +18,6 @@ namespace threadlock {
 // `kind` picks a template (0 race, 1 shares, 2 mixer, 3 shared pipe); -1 = by difficulty.
 Level Generate(uint64_t seed, int difficulty, int kind = -1);
 
-int DailyWeekday(int yyyymmdd);     // 0 = Monday
-int DailyDifficulty(int yyyymmdd);  // Monday 0 .. Sunday 6
-const char* DailyDifficultyName(int difficulty);
-Level GenerateDaily(int yyyymmdd);
 // The Lab: "easy" / "medium" / "hard".
 Level GenerateLab(int64_t seed, const std::string& difficulty);
 

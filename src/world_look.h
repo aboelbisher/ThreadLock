@@ -8,8 +8,8 @@
 
 // How a world looks around its machines (DESIGN.md §5): the HUD and the cards keep one layout in every
 // world, tinted with the world's colours, and each world draws its boards with its own art and plays
-// its own instruments. A world whose art isn't built yet uses the workshop look and sounds (v2), as do
-// the daily puzzle and the Lab.
+// its own instruments. A world whose art isn't built yet uses the workshop look and sounds (v2), as does
+// the Lab.
 namespace threadlock {
 
 enum class ArtKind : uint8_t { Workshop, Lantern, Apothecary, Canal, Sanctum };
@@ -65,7 +65,7 @@ inline constexpr WorldLook kWorldLooks[] = {
      synth::SoundSet::Sanctum, "Sludge!", "The sigil wakes"},
 };
 
-// `world` counts from 1; anything else (the daily, the Lab) gets the workshop look.
+// `world` counts from 1; anything else (the Lab) gets the workshop look.
 inline const WorldLook& LookForWorld(int world) {
   if (world >= 1 && world <= static_cast<int>(std::size(kWorldLooks))) return kWorldLooks[world - 1];
   return kWorkshopLook;

@@ -160,13 +160,6 @@ const Level* ThreadlockApp::Keep(Level level) {
   return &kept_.back();
 }
 
-void ThreadlockApp::OpenDaily(int date, bool archive) {
-  const Level* level = Keep(GenerateDaily(date));
-  WLW_LOG_INFO("Daily %d: %s, pars %d pieces / %d ticks", date, level->name.c_str(), level->pars.pieces,
-               level->pars.ticks);
-  OpenLevel(level, {.kind = LevelSource::Daily, .date = date, .archive = archive, .difficulty = DailyDifficulty(date)});
-}
-
 void ThreadlockApp::OpenLab() {
   const int64_t seed = progress_->lab_seed++;
   progress_->LabChanged();
@@ -182,10 +175,6 @@ void ThreadlockApp::OpenSettings() {
 
 void ThreadlockApp::OpenAchievements() {
   App().Screens().Push(std::make_unique<MenuScreen>(*this, MenuScreen::Kind::Achievements));
-}
-
-void ThreadlockApp::OpenDailyMenu() {
-  App().Screens().Push(std::make_unique<MenuScreen>(*this, MenuScreen::Kind::Daily));
 }
 
 void ThreadlockApp::OpenLabMenu() { App().Screens().Push(std::make_unique<MenuScreen>(*this, MenuScreen::Kind::Lab)); }
@@ -297,8 +286,6 @@ void ThreadlockApp::OnDebugUI() {
         if (ImGui::SmallButton(level.id.c_str())) OpenLevel(&level);
       }
     }
-    if (ImGui::Button("Today's daily")) OpenDaily(Today(), false);
-    ImGui::SameLine();
     if (ImGui::Button("Lab")) OpenLab();
     ImGui::SameLine();
     if (ImGui::Button("Map")) OpenMap();

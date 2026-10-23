@@ -16,7 +16,7 @@ piece in any socket), taps play and watches. Different colours in one junction a
 condition); every piece is a concurrency idea (separator = branching, turnstile = mutex, tank = sleep,
 flipper = round-robin, overflow = counting semaphore, bridge = don't share, mixer = join, twin gate =
 barrier), every failure a real bug (mud, spill, dry, THREADLOCKED). Stars: Solve / Lean (≤ par pieces) /
-Swift (≤ par time). Launch scope: worlds 1–4 (60 levels + 12 challenges), the daily puzzle and the Lab.
+Swift (≤ par time). Launch scope: worlds 1–4 (60 levels + 12 challenges) and the Lab (the daily puzzle was removed 23 October).
 Each world is a trade of one city that runs on liquid light, with its own look and board grammar.
 
 Competition (researched before the pitch): Auditorium (PC, old) is the closest; mobile pipe puzzles are
@@ -62,15 +62,15 @@ src/barges.{h,cpp}            World 3's barges (plain C++, tested): a drop's pos
                               a lock's leaves
 src/polyline.{h,cpp}          paths (glm, header-only): round bends (RoundCorners), points by distance; the canals use it
 src/solver.{h,cpp}            every placement where each piece acts, run each: pars (Lean/Swift), solutions, NextHint
-src/generator.{h,cpp}         daily puzzle + Lab: 4 templates (race, shares, mixer, shared pipe), solver-filtered
+src/generator.{h,cpp}         the Lab: 4 templates (race, shares, mixer, shared pipe), solver-filtered
 src/catalog.{h,cpp}           loads assets/levels/world*.json + pars.json (platform::ReadFile)
-src/progress.{h,cpp}          saves (kit::SaveStore): progress.json (mergeable: star bits, counters, daily log,
+src/progress.{h,cpp}          saves (kit::SaveStore): progress.json (mergeable: star bits, counters,
                               achievements) + device.json (settings, hints, ad pacing, Lab, the map's seen record); unlock rules
 src/threadlock_app.{h,cpp}    the one System: services (catalog, progress, feedback, liquid, ads) + navigation, toasts,
                               debug panel (WLW_DEBUG_UI)
 src/level_screen.{h,cpp}      the level screen: drag/tap/long-press, run loop (1x/2x/4x), result card, Show me, hints
-src/map_screen.{h,cpp}        the city map (level select): input, camera, HUD (stars, hints, trophies, settings; Daily +
-                              Lab round buttons), the news since the last visit as animations (glides, lights, gates,
+src/map_screen.{h,cpp}        the city map (level select): input, camera, HUD (stars, hints, trophies, settings; the Lab
+                              round button), the news since the last visit as animations (glides, lights, gates,
                               World 2's bottles, World 3's neighbourhoods and the light running down the canal, World 4's
                               candles catching and the strokes of the star), the top bar + ambience following the district in view
 src/city_map.{h,cpp}          the map in plain C++ (tested): every position (lantern path, window panes, districts, lamps,
@@ -84,7 +84,7 @@ src/city_art.{h,cpp}          the map's look: still art in pooled tiles, lit pan
                               challenge rings, the elixir's phial and beam)
 src/tile_pool.{h,cpp}         a tall still picture as a pool of screen-sized offscreen tiles (LanternArt, CityArt)
 src/stars.h                   StarBits + StarMap (level id -> bits)
-src/menus.{h,cpp}             overlays: settings (palettes), achievements, daily (streak, archive), Lab
+src/menus.{h,cpp}             overlays: settings (palettes), achievements, Lab
 src/board_view.{h,cpp}        a board on screen: per-node animations, markers, hit tests, and what every world shares:
                               the pieces (DrawPiece = the brass toolkit), sockets, flaps, hints. Calls the world's art
 src/board_camera.{h,cpp}      a tall board's view (plain C++, tested): drag + fling, edge auto-scroll, the ride down with
@@ -99,7 +99,7 @@ src/apothecary_art.{h,cpp}    World 2, The Apothecary: still tiles (planked wall
                               shelves + stock, counter, cork board, jars, sink); overlay: copper lines with portholes, bottles,
                               the lazy-susan rack + clock, slips (Caveat), bell, the moments (cork, label, PAID stamp,
                               spill puddle, short ghost fill, unpaid) and the sludge mud
-src/workshop_art.{h,cpp}      the v2 look (the daily, the Lab, a world's levels outside its grammar) + shared machine parts
+src/workshop_art.{h,cpp}      the v2 look (the Lab, a world's levels outside its grammar) + shared machine parts
 src/art_shapes.{h,cpp}        drawing helpers: paths with round bends, Ribbon (seamless translucent bands), strokes,
                               glyphs, glows, brass (medallion, plate, bar)
 src/liquid.{h,cpp}            metaball liquid: blobs per drop from the rules' state -> SpriteBatch -> RGBA16F viewport
@@ -144,8 +144,8 @@ external/WLWengine/           the engine (v0.2.0 + KeepScreenOn + TextStyle::rot
   Turn, Finished, Jammed. `Outcome` = the first failure (kind, node, bottle, tick) for "Show me".
 - Deadlocks that don't depend on turnstile arrows need one-cell links between locks (3-8, 3-11, 3-13): with
   longer links some arrow setting always lets traffic through (priority only decides same-tick arrivals).
-- **Determinism across devices** (pars are baked on the PC, the daily is generated on each phone and must be
-  the same for everyone): pipe cells use doubles + plain `sqrt` (never `std::hypot` / float sums), and the
+- **Determinism across devices** (pars are baked on the PC, a Lab seed is generated on each phone and must be
+  the same puzzle everywhere): pipe cells use doubles + plain `sqrt` (never `std::hypot` / float sums), and the
   generator makes one random draw per statement (C++ leaves argument order unspecified: MSVC and clang differ).
   The test "generated levels are the same on every device" pins fingerprints; run the tests on a phone too.
 
@@ -157,7 +157,7 @@ threadlock_tool format                 rewrite the world files in one layout (a 
 threadlock_tool solve <id>             cells per pipe, every solution, how small placements fail
 threadlock_tool timing <id> [lean|swift]   when each drop enters each junction
 threadlock_tool render <id> <png> [none|lean|swift] [tick]   the board (+ drops at a tick), full height: check layouts
-threadlock_tool daily <yyyymmdd> <png> / lab <seed> <easy|medium|hard> <png>
+threadlock_tool lab <seed> <easy|medium|hard> <png>
 threadlock_tool sounds <dir>           every sound as a 48 kHz WAV, 30 s of ambience, a short demo run (listen on the PC)
 threadlock_tool search <kind> <difficulty> <seed> <count> <min pieces> <max solutions> [png dir]
                                        generated machines as level JSON (a start for hard levels)
@@ -237,5 +237,5 @@ open everything, hints, wipe, ads).
 
 ## Next steps
 DESIGN.md §11 is the build order. All four launch worlds are done (World 4, The Mixing Hall, 23 October), each with
-its district on the map. Next: decide and build the daily puzzle's and the Lab's look (they still use the v2 workshop
+its district on the map. Next: decide and build the Lab's look (it still uses the v2 workshop
 look), then DESIGN §11 step 4 (playtest World 1 with 5-10 people) and step 5 (launch).

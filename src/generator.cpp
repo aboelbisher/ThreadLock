@@ -335,15 +335,6 @@ uint64_t Mix(uint64_t x) {
   return rng.Next();
 }
 
-int64_t DaysFromCivil(int y, int m, int d) {  // Howard Hinnant's algorithm
-  y -= m <= 2;
-  const int era = (y >= 0 ? y : y - 399) / 400;
-  const int yoe = y - era * 400;
-  const int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
-  const int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-  return static_cast<int64_t>(era) * 146097 + doe - 719468;
-}
-
 }  // namespace
 
 Level Generate(uint64_t seed, int difficulty, int only_kind) {
@@ -390,27 +381,6 @@ Level Generate(uint64_t seed, int difficulty, int only_kind) {
     }
   }
   return best;
-}
-
-int DailyWeekday(int yyyymmdd) {
-  const int64_t days = DaysFromCivil(yyyymmdd / 10000, yyyymmdd / 100 % 100, yyyymmdd % 100);
-  return static_cast<int>(((days + 3) % 7 + 7) % 7);  // 1970-01-01 was a Thursday
-}
-
-int DailyDifficulty(int yyyymmdd) { return DailyWeekday(yyyymmdd); }
-
-const char* DailyDifficultyName(int difficulty) {
-  static constexpr const char* kNames[] = {"gentle", "easy", "easy", "medium", "medium", "hard", "hardest"};
-  return kNames[std::clamp(difficulty, 0, 6)];
-}
-
-Level GenerateDaily(int yyyymmdd) {
-  const uint64_t seed = Mix(0xDA11000000ull + static_cast<uint64_t>(yyyymmdd));
-  Level level = Generate(seed, DailyDifficulty(yyyymmdd));
-  level.id = "daily-" + std::to_string(yyyymmdd);
-  level.name = NameFor(seed);
-  level.type = LevelType::Daily;
-  return level;
 }
 
 Level GenerateLab(int64_t seed, const std::string& difficulty) {

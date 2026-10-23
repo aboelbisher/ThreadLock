@@ -16,8 +16,8 @@
 
 // The city map (DESIGN.md §5, §8): the level select. A tall picture of the city you scroll down: World
 // 1's tower with the rose window (progress, not buttons) and a path of numbered lanterns (one per level,
-// its stars under it), then the districts of worlds 2-4 behind their star gates. Daily and the Lab are
-// round buttons in the bottom corners; stars, hints, trophies and settings sit in a slim top bar.
+// its stars under it), then the districts of worlds 2-4 behind their star gates. The Lab is a
+// round button in the bottom corner; stars, hints, trophies and settings sit in a slim top bar.
 //
 // What's new since the map was last seen (city::WhatsNew against the record in device.json) plays as
 // an animation: the view glides to the lantern, it lights and its stars pop, the window's petal lights

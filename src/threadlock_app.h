@@ -31,12 +31,10 @@
 // the game's states on the engine's ScreenStack.
 namespace threadlock {
 
-// Where a level came from: the handmade worlds, today's (or an archived) daily puzzle, the Lab.
+// Where a level came from: the handmade worlds or the Lab.
 struct LevelSource {
-  enum Kind { Main, Daily, Lab } kind = Main;
-  int date = 0;          // Daily: yyyymmdd
-  bool archive = false;  // Daily: a missed day, played from the archive
-  int difficulty = 0;    // Daily / Lab
+  enum Kind { Main, Lab } kind = Main;
+  int difficulty = 0;  // Lab
 };
 
 class ThreadlockApp : public wlw::app::System {
@@ -59,7 +57,7 @@ class ThreadlockApp : public wlw::app::System {
   CityArt& GetCityArt() { return city_art_; }  // the map's look (its tiles freed while it's closed)
   // The big EDIT / PLAY button's gradient (assets/shaders/ui_gradient.shader).
   const std::shared_ptr<wlw::rendering::ShaderMaterial>& ActionMaterial() const { return action_material_; }
-  // How a level's board is drawn: its world's art (world 0 = the daily and the Lab); World 3's canal city
+  // How a level's board is drawn: its world's art (world 0 = the Lab); World 3's canal city
   // only for canal maps (its older levels keep the workshop look).
   BoardArt& ArtFor(const Level& level);
   const wlw::ui::Font& GetFont() const { return *font_; }
@@ -76,13 +74,11 @@ class ThreadlockApp : public wlw::app::System {
   // ---- Moving between screens ----
   void OpenLevel(const Level* level, const LevelSource& source = {});
   void OpenMap(const Level* focus = nullptr);
-  void OpenDaily(int date, bool archive);
   void OpenLab();
   void OpenSettings();
   void OpenAchievements();
-  void OpenDailyMenu();
   void OpenLabMenu();
-  // A generated level (daily / Lab), kept alive as long as a screen may use it.
+  // A generated level (the Lab), kept alive as long as a screen may use it.
   const Level* Keep(Level level);
 
   // ---- Ads (DESIGN.md §10) ----
@@ -92,7 +88,7 @@ class ThreadlockApp : public wlw::app::System {
   // A solved level counts towards the interstitial pacing.
   void LevelSolved();
   // Before leaving a solved level (Next / Map): shows an interstitial if one is due and allowed,
-  // then runs `then` (at once if none). `allowed` = our own rules (not after a finale, the daily...).
+  // then runs `then` (at once if none). `allowed` = our own rules (not after a finale...).
   void BetweenLevels(bool allowed, std::function<void()> then);
 
   // A short message over everything (a new achievement, a reward).

@@ -233,7 +233,7 @@ struct TrayPiece {
   bool locked = false;
 };
 
-enum class LevelType : uint8_t { Build, Repair, Spectacle, Challenge, Daily, Lab };
+enum class LevelType : uint8_t { Build, Repair, Spectacle, Challenge, Lab };
 const char* LevelTypeKey(LevelType type);
 bool ParseLevelType(std::string_view text, LevelType& out);
 

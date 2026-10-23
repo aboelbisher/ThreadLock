@@ -59,7 +59,6 @@ void Progress::Read() {
   achievements_ = ReadSet(p, "achievements");
   two_answers_ = ReadSet(p, "two_answers");
   counters_ = p.contains("counters") ? wlw::kit::Counters::FromJson(p["counters"]) : wlw::kit::Counters{};
-  daily_ = p.contains("daily") ? wlw::kit::DailyLog::FromJson(p["daily"]) : wlw::kit::DailyLog{};
 
   const Json& d = device_.Data();
   const Json settings_json = d.contains("settings") ? d["settings"] : Json::object();
@@ -72,7 +71,6 @@ void Progress::Read() {
   hint_ads_day_ = Get(d, "hint_ads_day", 0);
   hint_ads_ = Get(d, "hint_ads", 0);
   ad_games_ = Get(d, "ad_games", 0);
-  last_mend_ = Get(d, "last_mend", 0);
   const Json lab = d.contains("lab") ? d["lab"] : Json::object();
   lab_difficulty = Get<std::string>(lab, "difficulty", "medium");
   lab_seed = Get<int64_t>(lab, "seed", 1);
@@ -98,7 +96,6 @@ void Progress::Write() {
   p["achievements"] = achievements_;
   p["two_answers"] = two_answers_;
   p["counters"] = counters_.ToJson();
-  p["daily"] = daily_.ToJson();
 
   Json& d = device_.Data();
   d["settings"] = {{"sound", settings.sound},
@@ -110,7 +107,6 @@ void Progress::Write() {
   d["hint_ads_day"] = hint_ads_day_;
   d["hint_ads"] = hint_ads_;
   d["ad_games"] = ad_games_;
-  d["last_mend"] = last_mend_;
   d["lab"] = {{"difficulty", lab_difficulty}, {"seed", lab_seed}};
   if (map_seen_known_) {
     Json seen_stars = Json::object();
@@ -253,7 +249,6 @@ int Progress::AchievementProgress(const Achievement& achievement) const {
     return std::min(lean, achievement.goal);
   }
   if (key == "two_answers") return std::min(static_cast<int>(two_answers_.size()), achievement.goal);
-  if (key == "daily_week") return std::min(daily_.BestStreak(), achievement.goal);
   if (key == "first_world") return Solved("1-15") ? 1 : 0;
   return 0;
 }
@@ -266,27 +261,6 @@ std::vector<std::string> Progress::UpdateAchievements(const Catalog& catalog) {
       fresh.push_back(achievement.key);
   }
   return fresh;
-}
-
-// ---- Daily ----
-
-bool Progress::MarkDaily(int date) {
-  if (!daily_.Mark(date)) return false;
-  progress_.MarkDirty();
-  return true;
-}
-
-bool Progress::CanMendStreak(int today) const {
-  if (last_mend_ == 0) return true;
-  const int64_t days =
-      wlw::kit::Date::FromNumber(today).DayNumber() - wlw::kit::Date::FromNumber(last_mend_).DayNumber();
-  return days >= 7;
-}
-
-void Progress::MendStreak(int date, int today) {
-  MarkDaily(date);
-  last_mend_ = today;
-  device_.MarkDirty();
 }
 
 // ---- Hints ----
@@ -341,16 +315,16 @@ bool Progress::PaletteOwned(const Catalog& catalog, std::string_view key) const 
   if (key == "classic" || key == "contrast") return true;
   if (key == "neon") return challenges_done(1);
   if (key == "sunset") return challenges_done(2);
-  if (key == "deep_sea") return daily_.BestStreak() >= 7;
-  if (key == "prism") return daily_.BestStreak() >= 30;
+  if (key == "deep_sea") return challenges_done(3);
+  if (key == "prism") return challenges_done(4);
   return false;
 }
 
 const char* Progress::PaletteUnlockText(std::string_view key) {
   if (key == "neon") return "Solve World 1's challenges";
   if (key == "sunset") return "Solve World 2's challenges";
-  if (key == "deep_sea") return "A 7-day daily streak";
-  if (key == "prism") return "A 30-day daily streak";
+  if (key == "deep_sea") return "Solve World 3's challenges";
+  if (key == "prism") return "Solve World 4's challenges";
   return "";
 }
 

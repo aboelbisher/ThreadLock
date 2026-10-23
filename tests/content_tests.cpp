@@ -1,5 +1,5 @@
 // The game's content: every shipped level (assets/levels) is valid, solvable and matches the pars
-// file; generated levels (daily, Lab) are deterministic, valid and solvable.
+// file; generated levels (the Lab) are deterministic, valid and solvable.
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -1161,26 +1161,24 @@ TEST_SUITE("content") {
   }
 
   TEST_CASE("generated levels are the same on every device") {
-    // Fingerprints of a week of dailies and three Lab levels. The daily puzzle is "the same for everyone":
-    // a compiler or platform that builds a different level from the same seed fails here (run these
+    // Fingerprints of three Lab levels. A Lab seed is always the same puzzle: a compiler or platform that builds a
+    // different level from the same seed fails here (run these
     // tests on a phone too: CLAUDE.md). Change them only on purpose (a new generator = new puzzles).
     struct Print {
       int seed;
-      const char* lab;  // null = a daily (seed = the date)
+      const char* lab;
       const char* name;
       size_t nodes;
       int pieces, ticks, solutions;
     };
     // Rules v3 (open sockets, 17 October 2026) made these.
     const Print prints[] = {
-        {20261012, nullptr, "Winding Press", 6, 1, 86, 14},  {20261013, nullptr, "Sleepy Loom", 5, 1, 86, 3},
-        {20261014, nullptr, "Hollow Channel", 8, 2, 115, 6}, {20261015, nullptr, "Glass Loom", 6, 2, 95, 2},
-        {20261016, nullptr, "Sleepy Valve", 6, 2, 90, 1},    {20261017, nullptr, "Copper Spring", 7, 3, 116, 2},
-        {20261018, nullptr, "Twin Loom", 8, 3, 131, 4},      {7, "easy", "Copper Canal", 5, 1, 100, 3},
-        {7, "medium", "Velvet Canal", 6, 2, 116, 1},         {7, "hard", "Crooked Valve", 8, 3, 123, 2},
+        {7, "easy", "Copper Canal", 5, 1, 100, 3},
+        {7, "medium", "Velvet Canal", 6, 2, 116, 1},
+        {7, "hard", "Crooked Valve", 8, 3, 123, 2},
     };
     for (const Print& print : prints) {
-      const Level level = print.lab ? GenerateLab(print.seed, print.lab) : GenerateDaily(print.seed);
+      const Level level = GenerateLab(print.seed, print.lab);
       INFO(level.id << " " << level.name);
       CHECK(level.name == print.name);
       CHECK(level.nodes.size() == print.nodes);
@@ -1201,12 +1199,13 @@ TEST_SUITE("content") {
     CHECK(std::adjacent_find(ids.begin(), ids.end()) == ids.end());
   }
 
-  TEST_CASE("generated levels: deterministic, valid, solvable, harder later in the week") {
+  TEST_CASE("generated levels: deterministic, valid, solvable at every difficulty") {
     const auto start = std::chrono::steady_clock::now();
-    for (int date : {20261012, 20261013, 20261014, 20261015, 20261016, 20261017, 20261018}) {
-      const Level a = GenerateDaily(date);
-      const Level b = GenerateDaily(date);
-      INFO("daily " << date);
+    for (int difficulty = 0; difficulty <= 6; ++difficulty) {
+      const uint64_t seed = 1000u + static_cast<uint64_t>(difficulty);
+      const Level a = Generate(seed, difficulty);
+      const Level b = Generate(seed, difficulty);
+      INFO("difficulty " << difficulty);
       REQUIRE(!a.nodes.empty());
       CHECK(a.id == b.id);
       CHECK(a.nodes.size() == b.nodes.size());
@@ -1219,8 +1218,6 @@ TEST_SUITE("content") {
       CHECK(report.pars.pieces == a.pars.pieces);
       CHECK(Simulate(copy, copy.pars.lean).solved);
     }
-    CHECK(DailyWeekday(20261012) == 0);  // a Monday
-    CHECK(DailyWeekday(20261018) == 6);  // a Sunday
     for (const char* difficulty : {"easy", "medium", "hard"}) {
       for (int64_t seed = 1; seed <= 6; ++seed) {
         Level level = GenerateLab(seed, difficulty);

@@ -31,7 +31,7 @@ wlw::CVar<float> cv_scroll{"tl.mapscroll", -1.0f, "The map opens scrolled to thi
 wlw::CVar<std::string> cv_stars{"tl.stars", "", "The map's stars instead of the saved ones: 1-*:7,2-1:3 (dev)"};
 
 constexpr float kBar = 58.0f;     // the top bar under the safe area's top
-constexpr float kRound = 64.0f;   // Daily, Lab
+constexpr float kRound = 64.0f;   // the Lab
 constexpr float kAppear = 0.45f;  // seconds for a star or a pane to light
 constexpr float kFlash = 0.7f;
 // The sanctum (World 4): a stroke of the star drawing, a candle catching, a ring lighting, the ring round the sigil,
@@ -1010,12 +1010,10 @@ void MapScreen::RenderUI(UIContext& ui) {
   // The finger: a drag scrolls (and flings), a tap picks a lantern; any touch skips an animation.
   const Rect safe = ui.safe_area;
   const glm::vec2 p = ui.pointer.position;
-  const Rect daily{{safe.min.x + 14.0f, safe.max.y - 16.0f - kRound},
-                   {safe.min.x + 14.0f + kRound, safe.max.y - 16.0f}};
   const Rect lab{{safe.max.x - 14.0f - kRound, safe.max.y - 16.0f - kRound}, {safe.max.x - 14.0f, safe.max.y - 16.0f}};
   if (ui.pointer.pressed) press_at_ = p;
   if (ui.pointer.pressed && ui.interactive) {
-    const bool hud = p.y < safe.min.y + kBar || Inside(daily, p) || Inside(lab, p);
+    const bool hud = p.y < safe.min.y + kBar || Inside(lab, p);
     if (Busy() || (glide_.on && glide_.follow)) {
       Skip();
     } else if (!hud) {
@@ -1097,9 +1095,7 @@ void MapScreen::DrawHud(UIContext& ui) {
     app_.OpenAchievements();
   }
 
-  // Daily and the Lab in the bottom corners.
-  const int today = app_.Today();
-  const bool daily_done = progress.Daily().Marked(today);
+  // The Lab in the bottom corner.
   const bool lab_open = progress.LabOpen(catalog);
   auto round_button = [&](const Rect& r, Icon icon, const char* label, bool dim, bool dot) {
     const glm::vec2 c = r.Center();
@@ -1112,15 +1108,8 @@ void MapScreen::DrawHud(UIContext& ui) {
     canvas.Text(font, label, c + glm::vec2(0.0f, 16.0f), 11.0f * kText, Align::Center, {.color = ink});
     if (dot) canvas.Circle(c + glm::vec2(22.0f, -22.0f), 6.0f, Hex(0xFFC53D));
   };
-  round_button({{safe.min.x + 14.0f, safe.max.y - 16.0f - kRound}, {safe.min.x + 14.0f + kRound, safe.max.y - 16.0f}},
-               daily_done ? Icon::Check : Icon::Clock, "Daily", false, !daily_done);
   round_button({{safe.max.x - 14.0f - kRound, safe.max.y - 16.0f - kRound}, {safe.max.x - 14.0f, safe.max.y - 16.0f}},
                lab_open ? Icon::Grid : Icon::Lock, "Lab", !lab_open, false);
-  if (Button(ui,
-             {{safe.min.x + 14.0f, safe.max.y - 16.0f - kRound}, {safe.min.x + 14.0f + kRound, safe.max.y - 16.0f}})) {
-    app_.GetFeedback().Play(synth::Sound::Tap);
-    app_.OpenDailyMenu();
-  }
   if (Button(ui,
              {{safe.max.x - 14.0f - kRound, safe.max.y - 16.0f - kRound}, {safe.max.x - 14.0f, safe.max.y - 16.0f}})) {
     app_.GetFeedback().Play(synth::Sound::Tap);

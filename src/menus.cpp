@@ -19,7 +19,6 @@ using wlw::ui::UIContext;
 using wlw::ui::Variant;
 
 constexpr const char* kVersion = "Threadlock 0.2";
-constexpr const char* kWeekdays[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 
 }  // namespace
 
@@ -38,7 +37,6 @@ void MenuScreen::RenderUI(UIContext& ui) {
   switch (kind_) {
     case Kind::Settings: Settings(ui); break;
     case Kind::Achievements: Achievements(ui); break;
-    case Kind::Daily: Daily(ui); break;
     case Kind::Lab: Lab(ui); break;
   }
 }
@@ -152,74 +150,6 @@ void MenuScreen::Achievements(UIContext& ui) {
                   {rect.max.x - 10.0f, rect.min.y + 32.0f}, 12.0f, Align::Right, Outlined(ui_color::kMuted));
     }
   }
-}
-
-void MenuScreen::Daily(UIContext& ui) {
-  wlw::ui::Canvas& canvas = ui.canvas;
-  const wlw::ui::Font& font = app_.GetFont();
-  Progress& progress = app_.GetProgress();
-  const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, "Daily puzzle", {330.0f, 460.0f}, true);
-  if (dialog.close) {
-    Close();
-    return;
-  }
-  const Rect& r = dialog.content;
-  const int today = app_.Today();
-  const wlw::kit::Date date = wlw::kit::Date::FromNumber(today);
-  const int weekday = DailyWeekday(today);
-  canvas.Text(font,
-              std::string(kWeekdays[weekday]) + " " + std::to_string(date.day) + "." + std::to_string(date.month) +
-                  " - " + DailyDifficultyName(DailyDifficulty(today)),
-              {r.Center().x, r.min.y + 14.0f}, 17.0f, Align::Center, Outlined(ui_color::kInk));
-  canvas.Text(font, "Easy on Monday, hard on Sunday. The same for everyone.", {r.Center().x, r.min.y + 38.0f}, 12.0f,
-              Align::Center, Outlined(ui_color::kMuted));
-  const int streak = progress.Daily().CurrentStreak(today);
-  const int best = progress.Daily().BestStreak();
-  canvas.Text(font, "Streak " + std::to_string(streak) + ",  best " + std::to_string(best),
-              {r.Center().x, r.min.y + 68.0f}, 18.0f, Align::Center, Outlined(ui_color::kStar));
-  const bool done = progress.Daily().Marked(today);
-  if (wlw::ui::Button(ui, done ? "Play again" : "Play today's puzzle",
-                      {{r.min.x + 10.0f, r.min.y + 92.0f}, {r.max.x - 10.0f, r.min.y + 142.0f}},
-                      done ? Variant::Secondary : Variant::Primary, Icon::Play)) {
-    app_.GetFeedback().Play(synth::Sound::Tap);
-    Stack().Pop();
-    app_.OpenDaily(today, false);
-    return;
-  }
-  canvas.Text(font, "The last week", {r.min.x + 10.0f, r.min.y + 166.0f}, 15.0f, Align::Left,
-              Outlined(ui_color::kMuted));
-  const float cell = (r.Size().x - 20.0f) / 7.0f;
-  wlw::kit::Ads& ads = app_.GetAds();
-  for (int k = 0; k < 7; ++k) {
-    const int day = date.AddDays(k - 7).ToNumber();
-    const bool solved = progress.Daily().Marked(day);
-    const Rect rect{{r.min.x + 10.0f + cell * static_cast<float>(k) + 2.0f, r.min.y + 182.0f},
-                    {r.min.x + 10.0f + cell * static_cast<float>(k + 1) - 2.0f, r.min.y + 252.0f}};
-    const wlw::ui::Press press = wlw::ui::Pressable(ui, wlw::ui::WidgetId("day" + std::to_string(day), rect), rect);
-    canvas.FillRect(rect, solved ? ui.theme.surface_raised : WithAlpha(ui.theme.track, 0.8f), 8.0f);
-    canvas.Text(font, kWeekdays[DailyWeekday(day)], {rect.Center().x, rect.min.y + 16.0f}, 13.0f, Align::Center,
-                Outlined(ui_color::kMuted));
-    wlw::ui::DrawIcon(canvas, solved ? Icon::Check : Icon::Play,
-                      {rect.Center() - glm::vec2(10.0f, -6.0f), rect.Center() + glm::vec2(10.0f, 26.0f)},
-                      solved ? ui_color::kGood : ui_color::kInk);
-    if (press.clicked && !solved) {
-      if (!ads.RewardedReady()) {
-        app_.Toast("No ad right now: try again soon");
-      } else {
-        ThreadlockApp& app = app_;
-        app.OfferRewarded([&app, day] { app.OpenDaily(day, true); });
-        Stack().Pop();
-        return;
-      }
-    }
-  }
-  const bool mend = progress.CanMendStreak(today);
-  canvas.Text(font, "Missed a day? Watch an ad to play it.", {r.Center().x, r.min.y + 276.0f}, 13.0f, Align::Center,
-              Outlined(ui_color::kMuted));
-  canvas.Text(font, mend ? "Once a week, that also mends your streak." : "Your streak mend is used for this week.",
-              {r.Center().x, r.min.y + 296.0f}, 13.0f, Align::Center, Outlined(ui_color::kMuted));
-  canvas.Text(font, "Each daily solved: +1 hint", {r.Center().x, r.max.y - 14.0f}, 13.0f, Align::Center,
-              Outlined(ui_color::kGood));
 }
 
 void MenuScreen::Lab(UIContext& ui) {

@@ -9,14 +9,13 @@
 #include "catalog.h"
 #include "city_map.h"
 #include "stars.h"
-#include "wlw/kit/daily.h"
 #include "wlw/kit/progress.h"
 #include "wlw/kit/save_store.h"
 
 // What Threadlock remembers between launches, in two files (wlw::kit::SaveStore), like Bluzzle:
 //
 //   progress.json  the player's progress, built only from mergeable shapes (a union of star bits per
-//                  level, sets, per-device counters, the daily log), so a later cloud sync can
+//                  level, sets, per-device counters), so a later cloud sync can
 //                  combine two devices without losing anything.
 //   device.json    this device: settings, hints (a currency, not synced), ad pacing, the Lab.
 //
@@ -43,7 +42,6 @@ inline constexpr Achievement kAchievements[] = {
     {"close_shave", "Close Shave", "100 near misses.", 100},
     {"lean_machine", "Lean Machine", "Lean on 20 levels.", 20},
     {"two_answers", "Two Answers", "Lean and Swift with different machines on 10 levels.", 10},
-    {"daily_week", "Regular", "A 7-day daily streak.", 7},
     {"first_world", "First Light", "Finish World 1.", 1},
 };
 
@@ -89,13 +87,6 @@ class Progress {
   // Checks every achievement against the current numbers; returns the keys newly earned.
   std::vector<std::string> UpdateAchievements(const Catalog& catalog);
 
-  // ---- Daily puzzle ----
-  wlw::kit::DailyLog& Daily() { return daily_; }
-  const wlw::kit::DailyLog& Daily() const { return daily_; }
-  bool MarkDaily(int date);
-  bool CanMendStreak(int today) const;  // a missed day may mend the streak once a week
-  void MendStreak(int date, int today);
-
   // ---- Hints (this device) ----
   int Hints() const { return hints_; }
   void AddHints(int amount);
@@ -138,12 +129,10 @@ class Progress {
   std::set<std::string> achievements_;
   std::set<std::string> two_answers_;  // levels where Lean and Swift came from different runs
   wlw::kit::Counters counters_;
-  wlw::kit::DailyLog daily_;
   int hints_ = 3;
   int hint_ads_day_ = 0;
   int hint_ads_ = 0;
   int ad_games_ = 0;
-  int last_mend_ = 0;
   bool map_seen_known_ = false;
   city::Seen map_seen_;
 };

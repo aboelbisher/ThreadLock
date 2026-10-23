@@ -406,7 +406,7 @@ Grand Works). Signals and time slices have moved into worlds 3 and 2; W5 keeps b
 bucket).
 
 Level types: build (default), repair (pieces placed, one thing wrong), spectacle (a breather made for
-watching), challenge (optional, hard, unlocks cosmetics), daily, Lab.
+watching), challenge (optional, hard, unlocks cosmetics), Lab.
 
 ## 6. Stars
 
@@ -422,11 +422,9 @@ often has two good answers. World gates: the next world opens at about 45% of th
 ## 7. Why players stay
 
 The run (20–60 s of tension and music), the level (place, run, fix; instant retry), the session (a
-world's arc), the days (the daily puzzle and its streak, challenges, the Lab, collections,
-achievements). First launch: no menu, level 1-1 on screen at once; the map appears after 1-3.
-Daily puzzle: generated, the same for everyone, easy on Monday and hard on Sunday; a streak; the last
-week's archive. The Lab: endless generated puzzles at a chosen difficulty, after World 2. Collections:
-liquid palettes earned with challenges and streaks (a high-contrast palette is free). Achievements:
+world's arc), the days (challenges, the Lab, collections, achievements). First launch: no menu, level 1-1 on screen at once; the map appears after 1-3.
+The Lab: endless generated puzzles at a chosen difficulty, after World 2. Collections:
+liquid palettes earned with each world's challenges (a high-contrast palette is free). Achievements:
 Threadlocked, Close Shave (100 near misses), Lean Machine, Two Answers. No energy, no lives, no timers
 on thinking, no paying to progress.
 
@@ -443,7 +441,7 @@ run an idle piece sits dim and still. A solved card (stars, time, pieces; Next, 
 failure at quarter speed under a spotlight. Hints in three steps: Show me (free), place one (1 hint),
 show the solution (2 hints or a rewarded ad; Lean and Swift then need a machine of your own).
 Map: the city (§5); worlds open behind star gates. A slim top bar (stars, hints; trophies, settings) and
-the Daily puzzle and the Lab as round buttons in the bottom corners; drag and fling to scroll, tap a
+the Lab as a round button in the bottom corner; drag and fling to scroll, tap a
 lantern to play its level. Coming back from a level focuses its lantern.
 
 ## 9. Look, sound and feel
@@ -459,14 +457,14 @@ high-contrast palette, reduced motion, large touch targets, one hand.
 
 No banners, no app-open ads, nothing while editing or running. Interstitials only after a solve, on
 Next or Map, paced by `kit::AdPacing {first_after_games = 10, games_between = 3, min_seconds_between =
-180}` (a solved level counts as a game) and never after a failed run, a world finale, the daily puzzle
-or a solve that took five or more runs. Rewarded: +1 hint (up to 5 a day), show the solution, a missed
-daily (once a week it also mends the streak), a Lab hint. Later: remove-ads purchase (needs Play
+180}` (a solved level counts as a game) and never after a failed run, a world finale
+or a solve that took five or more runs. Rewarded: +1 hint (up to 5 a day), show the solution, a Lab hint. Later: remove-ads purchase (needs Play
 Billing in the kit), cosmetics never sold for ads.
 
 ## 11. Building it
 
-v2 was built on 16 October: rules v2, solver, generator, level tool, 72 levels, view v2, map, daily, Lab,
+v2 was built on 16 October: rules v2, solver, generator, level tool, 72 levels, view v2, map, daily (removed
+23 October), Lab,
 saves, sounds, ads. v3, in order; each step is built, verified (PC tests and the Pixel 4), shown, and
 committed after the owner's OK, in small commits:
 
@@ -488,15 +486,15 @@ committed after the owner's OK, in small commits:
    district. **World 4 done (23 October):** the Sanctum (sigils with arcs, flasks and phials, twin seals,
    mixer globes; sludge, the lonely seal, the circle of waiting, short, spill moments), 14 levels + 3
    challenges + The Great Work (two sigils), its choir / harp / organ sounds and sanctum ambience, the
-   sanctum floor district. **All four launch worlds are built.** Next: the daily's and the Lab's look.
+   sanctum floor district. **All four launch worlds are built.** The daily puzzle was removed (23 October: the owner's call); the Lab
+   stays. Next: the Lab's look.
 4. Playtest World 1 with 5–10 people; adjust levels with the tool.
 5. Launch: Threadlock's own AdMob app and units, analytics, store page, closed test. Then worlds 5–8 as
    live updates.
 
 The cost the owner accepted: four looks are about four times the drawing work (each world needs its own
 pipes, containers, junctions, background, payoff animation and sounds), and the level files gain
-per-world extras. To decide next: which look the daily and the Lab use (they still use the v2 workshop
-look); later, the W5–8 re-plan.
+per-world extras. To decide next: which look the Lab uses (it still uses the v2 workshop look); later, the W5–8 re-plan.
 
 ## 12. Decisions
 
@@ -506,7 +504,7 @@ Taken 16 October 2026 (v2), all as recommended:
 3. Pieces fit socket shapes: **replaced by v3: every piece fits every socket.**
 4. Tanks come in fixed sizes (+4, +8): **yes**.
 5. The stars are Solve / Lean / Swift: **yes**.
-6. Launch with worlds 1–4, the daily and the Lab: **yes**.
+6. Launch with worlds 1–4 and the Lab: **yes** (the daily puzzle was dropped on 23 October).
 
 Taken 16 October 2026 (v3, round 3 of the canvas), all as recommended:
 7. Any piece in any socket, as in the table of §3.

@@ -5,8 +5,7 @@
 //   threadlock_tool solve  <id> [assets]       every solution, and how the small placements fail
 //   threadlock_tool timing <id> [placement]    when each drop enters each junction (placement: none|lean|swift)
 //   threadlock_tool render <id> <out.png> [none|lean|swift] [tick]   the board, and the drops at `tick`
-//   threadlock_tool daily <yyyymmdd> <out.png>          generate a daily puzzle, solve it, render it
-//   threadlock_tool lab <seed> <easy|medium|hard> <out.png>
+//   threadlock_tool lab <seed> <easy|medium|hard> <out.png>  generate a Lab puzzle, solve it, render it
 //   threadlock_tool sounds <dir>                        every sound as a WAV + 30 s of ambience + a demo run
 //
 // `assets` defaults to ./assets (run it from the repo's root).
@@ -720,14 +719,14 @@ int main(int argc, char** argv) {
     }
     return 0;
   }
-  if ((command == "daily" && argc > 3) || (command == "lab" && argc > 4)) {
-    Level level = command == "daily" ? GenerateDaily(std::atoi(argv[2])) : GenerateLab(std::atoll(argv[2]), argv[3]);
+  if (command == "lab" && argc > 4) {
+    Level level = GenerateLab(std::atoll(argv[2]), argv[3]);
     std::printf("%s \"%s\": %zu nodes, %zu pipes, tray %zu, pars %d pieces / %d ticks, %d solutions\n",
                 level.id.c_str(), level.name.c_str(), level.nodes.size(), level.pipes.size(), level.tray.size(),
                 level.pars.pieces, level.pars.ticks, level.pars.solutions);
     std::printf("  lean: %s\n  swift: %s\n", PlacementText(level, level.pars.lean).c_str(),
                 PlacementText(level, level.pars.swift).c_str());
-    return Render(level, argv[command == "daily" ? 3 : 4], level.pars.lean, 0, "assets");
+    return Render(level, argv[4], level.pars.lean, 0, "assets");
   }
   // search <kind> <difficulty> <first seed> <count> <min pieces> <max solutions> [out dir]: generated
   // machines good enough to start a handmade level from, as level JSON (and PNGs when given a dir).
