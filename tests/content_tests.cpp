@@ -708,6 +708,101 @@ TEST_SUITE("content") {
     CHECK(loop.front() == loop.back());
   }
 
+  TEST_CASE("every World 4 level is a sigil whose every placement ends") {
+    const std::vector<World> worlds = LoadAll();
+    REQUIRE(worlds.size() >= 4);
+    int rose = 0, pearl = 0, twins = 0, sigils = 0;
+    for (const Level& level : worlds[3].levels) {
+      INFO("level " << level.id);
+      if (level.id == "4-15") continue;  // the finale's two sigils come with step d B
+      ++sigils;
+      CHECK(sigil::IsSigil(level));
+      CHECK(LookProblems(level).empty());
+      bool has_rose = false, has_pearl = false, has_twin = false, has_mixer = false;
+      for (const Node& node : level.nodes) {
+        for (const Bead& bead : node.beads) has_rose = has_rose || bead.Has(Color::Rose);
+        has_pearl = has_pearl || (node.kind == NodeKind::Cup && node.want == Color::Pearl);
+        has_twin = has_twin || node.twin >= 0;
+      }
+      for (const TrayPiece& piece : level.tray) has_mixer = has_mixer || piece.piece.type == PieceType::Mixer;
+      CHECK(has_mixer);
+      rose += has_rose;
+      pearl += has_pearl;
+      twins += has_twin;
+      int longest = 0;
+      ForEachPlacement(level, [&](const Placement& placement) {
+        const Outcome outcome = Simulate(level, placement, false);
+        CHECK(outcome.over);
+        longest = std::max(longest, outcome.ticks);
+        return true;
+      });
+      CHECK(longest < 400);
+    }
+    CHECK(sigils == 17);
+    CHECK(rose >= 4);
+    CHECK(pearl >= 2);
+    CHECK(twins >= 3);
+  }
+
+  TEST_CASE("World 4's lessons: leftovers, the crossing mixer, the wrong globe, hold and wait, pearl") {
+    // 4-3: a mixer alone holds the leftover amber and waits for a blue that never comes.
+    {
+      const Level level = Shipped("4-3");
+      Board board(level);
+      REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), NodeOf(level, "m")));
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.failure == Failure::Jam);
+      CHECK(board.Jam().lonely == NodeOf(level, "m"));
+    }
+    // 4-5: a mixer on the crossing sends each mixed pair on its own lane: green lands in both phials.
+    {
+      const Level level = Shipped("4-5");
+      Board board(level);
+      REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), NodeOf(level, "x")));
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.solved);
+      CHECK(run.Ticks(EventType::Land, NodeOf(level, "cl")).size() > 0);
+      CHECK(run.Ticks(EventType::Land, NodeOf(level, "cr")).size() > 0);
+    }
+    // 4-11: as placed it clots in the bottom globe; moving the mixer there solves it.
+    {
+      const Level level = Shipped("4-11");
+      Board board(level);
+      const Run broken = RunBoard(board);
+      CHECK(broken.outcome.failure == Failure::Mud);
+      CHECK(broken.outcome.fail_node == NodeOf(level, "m"));
+      board.Stop();
+      // The placed mixer moves from the crossing to the bottom globe.
+      const int placed = board.PieceAt(NodeOf(level, "x2"));
+      REQUIRE(placed >= 0);
+      REQUIRE(board.Place(placed, NodeOf(level, "m")));
+      CHECK(RunBoard(board).outcome.solved);
+    }
+    // 4-12: on the empty board each mixer holds one drop and waits for the other's: a circle of waiting.
+    {
+      const Level level = Shipped("4-12");
+      Board board(level);
+      const Run run = RunBoard(board);
+      REQUIRE(run.outcome.failure == Failure::Jam);
+      const JamReport jam = board.Jam();
+      for (const char* mixer : {"m1", "m2"}) {
+        CHECK(std::find(jam.stuck_nodes.begin(), jam.stuck_nodes.end(), NodeOf(level, mixer)) != jam.stuck_nodes.end());
+      }
+      if (!jam.cycle.empty()) {
+        const std::vector<Vec2> loop = sigil::JamLoop(level, jam.cycle);
+        REQUIRE(loop.size() >= 3);
+        CHECK(loop.front() == loop.back());
+      }
+    }
+    // 4-13: green mixed, then mixed with rose: eight pearls land and it solves.
+    {
+      const Level level = Shipped("4-13");
+      const Outcome lean = Simulate(level, level.pars.lean, false);
+      CHECK(lean.solved);
+      CHECK(Board(level).GetLevel().nodes[static_cast<size_t>(NodeOf(level, "cp"))].want == Color::Pearl);
+    }
+  }
+
   TEST_CASE("the canal city round 3-6: locks, harbours, the mill's house, the gate's lamp, rooftops") {
     const Level level = MakeLevel(kMillGateCanals);
     auto near = [](Vec2 a, Vec2 b) { return std::fabs(a.x - b.x) < 0.01f && std::fabs(a.y - b.y) < 0.01f; };

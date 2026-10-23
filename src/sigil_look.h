@@ -39,7 +39,7 @@ Vessel FlaskAt(const Level& level, int spout);
 // A cup's phial: r 24 for an order of 5 or more, else 15, hanging past the node the way its last groove runs
 // (centre = node + u (r + 9)), its neck back toward the groove.
 Vessel PhialAt(const Level& level, int cup);
-// A phial's pill (glyph + count): under it, or over it when under would leave the board.
+// A phial's pill (glyph + count): under it (over it when it hangs neck down, or when under would leave the board).
 Vec2 PillAt(const Level& level, int cup);
 inline constexpr float kFlaskNeck = 17.0f, kPhialNeck = 22.0f, kPillHeight = 18.0f;
 // The glass round a junction: a socket's globe 26 (the piece shows inside it), a fixed junction's 15, a twin

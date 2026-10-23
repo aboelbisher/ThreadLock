@@ -284,6 +284,8 @@ Vessel PhialAt(const Level& level, int cup) {
 
 Vec2 PillAt(const Level& level, int cup) {
   const Vessel phial = PhialAt(level, cup);
+  // A phial hanging neck down (fed from below) has its groove under it: the pill goes over it, clear of the glass.
+  if (phial.up.y > 0.5f) return {phial.centre.x, phial.centre.y - phial.r - 14.0f};
   const Vec2 below{phial.centre.x, phial.centre.y + phial.r + 22.0f};
   if (below.y <= level.look.height - 2.0f) return below;
   return {phial.centre.x, phial.centre.y - phial.r - kPhialNeck - 14.0f};
