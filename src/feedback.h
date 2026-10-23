@@ -1,7 +1,11 @@
 #pragma once
 
 #include <array>
+#include <atomic>
+#include <deque>
 #include <memory>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 #include "ambience.h"
@@ -17,13 +21,19 @@ namespace threadlock {
 
 class Feedback {
  public:
-  void Load(wlw::audio::Audio& audio);  // synthesizes every sound (a few ms each)
+  // Synthesizes the Workshop's sounds (the UI's among them) at once, then the other worlds' on a worker thread
+  // (~1 s on a phone for all of them): each is handed to the mixer by Update as it's ready, and plays from then on.
+  void Load(wlw::audio::Audio& audio);
+  ~Feedback();
 
   void Play(synth::Sound sound, float volume = 1.0f, float pitch = 1.0f, float pan = 0.0f);
   void Vibrate(int milliseconds, float strength);
 
   // The world's instruments (its look picks them).
-  void SetSoundSet(synth::SoundSet set) { set_ = set; }
+  void SetSoundSet(synth::SoundSet set);
+  // The worker makes these sounds next (a world about to be heard).
+  void Request(synth::SoundSet set);
+  bool Ready(synth::Sound sound) const;  // handed to the mixer
   synth::SoundSet GetSoundSet() const { return set_; }
 
   // Sounds and vibrations for one tick's events, heard from the camera on a tall board (a cue held for later
@@ -35,7 +45,7 @@ class Feedback {
   // The ambience bed: on while a level that has one is open, ducked to 60% while a run plays. Applied
   // once a frame by Update, so leaving one level for the next doesn't stop and restart it.
   void SetAmbience(bool on, bool running, Ambience::Bed bed = Ambience::Bed::Lantern);
-  void Update();  // ThreadlockApp::OnUpdate
+  void Update();  // ThreadlockApp::OnUpdate: also hands the worker's sounds to the mixer
 
   // The settings (ThreadlockApp::ApplySettings); music = the ambience (Bus::Music).
   void SetSettings(bool sound, bool haptics, bool music);
@@ -56,7 +66,18 @@ class Feedback {
   };
 
   wlw::audio::Audio* audio_ = nullptr;
-  std::array<wlw::audio::Audio::SoundId, static_cast<size_t>(synth::Sound::Count)> ids_{};
+  static constexpr size_t kSounds = static_cast<size_t>(synth::Sound::Count);
+  void Work(uint32_t rate);  // the worker: the queued sets, one sound at a time
+  void Add(size_t sound, const std::vector<float>& mono);
+
+  std::array<wlw::audio::Audio::SoundId, kSounds> ids_{};  // kNoSound until handed to the mixer
+  // The worker's: each sound made (mono) and whether it's done; the sets still to make, the next first.
+  std::array<std::vector<float>, kSounds> made_;
+  std::array<std::atomic<bool>, kSounds> ready_{};
+  std::deque<synth::SoundSet> queue_;
+  std::mutex queue_mutex_;
+  std::atomic<bool> stop_{false};
+  std::thread worker_;
   synth::SoundSet set_ = synth::SoundSet::Workshop;
   CueDelay delay_;
   bool sound_on_ = true, haptics_on_ = true, music_on_ = true;

@@ -1560,6 +1560,14 @@ const char* SoundName(Sound sound) {
   return sound < Sound::Count ? kNames[static_cast<size_t>(sound)] : "?";
 }
 
+SoundSet SetOf(Sound sound) {
+  if (sound < Sound::HarmonicaNote) return SoundSet::Workshop;
+  if (sound < Sound::MarimbaNote) return SoundSet::Lantern;
+  if (sound < Sound::VibesNote) return SoundSet::Shop;
+  if (sound < Sound::HarpNote) return SoundSet::Canal;
+  return SoundSet::Sanctum;
+}
+
 Sound MudFor(SoundSet set) {
   switch (set) {
     case SoundSet::Lantern: return Sound::Smoke;

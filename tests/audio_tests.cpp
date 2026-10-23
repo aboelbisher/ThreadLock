@@ -434,3 +434,36 @@ TEST_SUITE("audio") {
     CHECK(handover < 0.25f * Rms(bed.left, 2.0f, 3.0f));
   }
 }
+
+TEST_SUITE("audio") {
+  TEST_CASE("each sound belongs to a set: every pick comes from its set or the Workshop's") {
+    using synth::Sound;
+    using synth::SoundSet;
+    CHECK(synth::SetOf(Sound::NoteBlue) == SoundSet::Workshop);
+    CHECK(synth::SetOf(Sound::Tap) == SoundSet::Workshop);
+    CHECK(synth::SetOf(Sound::HarmonicaNote) == SoundSet::Lantern);
+    CHECK(synth::SetOf(Sound::Ascent) == SoundSet::Lantern);
+    CHECK(synth::SetOf(Sound::MarimbaNote) == SoundSet::Shop);
+    CHECK(synth::SetOf(Sound::ShopBell) == SoundSet::Shop);
+    CHECK(synth::SetOf(Sound::VibesNote) == SoundSet::Canal);
+    CHECK(synth::SetOf(Sound::RushHour) == SoundSet::Canal);
+    CHECK(synth::SetOf(Sound::HarpNote) == SoundSet::Sanctum);
+    CHECK(synth::SetOf(Sound::Kindle) == SoundSet::Sanctum);
+    for (SoundSet set : {SoundSet::Workshop, SoundSet::Lantern, SoundSet::Shop, SoundSet::Canal, SoundSet::Sanctum}) {
+      std::vector<Sound> picks{synth::MudFor(set),          synth::PourFor(set), synth::SolvedFor(set, false),
+                               synth::SolvedFor(set, true), synth::JamFor(set),  synth::SpillFor(set),
+                               synth::TurnFor(set),         synth::MillFor(set), synth::GateFor(set)};
+      if (synth::ShortFor(set) != Sound::Count) picks.push_back(synth::ShortFor(set));
+      for (Color c : {Color::Blue, Color::Amber, Color::Green, Color::Rose, Color::Pearl, Color::Mud}) {
+        picks.push_back(synth::NoteFor(set, c));
+        picks.push_back(synth::ChordFor(set, c));
+        picks.push_back(synth::MixFor(set, c).sound);
+      }
+      for (Sound pick : picks) {
+        const std::string name = synth::SoundName(pick);
+        CAPTURE(name);
+        CHECK((synth::SetOf(pick) == set || synth::SetOf(pick) == SoundSet::Workshop));
+      }
+    }
+  }
+}

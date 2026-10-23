@@ -126,6 +126,10 @@ enum class Sound : uint8_t {
 // A mono sound at `sample_rate`, -1..1.
 std::vector<float> Make(Sound sound, uint32_t sample_rate);
 const char* SoundName(Sound sound);  // "HarmonicaNote" (the tool, tests)
+// The set a sound is made for (by its place in Sound): the Workshop's include the UI's, the Shop's and the Sanctum's
+// the map's market square and sanctum sounds. The game makes the Workshop's at startup and the others in the
+// background.
+SoundSet SetOf(Sound sound);
 
 // The note for a colour (its instrument in the set), the chord a full cup rings, and the pitch for
 // the k-th drop in a cup (a major pentatonic scale, climbing). Colours a set has no voice for use
