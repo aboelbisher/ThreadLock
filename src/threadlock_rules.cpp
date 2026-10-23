@@ -433,8 +433,9 @@ std::vector<std::string> Level::Finalize() {
         problem("the arc on " + from.id + " -> " + to.id + " needs a segment of the pipe without a coil or a drip");
       } else {
         const int at = coil_points > 0 && k > pipe.coil_segment ? k + coil_points : k;
-        const std::vector<Vec2> arc =
-            ArcPoints(look.sigil, line[static_cast<size_t>(at)], line[static_cast<size_t>(at) + 1]);
+        const Vec2 a = line[static_cast<size_t>(at)], b = line[static_cast<size_t>(at) + 1];
+        const Sigil* sigil = SigilOf(look.sigils, a, b);
+        const std::vector<Vec2> arc = sigil ? ArcPoints(*sigil, a, b) : std::vector<Vec2>{};
         if (arc.empty()) {
           problem("the arc on " + from.id + " -> " + to.id +
                   " needs both ends on points of one ring of the sigil (and less than half a ring apart)");
@@ -592,6 +593,13 @@ Vec2 RingStep(const Sigil& sigil, int ring, int j) {
 }  // namespace
 
 Vec2 SigilPoint(const Sigil& sigil, int ring, int k) { return RingStep(sigil, ring, k * kArcSamples); }
+
+const Sigil* SigilOf(const std::vector<Sigil>& sigils, Vec2 a, Vec2 b) {
+  for (const Sigil& sigil : sigils) {
+    if (!ArcPoints(sigil, a, b).empty()) return &sigil;
+  }
+  return nullptr;
+}
 
 bool OnSigilPoint(const Sigil& sigil, Vec2 p, int& ring, int& k) {
   for (size_t r = 0; r < sigil.rings.size(); ++r) {

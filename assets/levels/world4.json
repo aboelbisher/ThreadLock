@@ -214,24 +214,24 @@
       "tray": ["mixer", "mixer", {"type": "overflow", "n": 4}, "twin"]
     },
     {
-      "id": "4-15", "name": "The Dye Works", "intro": "Four colours from two spouts.",
+      "id": "4-15", "name": "The Great Work", "intro": "Green below, rose beside: pearl at the heart.", "height": 1200, "payoff": [180, 1105], "sigil": [{"at": [180, 300], "rings": [130]}, {"at": [180, 880], "rings": [150]}],
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [150, 36], "beads": "B+A*6", "beat": 12},
-        {"id": "f", "kind": "fork", "at": [150, 100], "socket": true},
-        {"id": "gb", "kind": "fork", "at": [70, 170], "socket": true},
-        {"id": "ga", "kind": "fork", "at": [230, 170], "socket": true},
-        {"id": "m", "kind": "merge", "at": [150, 270], "socket": true},
-        {"id": "sr", "kind": "spout", "at": [310, 300], "beads": "R*4", "beat": 24, "start": 20},
-        {"id": "pr", "kind": "pass", "at": [290, 380]},
-        {"id": "m2", "kind": "merge", "at": [150, 400], "socket": true},
-        {"id": "f2", "kind": "fork", "at": [150, 470], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [30, 330], "want": "B", "count": 2},
-        {"id": "ca", "kind": "cup", "at": [320, 120], "want": "A", "count": 2},
-        {"id": "cg", "kind": "cup", "at": [70, 520], "want": "G", "count": 8},
-        {"id": "cr", "kind": "cup", "at": [230, 520], "want": "R", "count": 4}
+        {"id": "sb", "kind": "spout", "at": [40, 50], "beads": "B*5", "beat": 8},
+        {"id": "sa", "kind": "spout", "at": [320, 50], "beads": "A*5", "beat": 12, "start": 4},
+        {"id": "sr", "kind": "spout", "at": [14, 330], "beads": "R*4", "beat": 12, "start": 3},
+        {"id": "p1", "kind": "pass", "at": [67.400002, 235], "twin": "p2"},
+        {"id": "p2", "kind": "pass", "at": [292.600006, 235]},
+        {"id": "x1", "kind": "cross", "at": [123.400002, 330]},
+        {"id": "x2", "kind": "cross", "at": [236.600006, 330]},
+        {"id": "mA", "kind": "merge", "at": [180, 430], "socket": true},
+        {"id": "fg", "kind": "fork", "at": [180, 730], "socket": true},
+        {"id": "h", "kind": "merge", "at": [180, 880], "socket": true},
+        {"id": "pp", "kind": "pass", "at": [180, 1030]},
+        {"id": "cg", "kind": "cup", "at": [30, 690], "want": "G", "count": 6},
+        {"id": "cp", "kind": "cup", "at": [180, 1110], "want": "P", "count": 8}
       ],
-      "pipes": [["s", "f"], ["f", "gb", [[70, 130]]], ["f", "ga", [[230, 130]]], ["gb", "cb", [[30, 230]]], ["gb", "m", [[70, 230]]], ["ga", "m", [[230, 230]]], ["ga", "ca", [[275, 170], [275, 80], [320, 80]]], ["m", "m2"], ["sr", "pr"], ["pr", "m2", [[290, 400]]], ["m2", "f2"], ["f2", "cg", [[70, 490]]], ["f2", "cr", [[230, 490]]]],
-      "tray": ["separator", "mixer", {"type": "overflow", "n": 2}, {"type": "overflow", "n": 2}, {"type": "separator", "a": "G", "b": "R"}, "tank4", "turnstile"]
+      "pipes": [["sb", "p1"], ["sa", "p2"], ["p1", "x1"], ["p2", "x2"], ["sr", "x1"], ["x1", "x2"], ["x1", "mA"], ["x2", "mA"], ["mA", "fg"], ["x2", "h", [[340, 330], [340, 880]]], ["fg", "h"], ["fg", "cg", [[50.099998, 805]], {"arc": 0}], ["h", "pp"], ["pp", "cp"]],
+      "tray": ["twin", "mixer", "mixer", {"type": "overflow", "n": 4}, "bridge", "tank4"]
     },
     {
       "id": "4-C1", "name": "Hold and Wait II", "type": "challenge", "intro": "Five and five, two mixers, two flippers.", "sigil": {"at": [180, 290], "rings": [150]},

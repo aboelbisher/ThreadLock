@@ -33,7 +33,8 @@
 // "district": "Lantern Row" (the district it serves; its canals then run straight with round bends); World 4's
 // "sigil": {"at": [180, 290], "rings": [150]} (rings round a centre, a point every 15 degrees: its junctions
 // sit on them, its grooves run straight between them or, with a pipe's shape {"arc": segment}, along a ring
-// the shorter way, which makes the pipe longer: the rules count an arc's cells).
+// the shorter way, which makes the pipe longer: the rules count an arc's cells; a finale may list two sigils,
+// "sigil": [{...}, {...}], each arc then on the one whose ring it runs along).
 // Sockets ("socket": true; pass nodes are sockets unless false) go on forks, passes, crossings and
 // merges; any piece goes in any socket. A pipe leaving a fork is its side 0 or 1 in the order the
 // pipes are listed.

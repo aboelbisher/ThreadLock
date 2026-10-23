@@ -59,7 +59,7 @@ bool IsVessel(NodeKind kind) {
 
 }  // namespace
 
-bool IsSigil(const Level& level) { return !level.look.sigil.rings.empty(); }
+bool IsSigil(const Level& level) { return !level.look.sigils.empty(); }
 
 std::vector<Vec2> GroovePoints(const Level& level, const Pipe& pipe) {
   std::vector<Vec2> points{level.nodes[static_cast<size_t>(pipe.from)].at};
@@ -67,8 +67,9 @@ std::vector<Vec2> GroovePoints(const Level& level, const Pipe& pipe) {
   points.push_back(level.nodes[static_cast<size_t>(pipe.to)].at);
   const int k = pipe.arc_segment;
   if (k >= 0 && static_cast<size_t>(k) + 1 < points.size()) {
-    const std::vector<Vec2> arc =
-        ArcPoints(level.look.sigil, points[static_cast<size_t>(k)], points[static_cast<size_t>(k) + 1]);
+    const Vec2 a = points[static_cast<size_t>(k)], b = points[static_cast<size_t>(k) + 1];
+    const Sigil* sigil = SigilOf(level.look.sigils, a, b);
+    const std::vector<Vec2> arc = sigil ? ArcPoints(*sigil, a, b) : std::vector<Vec2>{};
     if (arc.size() > 2) points.insert(points.begin() + k + 1, arc.begin() + 1, arc.end() - 1);
   }
   return points;
@@ -77,37 +78,46 @@ std::vector<Vec2> GroovePoints(const Level& level, const Pipe& pipe) {
 std::vector<std::string> Problems(const Level& level) {
   std::vector<std::string> problems;
   if (!IsSigil(level)) return problems;
-  const Sigil& sigil = level.look.sigil;
   auto id = [&](int node) { return level.nodes[static_cast<size_t>(node)].id; };
   auto groove = [&](int p) {
     const Pipe& pipe = level.pipes[static_cast<size_t>(p)];
     return "groove " + id(pipe.from) + " -> " + id(pipe.to);
   };
+  auto outer = [](const Sigil& sigil) { return *std::max_element(sigil.rings.begin(), sigil.rings.end()); };
 
-  // The sigil on the board.
-  const float outer = *std::max_element(sigil.rings.begin(), sigil.rings.end());
-  if (sigil.at.x - outer < 0.0f || sigil.at.x + outer > 360.0f || sigil.at.y - outer < 0.0f ||
-      sigil.at.y + outer > level.look.height)
-    problems.push_back("the sigil is off the board");
+  // Each sigil on the board.
+  for (const Sigil& sigil : level.look.sigils) {
+    const float r = outer(sigil);
+    if (sigil.at.x - r < 0.0f || sigil.at.x + r > 360.0f || sigil.at.y - r < 0.0f || sigil.at.y + r > level.look.height)
+      problems.push_back("the sigil is off the board");
+  }
 
-  // Junctions on its points, or on the figure's lines: straight between two junctions on its points (every
-  // point of a 24-point ring is on some chord, so any chord would allow anything).
-  std::vector<Vec2> on_points;  // the junctions on ring points
+  // Junctions on a sigil's points, or on its figure's lines: straight between two junctions on the same sigil's
+  // points (every point of a 24-point ring is on some chord, so any chord would allow anything).
+  std::vector<std::vector<Vec2>> on_points(level.look.sigils.size());  // per sigil: the junctions on its points
   for (const Node& node : level.nodes) {
-    int ring = 0, k = 0;
-    if (IsJunction(node.kind) && OnSigilPoint(sigil, node.at, ring, k)) on_points.push_back(node.at);
+    for (size_t s = 0; s < level.look.sigils.size(); ++s) {
+      int ring = 0, k = 0;
+      if (IsJunction(node.kind) && OnSigilPoint(level.look.sigils[s], node.at, ring, k))
+        on_points[s].push_back(node.at);
+    }
   }
   for (const Node& node : level.nodes) {
     if (IsJunction(node.kind)) {
-      bool on = std::find(on_points.begin(), on_points.end(), node.at) != on_points.end();
-      for (size_t i = 0; i < on_points.size() && !on; ++i) {
-        for (size_t j = i + 1; j < on_points.size() && !on; ++j)
-          on = DistanceToSegment(node.at, on_points[i], on_points[j]) <= kSigilSnap;
+      bool on = false;
+      for (const std::vector<Vec2>& points : on_points) {
+        on = on || std::find(points.begin(), points.end(), node.at) != points.end();
+        for (size_t i = 0; i < points.size() && !on; ++i) {
+          for (size_t j = i + 1; j < points.size() && !on; ++j)
+            on = DistanceToSegment(node.at, points[i], points[j]) <= kSigilSnap;
+        }
       }
       if (!on) problems.push_back("node " + node.id + " isn't on the sigil's points or lines");
     }
-    if (IsVessel(node.kind) && Distance(node.at, sigil.at) <= outer)
-      problems.push_back("node " + node.id + " is inside the sigil");
+    if (!IsVessel(node.kind)) continue;
+    for (const Sigil& sigil : level.look.sigils) {
+      if (Distance(node.at, sigil.at) <= outer(sigil)) problems.push_back("node " + node.id + " is inside the sigil");
+    }
   }
 
   // A groove runs through no node it doesn't join.
@@ -392,7 +402,7 @@ std::vector<Vec2> Candles(const Level& level) {
       if (Distance(p, v.centre) < v.r + 16.0f) return false;
     }
     for (const Vec2 pill : pills) {
-      if (Distance(p, pill) < 34.0f) return false;
+      if (std::fabs(p.x - pill.x) < 46.0f && std::fabs(p.y - pill.y) < 24.0f) return false;  // a pill is ~60 wide
     }
     return true;
   };
@@ -401,6 +411,7 @@ std::vector<Vec2> Candles(const Level& level) {
   for (int s = 0; s < screens; ++s) {
     const float dy = 600.0f * static_cast<float>(s);
     for (const Vec2 corner : {Vec2{19, 64}, Vec2{341, 64}, Vec2{11, 618}, Vec2{349, 618}}) {
+      if (corner.y > 600.0f && s + 1 < screens) continue;  // the next screen's top pair is just below
       Vec2 at{corner.x, corner.y + dy};
       for (float d = 2.0f; !clear(at) && d <= 30.0f; d += 2.0f) {
         for (const Vec2 way : {Vec2{0, 1}, Vec2{0, -1}, Vec2{1, 0}, Vec2{-1, 0}}) {
@@ -411,7 +422,7 @@ std::vector<Vec2> Candles(const Level& level) {
           }
         }
       }
-      candles.push_back(at);
+      if (clear(at)) candles.push_back(at);  // none where nothing near the corner is clear
     }
   }
   return candles;

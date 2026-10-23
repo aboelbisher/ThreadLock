@@ -221,6 +221,8 @@ bool OnSigilPoint(const Sigil& sigil, Vec2 p, int& ring, int& k);
 // An arc from a to b, both on points of one ring, the shorter way round: its points, a and b included (the
 // same on every device). Empty if a and b aren't on one ring's points, are the same point or half a ring apart.
 std::vector<Vec2> ArcPoints(const Sigil& sigil, Vec2 a, Vec2 b);
+// The sigil with a ring both points sit on (on its points), for an arc between them; nullptr if none.
+const Sigil* SigilOf(const std::vector<Sigil>& sigils, Vec2 a, Vec2 b);
 
 // A piece in the level's tray, or placed by the level (`at` >= 0). Locked pieces can't be moved
 // or changed (repair levels place movable ones).
@@ -273,7 +275,8 @@ struct Level {
                                   // grand machine's view centres it
     std::vector<float> shelves;   // World 2: the shop wall's shelves (y, board units); with shelves, the
                                   // copper lines run along them and straight down (pipes axis-aligned)
-    Sigil sigil;                  // World 4: the sigil its grooves follow (a pipe's arcs run along its rings)
+    std::vector<Sigil> sigils;    // World 4: the sigil its grooves follow (a pipe's arcs run along its rings); a
+                                  // finale may have two
     bool operator==(const LevelLook&) const = default;
   } look;
 

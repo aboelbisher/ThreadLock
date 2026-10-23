@@ -44,8 +44,9 @@ constexpr Rgba kFail = Hex(0xFF5A5A), kFailGlow = Hex(0xFF4D4D), kGhost = Hex(0x
 constexpr Rgba kWait = Hex(0x9FC2FF);
 // The moments' lengths (seconds).
 constexpr float kSludgeLength = 1.4f, kPhialSludgeLength = 1.2f, kFailLength = 1.2f, kJamLength = 1.3f;
-constexpr float kSettled = 100.0f;  // long past any moment
-constexpr float kLitHold = 0.6f;    // the whole sigil lit, before the result card
+constexpr float kSettled = 100.0f;   // long past any moment
+constexpr float kLitHold = 0.6f;     // the whole sigil lit, before the result card
+constexpr float kSigilAfter = 0.7f;  // a finale's next sigil lights this much later
 
 uint64_t Mix(uint64_t h, uint64_t v) {
   h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
@@ -255,7 +256,7 @@ void SanctumArt::Prepare(const ArtFrame& frame) {
   const Level& level = *frame.level;
   if (level_ == &level && grooves_.size() == level.pipes.size()) return;
   level_ = &level;
-  sigils_ = {level.look.sigil};
+  sigils_ = level.look.sigils;
   grooves_.clear();
   for (const Pipe& pipe : level.pipes) {
     std::vector<glm::vec2> points;
@@ -832,23 +833,31 @@ void SanctumArt::DrawSolved(Canvas& canvas, const ArtFrame& frame) const {
   for (size_t i = 0; i < sigils_.size(); ++i) {
     const Sigil& sigil = sigils_[i];
     if (sigil.rings.empty()) continue;
+    // A finale's sigils light one after the other, the one by the payoff (its pearl phial) first.
+    float shift = 0.0f;
+    const Vec2 payoff = level.look.payoff;
+    auto far = [&](const Sigil& g) {
+      return (g.at.x - payoff.x) * (g.at.x - payoff.x) + (g.at.y - payoff.y) * (g.at.y - payoff.y);
+    };
+    for (const Sigil& other : sigils_) shift += far(other) < far(sigil) ? kSigilAfter : 0.0f;
+    auto lit_sigil = [&](float at, float length) { return Ease((t - at - shift) / length); };
     const glm::vec2 c = frame.layout.ToCanvas(sigil.at);
     const float r = *std::max_element(sigil.rings.begin(), sigil.rings.end()) * s;
     const std::vector<std::vector<Vec2>>& figures = figures_[i];
     // The figure, the inner circle, the counter-figure, the rings from the bottom both ways.
     if (!figures.empty()) {
       const std::vector<glm::vec2> line = Closed(OnCanvas(frame, figures[0]));
-      Trace(canvas, line, 0.0f, Length(line) * lit(1.5f, 0.5f), 1.6f * s, WithAlpha(kIgnite, 0.85f));
+      Trace(canvas, line, 0.0f, Length(line) * lit_sigil(1.5f, 0.5f), 1.6f * s, WithAlpha(kIgnite, 0.85f));
     }
     const std::vector<glm::vec2> inner = CircleLine(c, 0.41f * r, kPi * 0.5f, 2.0f * kPi);
-    Trace(canvas, inner, 0.0f, Length(inner) * lit(1.8f, 0.6f), 1.6f * s, WithAlpha(kIgnite, 0.85f));
+    Trace(canvas, inner, 0.0f, Length(inner) * lit_sigil(1.8f, 0.6f), 1.6f * s, WithAlpha(kIgnite, 0.85f));
     if (figures.size() > 1) {
       const std::vector<glm::vec2> line = Closed(OnCanvas(frame, figures[1]));
-      Trace(canvas, line, 0.0f, Length(line) * lit(2.0f, 0.7f), 1.4f * s, WithAlpha(kIgnite, 0.7f));
+      Trace(canvas, line, 0.0f, Length(line) * lit_sigil(2.0f, 0.7f), 1.4f * s, WithAlpha(kIgnite, 0.7f));
     }
     for (const float way : {1.0f, -1.0f}) {
       const std::vector<glm::vec2> ring = CircleLine(c, r + 2.0f * s, kPi * 0.5f, way * kPi);
-      const float length = Length(ring) * lit(2.3f, 0.8f);
+      const float length = Length(ring) * lit_sigil(2.3f, 0.8f);
       Trace(canvas, ring, 0.0f, length, 6.0f * s, WithAlpha(kIgnite, 0.2f));
       Trace(canvas, ring, 0.0f, length, 2.4f * s, WithAlpha(kIgnite, 0.9f));
     }

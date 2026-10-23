@@ -486,11 +486,11 @@ TEST_SUITE("content") {
     // World 4's grammar, on 4-7 The Twin Seals.
     const Level level = MakeLevel(kTwinSeals);
     REQUIRE(sigil::IsSigil(level));
-    CHECK(level.look.sigil == Sigil{{180, 290}, {150}});
+    CHECK(level.look.sigils == std::vector<Sigil>{{{180, 290}, {150}}});
     // Ring point k is k * 15 degrees clockwise from +x (y down): the triangle's corners.
-    CHECK(std::fabs(SigilPoint(level.look.sigil, 0, 14).x - 50.1f) < 0.1f);
-    CHECK(std::fabs(SigilPoint(level.look.sigil, 0, 14).y - 215.0f) < 0.01f);
-    CHECK(std::fabs(SigilPoint(level.look.sigil, 0, 6).y - 440.0f) < 0.01f);
+    CHECK(std::fabs(SigilPoint(level.look.sigils[0], 0, 14).x - 50.1f) < 0.1f);
+    CHECK(std::fabs(SigilPoint(level.look.sigils[0], 0, 14).y - 215.0f) < 0.01f);
+    CHECK(std::fabs(SigilPoint(level.look.sigils[0], 0, 6).y - 440.0f) < 0.01f);
     CHECK(LookProblems(level).empty());
     Level copy;
     std::vector<std::string> errors;
@@ -595,7 +595,7 @@ TEST_SUITE("content") {
     CHECK(sigil::GlobeRadius(level, NodeOf(level, "p2")) == 15.0f);
 
     // Five grooves meet the ring: blue and amber at the seals, rose coming in, rose going out, green below.
-    const std::vector<float> ports = sigil::Ports(level, level.look.sigil, 150.0f);
+    const std::vector<float> ports = sigil::Ports(level, level.look.sigils[0], 150.0f);
     CHECK(ports.size() == 5);
     auto has_port = [&](float angle) {
       return std::any_of(ports.begin(), ports.end(), [&](float p) { return std::fabs(p - angle) < 1.0f; });
@@ -604,9 +604,9 @@ TEST_SUITE("content") {
     CHECK(has_port(210.0f));
     CHECK(has_port(330.0f));
     // The runes: the same every time, none at a port.
-    const std::vector<sigil::Stroke2> runes = sigil::Runes(level, level.look.sigil, 150.0f);
+    const std::vector<sigil::Stroke2> runes = sigil::Runes(level, level.look.sigils[0], 150.0f);
     CHECK(runes.size() > 40);
-    const std::vector<sigil::Stroke2> again = sigil::Runes(level, level.look.sigil, 150.0f);
+    const std::vector<sigil::Stroke2> again = sigil::Runes(level, level.look.sigils[0], 150.0f);
     REQUIRE(again.size() == runes.size());
     for (size_t k = 0; k < runes.size(); ++k) CHECK((runes[k].a == again[k].a && runes[k].b == again[k].b));
     for (const sigil::Stroke2& rune : runes) {
@@ -617,8 +617,8 @@ TEST_SUITE("content") {
       }
     }
     // The figure: the triangle of the seals and the mixer, inlaid with its half turn (a hexagram).
-    CHECK(sigil::Figure(level, level.look.sigil).size() == 3);
-    const auto lines = sigil::FigureLines(level, level.look.sigil);
+    CHECK(sigil::Figure(level, level.look.sigils[0]).size() == 3);
+    const auto lines = sigil::FigureLines(level, level.look.sigils[0]);
     REQUIRE(lines.size() == 2);
     CHECK(near(lines[1][0], {180, 140}, 0.5f));
     CHECK(sigil::Candles(level).size() == 4);
@@ -714,7 +714,6 @@ TEST_SUITE("content") {
     int rose = 0, pearl = 0, twins = 0, sigils = 0;
     for (const Level& level : worlds[3].levels) {
       INFO("level " << level.id);
-      if (level.id == "4-15") continue;  // the finale's two sigils come with step d B
       ++sigils;
       CHECK(sigil::IsSigil(level));
       CHECK(LookProblems(level).empty());
@@ -736,12 +735,78 @@ TEST_SUITE("content") {
         longest = std::max(longest, outcome.ticks);
         return true;
       });
-      CHECK(longest < 400);
+      CHECK(longest < (level.look.height > 600.0f ? 800 : 400));
     }
-    CHECK(sigils == 17);
+    CHECK(sigils == 18);
     CHECK(rose >= 4);
-    CHECK(pearl >= 2);
+    CHECK(pearl >= 3);
     CHECK(twins >= 3);
+  }
+
+  TEST_CASE("The Great Work (4-15): two sigils on two screens") {
+    const Level level = Shipped("4-15");
+    REQUIRE(level.look.sigils.size() == 2);
+    CHECK(level.look.sigils[0] == Sigil{{180, 300}, {130}});
+    CHECK(level.look.sigils[1] == Sigil{{180, 880}, {150}});
+    CHECK(level.look.height == 1200.0f);
+    CHECK(LookProblems(level).empty());
+    // The empty board clots at the first crossing on screen 1.
+    {
+      Board board(level);
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.failure == Failure::Mud);
+      CHECK(run.outcome.fail_node == NodeOf(level, "x1"));
+      CHECK(run.outcome.fail_tick == 35);
+    }
+    // Lean: the twin seals, a mixer for green on screen 1, the pearl mixer at the heart of screen 2, the overflow.
+    const Outcome lean = Simulate(level, level.pars.lean, false);
+    CHECK(lean.solved);
+    CHECK(lean.ticks == 164);
+    CHECK(level.pars.pieces == 4);
+    // Without the twin seals it clots on screen 1.
+    {
+      Board board(level);
+      board.SetPlacement(level.pars.lean);
+      for (int piece = 0; piece < board.PieceCount(); ++piece) {
+        if (board.PieceInfo(piece).piece.type == PieceType::TwinGate) board.Unplace(piece);
+      }
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.failure == Failure::Mud);
+      CHECK(level.nodes[static_cast<size_t>(run.outcome.fail_node)].at.y < 600.0f);
+    }
+    // Its candles: the top pair on each screen, the bottom pair on the last.
+    CHECK(sigil::Candles(level).size() >= 5);
+  }
+
+  TEST_CASE("two sigils: the file keeps both, arcs on the second, junctions off both are a problem") {
+    std::string json = kTwinSeals;
+    auto replace = [&](const std::string& from, const std::string& to) {
+      REQUIRE(json.find(from) != std::string::npos);
+      json.replace(json.find(from), from.size(), to);
+    };
+    // A second sigil below the first (a two-screen board), a crossing on its top point fed by an arc.
+    replace(R"("sigil": {"at": [180, 290], "rings": [150]},)",
+            R"("height": 1200, "sigil": [{"at": [180, 290], "rings": [150]}, {"at": [180, 880], "rings": [150]}],)");
+    replace(R"({"id": "c", "kind": "cup", "at": [180, 515], "want": "G", "count": 6},)",
+            R"({"id": "q", "kind": "pass", "at": [180, 730]}, {"id": "q2", "kind": "pass", "at": [309.9, 805]},
+               {"id": "c", "kind": "cup", "at": [334, 960], "want": "G", "count": 6},)");
+    replace(R"(["m", "c"])", R"(["m", "q"], ["q", "q2", [], {"arc": 0}], ["q2", "c", [[334, 805]]])");
+    const Level level = MakeLevel(json);
+    REQUIRE(level.look.sigils.size() == 2);
+    CHECK(LookProblems(level).empty());
+    const Pipe& arc =
+        level.pipes.back().from == NodeOf(level, "q2") ? level.pipes[level.pipes.size() - 2] : level.pipes.back();
+    CHECK(arc.arc_segment == 0);
+    CHECK(arc.points.size() > 4);  // along the second sigil's ring
+    Level copy;
+    std::vector<std::string> errors;
+    REQUIRE(ParseLevel(WriteLevel(level), copy, errors));
+    CHECK(copy.look.sigils == level.look.sigils);
+    // A junction on neither sigil.
+    std::string off = json;
+    off.replace(off.find("[309.9, 805]"), 12, "[300, 805]");
+    off.replace(off.find(R"(["q", "q2", [], {"arc": 0}])"), 27, R"(["q", "q2"])");
+    CHECK(Has(LookProblems(MakeLevel(off)), "node q2 isn't on the sigil's points or lines"));
   }
 
   TEST_CASE("World 4's lessons: leftovers, the crossing mixer, the wrong globe, hold and wait, pearl") {

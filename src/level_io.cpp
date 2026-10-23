@@ -122,20 +122,35 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
     }
   }
   if (json.contains("sigil")) {
-    // {"at": [180, 290], "rings": [150, 90]}
-    const Json& sigil = json["sigil"];
-    if (!sigil.is_object() || !sigil.contains("at") || !sigil.contains("rings") || !sigil["rings"].is_array()) {
-      reader.Error("a sigil is {\"at\": [x, y], \"rings\": [radius, ...]}");
+    // {"at": [180, 290], "rings": [150, 90]}, or a list of them (a finale's two sigils)
+    const Json& field = json["sigil"];
+    std::vector<const Json*> sigils;
+    if (field.is_array()) {
+      for (const Json& item : field) sigils.push_back(&item);
+      if (sigils.empty()) reader.Error("a list of sigils needs one");
     } else {
-      reader.Point(sigil["at"], level.look.sigil.at);
+      sigils.push_back(&field);
+    }
+    for (const Json* item : sigils) {
+      const Json& sigil = *item;
+      if (!sigil.is_object() || !sigil.contains("at") || !sigil.contains("rings") || !sigil["rings"].is_array()) {
+        reader.Error("a sigil is {\"at\": [x, y], \"rings\": [radius, ...]}");
+        continue;
+      }
+      Sigil read;
+      reader.Point(sigil["at"], read.at);
       for (const Json& value : sigil["rings"]) {
         if (!value.is_number() || value.get<float>() <= 0.0f) {
           reader.Error("a sigil's ring is a radius (above 0)");
           continue;
         }
-        level.look.sigil.rings.push_back(value.get<float>());
+        read.rings.push_back(value.get<float>());
       }
-      if (level.look.sigil.rings.empty()) reader.Error("a sigil needs a ring");
+      if (read.rings.empty()) {
+        reader.Error("a sigil needs a ring");
+        continue;
+      }
+      level.look.sigils.push_back(std::move(read));
     }
   }
   const std::string type = reader.String(json, "type", "build");
@@ -503,11 +518,17 @@ std::string WriteLevel(const Level& level) {
     for (size_t s = 0; s < level.look.shelves.size(); ++s) out += (s ? ", " : "") + number(level.look.shelves[s]);
     out += "]";
   }
-  if (!level.look.sigil.rings.empty()) {
-    out += ", \"sigil\": {\"at\": " + point(level.look.sigil.at) + ", \"rings\": [";
-    for (size_t r = 0; r < level.look.sigil.rings.size(); ++r)
-      out += (r ? ", " : "") + number(level.look.sigil.rings[r]);
-    out += "]}";
+  if (!level.look.sigils.empty()) {
+    // One sigil as an object (every level but a finale), more as a list.
+    const bool list = level.look.sigils.size() > 1;
+    out += list ? ", \"sigil\": [" : ", \"sigil\": ";
+    for (size_t s = 0; s < level.look.sigils.size(); ++s) {
+      const Sigil& sigil = level.look.sigils[s];
+      out += (s ? ", " : "") + std::string("{\"at\": ") + point(sigil.at) + ", \"rings\": [";
+      for (size_t r = 0; r < sigil.rings.size(); ++r) out += (r ? ", " : "") + number(sigil.rings[r]);
+      out += "]}";
+    }
+    if (list) out += "]";
   }
   out += ",\n  \"nodes\": [\n";
   for (size_t i = 0; i < level.nodes.size(); ++i) {

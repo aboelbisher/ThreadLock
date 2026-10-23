@@ -67,7 +67,7 @@
   "4-12": {"pieces":2,"ticks":83,"solutions":4,"lean":{"at":["fb","fa",null,"x","m1","m2"],"set":[1,1,0,0,0,0]},"swift":{"at":["fb","fa",null,"x","m1","m2"],"set":[1,1,0,0,0,0]}},
   "4-13": {"pieces":3,"ticks":84,"solutions":1,"lean":{"at":["m1","m2","f",null],"set":[0,0,0,0]},"swift":{"at":["m1","m2","f",null],"set":[0,0,0,0]}},
   "4-14": {"pieces":3,"ticks":79,"solutions":3,"lean":{"at":["m1","h","fr",null],"set":[0,0,0,0]},"swift":{"at":["m1","h","fr",null],"set":[0,0,0,0]}},
-  "4-15": {"pieces":5,"ticks":133,"solutions":5,"lean":{"at":["f","m","gb","ga","f2",null,null],"set":[0,0,0,1,0,0,0]},"swift":{"at":["f","m","gb","ga","f2",null,null],"set":[0,0,0,1,0,0,0]}},
+  "4-15": {"pieces":4,"ticks":164,"solutions":4,"lean":{"at":["p1","mA","h","fg",null,null],"set":[0,0,0,0,0,0]},"swift":{"at":["p1","mA","h","fg",null,null],"set":[0,0,0,0,0,0]}},
   "4-C1": {"pieces":4,"ticks":95,"solutions":3,"lean":{"at":["m1","m2",null,"fb","fa","x"],"set":[0,0,0,0,1,0]},"swift":{"at":["m1","m2",null,"fb","fa","x"],"set":[0,0,0,0,1,0]}},
   "4-C2": {"pieces":2,"ticks":77,"solutions":2,"lean":{"at":["p1",null,"q","m"],"set":[0,0,0,0]},"swift":{"at":["p1",null,"q","m"],"set":[0,0,0,0]}},
   "4-C3": {"pieces":4,"ticks":100,"solutions":2,"lean":{"at":["m1","fr","f","m2",null],"set":[0,0,0,0,0]},"swift":{"at":["m1","fr","f","m2",null],"set":[0,0,0,0,0]}}

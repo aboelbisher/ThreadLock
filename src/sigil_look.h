@@ -59,7 +59,8 @@ std::vector<Vec2> Figure(const Level& level, const Sigil& sigil);
 // What the table's inlay draws of the figure (closed polygons): a regular triangle and its half turn (a hexagram),
 // six points a sixth apart as their two triangles, any other figure as itself.
 std::vector<std::vector<Vec2>> FigureLines(const Level& level, const Sigil& sigil);
-// The candles at the board's corners (each screen of a tall board has its four), nudged off the vessels and pills.
+// The candles at the board's corners (a tall board's top pair on each screen, the bottom pair on the last), nudged
+// off the vessels and pills (left out where they can't be).
 std::vector<Vec2> Candles(const Level& level);
 
 // ---- The moments ----
