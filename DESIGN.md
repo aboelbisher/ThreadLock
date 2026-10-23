@@ -177,9 +177,8 @@ number; the next level to play breathes. **The window is not a button, it's the 
 lights when level n is solved, its big pane in that level's colours, its two small panes for Lean and
 Swift, gold leading at 3 stars; the heart's three lobes light with the challenges. Its light spills onto
 the roofs at the tower's foot. Below, a pipe fills with stars toward World 2's brass valve ("20 ★"), then
-the market square (World 2) and the canal quarter (World 3), both below; World 4 sleeps in mist with a name
-plate and its levels as 18 small lamps (playable once the gate is open, until it gets its own art). **What's
-new since the last visit plays as an animation**
+the market square (World 2), the canal quarter (World 3) and the sanctum floor (World 4), where the map
+ends. **What's new since the last visit plays as an animation**
 (the "seen" record in device.json): the view glides to the lantern, it lights and its stars pop with
 chimes, then glides up while the petal's panes light, and back down to the next lantern, which pulses; a
 gate's valve turns, light pours down the pipe (the view rides with it) and the district wakes. A tap
@@ -215,6 +214,22 @@ harbour, the view riding its head; that harbour opens as the light reaches it an
 its own. The gate: the valve turns, light pours into the plate, the mist lifts, then the light comes in at
 the sluice and runs to the first harbour, a harbour horn. The canal ambience plays while the open quarter
 fills the view (the top bar stays night blue). The map grew ~284 units for it (rows 160 apart, the lagoon).
+
+**The sanctum floor (World 4's district, built 23 October from the approved mock).** The sanctum from above
+by candlelight, under its plate ("The Sanctum" in Cinzel, "4 · The Mixing Hall" in old gold): a stair and a
+groove lead down to a gold sigil inlaid in the floor (two gold rings with runes between them, a dashed ring,
+the faint guide of a fifteen-pointed star). Fifteen candles stand round it, clockwise from the top, one per
+level (its number on the wax, its stars inside it); the three challenges are rings at its heart; the elixir's
+phial sits at the centre. **The floor is World 4's progress picture:** a solve lights its candle and draws one
+stroke of a {15/7} star from it to candle i + 7 (thicker at three stars), so the world draws one unbroken line,
+and the phial fills a fifteenth; the fifteenth stroke closes the star: the ring lights round and the elixir
+sends up a beam. Below: SOLVE ET COAGULA, a plaque, "the end of the map". News: the candle's stars pop (a harp
+note each), its flame catches (a soft whoosh), its stroke draws (the level's phial chord), then the next candle
+opens and pulses to the seal bell; the fifteenth plays The Great Work and the view glides to the heart; a
+challenge lights its ring (the seal bell and a choir swell). The gate: the valve turns, light pours into the
+plate, the floor wakes (the mist lifts), then the elixir's green runs down the groove with the view and candle
+1 pulses. While the open floor fills the view the top bar takes World 4's violet panel and the sanctum's
+ambience plays.
 
 ### World 1 · First Light · The Lantern Works
 - **Place:** the glassworks at the top of the tower, at dawn.
@@ -344,8 +359,46 @@ fills the view (the top bar stays night blue). The map grew ~284 units for it (r
   the shorter way (a pipe shape `{"arc": segment}`, both ends on one ring's points, never half a ring: the
   rules count its cells from fixed 3.75-degree steps, the same on every device). Grooves never run through
   a node, along each other or across one another except at a crossing; a twin pair's brass bar runs clear
-  of other nodes (`sigil::Problems`). 4-7 The Twin Seals is in world4.json (twin seals at p1/p2 + a mixer
-  on the merge: 0:09; nothing or the mixer alone = sludge at the first crossing, the seals alone = at the merge).
+  of other nodes (`sigil::Problems`). A finale may list two sigils (`"sigil": [{...}, {...}]`, one per screen):
+  an arc runs along whichever one's ring both its ends sit on. The vessels are placed from the grooves: a
+  spout's element flask sits behind it (r 23, smaller to stay on the board), a cup's phial hangs past it the
+  way its groove arrives (r 24 for an order of 5 or more, else 15) with its pill under it (over it when it
+  hangs neck down); the checks keep them on the board, off other nodes and grooves, pills apart.
+- **Art (built 23 October):** the still table in tiles (an obsidian gradient, veins, a parchment and quill,
+  candles' wax, the sigil's rings, runes and figure (a triangle is inlaid with its half turn: a hexagram),
+  black gold-lipped grooves, glass flasks, globes and phials, the seals' gold bases); each frame the candles'
+  flames, a stain of each colour that ran down a groove, the flasks emptying and phials filling, the mixer's
+  swirl and haze in the colour it made, the twin seals' bar and leaves sliding open as both halves let go
+  ("waits for its twin" while one waits alone). Mud is sludge.
+- **Moments:** a full phial's elixir rises in a column of light and its grooves ignite back up to the flasks;
+  once solved the whole sigil lights (the figure, the inner circle, the counter-figure, the rings from the
+  bottom both ways, the flasks' grooves; on the finale, the sigil by the payoff first). Sludge = a brown stain
+  out along every groove of the globe, a cloud, the globe clotted, bubbles; a mud mix that lands clots its
+  phial. The lonely seal or mixer (THREADLOCKED) cracks red, says what it waits for ("waits for amber"), the
+  way its partner would come is dashed red to an empty flask; a circle of waiting is traced then marches.
+  Short = the missing part dashed in the phial; spill = a trickle down the glass and a puddle; wrong colour = a
+  red ring. The result card names the colours and the partner ("The last blue waits at its seal for an amber
+  twin, but the amber flask is empty.") and every phial's count.
+- **Sound (built 23 October):** a choir, a harp and an organ: blue = a concert harp, amber = a sung "ah",
+  green = an organ flute, rose = a singing bowl, pearl = a bright harp with a choir shimmer; chords are open
+  fifths + sus2; a full phial = a glass ring, the chord, a choir swell with the ignite; a mix = a choir swell
+  in the colour made (pearl a fifth up; a mud mix clots); twin seals ring a low bell as they open; a flask's
+  pour is a glass tick and a trickle; THREADLOCKED is the seal cracking over a dissonant organ drone; solved =
+  the organ's plagal Amen as the sigil lights; the finale = The Great Work. The sanctum's ambience: an organ
+  pedal breathing, candle crackle, a far choir every 20 s, a low bell every 30 s.
+- **Levels (built 23 October):** the idea is meeting: things that must arrive together and in the right
+  numbers. 4-1 First Green (blue and amber into one globe: a mixer); 4-2 Partners (a mixer waits for one drop
+  from each way in; arcs down the ring); 4-3 Leftovers (two ambers too many; the mixer alone holds the last
+  one and waits for a blue that never comes); 4-4 Rose Stays Out (rose mixes with nothing here); 4-5 Green
+  Crossing (a mixer on a crossing sends each mixed pair on its own lane); 4-6 Unmix, Remix (split a blend,
+  mix half of it again); 4-7 The Twin Seals (both seals open together); 4-8 The Dye Fountain (spectacle);
+  4-9 The Triangle (three points, one mixes); 4-10 Lock or Mix; 4-11 The Wrong Globe (repair: move the
+  mixer); 4-12 Hold and Wait (two mixers each hold one drop of the other's: the empty board locks); 4-13 Pearl
+  (green, then green and rose); 4-14 Hexagram (six points, pearl at the heart). **Finale 4-15 The Great
+  Work**, two screens, two sigils: green made behind the twin seals on the first runs the long groove down to
+  the second, where rose joins it at the heart for pearl (Lean 4, 0:20). Challenges: 4-C1 Hold and Wait II,
+  4-C2 Barrier (the seals and a third stream out of step: a tank), 4-C3 Leftover Rose. Every placement of
+  every level is tested to end.
 
 ### Worlds 5–8
 Live updates after launch, to be re-planned (v2's plan: The Layer Bar, Signal Tower, Clockworks, The
@@ -432,14 +485,18 @@ committed after the owner's OK, in small commits:
    ambience, the market square district. **World 3 done (22 October):** the Canal City (canal maps with
    districts, barges, locks, mills with rods and gates; murk, gridlock, short, spill, wrong-colour moments),
    14 levels + 3 challenges + Rush Hour, its late-night jazz sounds and canal ambience, the canal quarter
-   district. Next: World 4.
+   district. **World 4 done (23 October):** the Sanctum (sigils with arcs, flasks and phials, twin seals,
+   mixer globes; sludge, the lonely seal, the circle of waiting, short, spill moments), 14 levels + 3
+   challenges + The Great Work (two sigils), its choir / harp / organ sounds and sanctum ambience, the
+   sanctum floor district. **All four launch worlds are built.** Next: the daily's and the Lab's look.
 4. Playtest World 1 with 5–10 people; adjust levels with the tool.
 5. Launch: Threadlock's own AdMob app and units, analytics, store page, closed test. Then worlds 5–8 as
    live updates.
 
 The cost the owner accepted: four looks are about four times the drawing work (each world needs its own
 pipes, containers, junctions, background, payoff animation and sounds), and the level files gain
-per-world extras. To decide when we get there: which look the daily and the Lab use; the W5–8 re-plan.
+per-world extras. To decide next: which look the daily and the Lab use (they still use the v2 workshop
+look); later, the W5–8 re-plan.
 
 ## 12. Decisions
 
