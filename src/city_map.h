@@ -99,7 +99,9 @@ int DistrictAt(float y);  // the world whose stretch holds map y
 // Until each world gets its own art they stay playable: an open district's lamps are buttons. World 2's
 // lamps stand in three rows of five across the market square (the second right to left), then the
 // challenges' diamonds, right to left. World 3's are harbours on the Grand Canal, five rows of three
-// (every other row right to left), then the buoys in the lagoon, right to left.
+// (every other row right to left), then the buoys in the lagoon, right to left. World 4's are fifteen candles round
+// the sigil on the sanctum floor, clockwise from the top, then the three challenge rings at its heart (top, lower
+// right, lower left).
 std::array<Vec2, kDistrictLamps> DistrictLamps(int world);
 inline constexpr float kLampHit = 30.0f;
 int HitLamp(int world, Vec2 at);  // the lamp a tap picks, -1 if none
@@ -109,7 +111,7 @@ struct Cubic {
   Vec2 At(float t) const;
   std::vector<Vec2> Points(int samples) const;  // samples + 1
 };
-// The valve down to the district's first lamp (worlds 2 and 3: a short stub into its name plate).
+// The valve down into the district's name plate (a short stub).
 Cubic GatePipe(int world);
 // The district before it down to this one's valve (its last lamp; World 2's fountain, World 3's lagoon); world >= 3.
 Cubic LinkPipe(int world);
@@ -187,6 +189,40 @@ const std::vector<Box>& QuarterBridges();        // over the canal
 const std::vector<Vec2>& QuayLamps();            // along the canal, sides in turn
 // The scroll that shows a lamp just past the middle of the view (where its news plays).
 float QuarterScroll(int lamp, float view);
+
+// ---- The sanctum floor (World 4's district; the approved mock SanctumFloor.dc.html, map y = mock y + 4828) ----
+// The sanctum seen from above by candlelight: under the plate, steps down to a gold sigil inlaid in the floor. Fifteen
+// candles stand round it, one per level; a solve lights its candle and draws one stroke of a fifteen-pointed star
+// ({15/7}) to candle i + 7, so the world draws one unbroken line. Three rings at its heart are the challenges; the
+// elixir's phial at the centre fills stroke by stroke and ends the map.
+inline constexpr Box kSanctumPlate{85.0f, 5014.0f, 305.0f, 5064.0f};
+inline constexpr float kSanctumGrooveTop = 5064.0f;     // the groove down the stair, x 195 (the gate's green)
+inline constexpr float kSanctumGrooveBottom = 5352.0f;  // into the sigil's rim
+inline constexpr int kSanctumSteps = 6;
+inline constexpr Vec2 kSanctumPillars[6] = {{40.0f, 5128.0f},  {350.0f, 5128.0f}, {34.0f, 5298.0f},
+                                            {356.0f, 5298.0f}, {34.0f, 5758.0f},  {356.0f, 5758.0f}};
+inline constexpr float kPillarRadius = 18.0f;
+inline constexpr Vec2 kSanctumCentre{195.0f, 5528.0f};
+inline constexpr float kSigilRing = 178.0f;  // the gold rings 178 and 166, runes between (172)
+inline constexpr float kCandleRing = 148.0f;
+inline constexpr float kCandleStarRing = 121.0f;  // each candle's three stars, inside it
+inline constexpr float kChallengeRing = 66.0f;
+inline constexpr float kPhialRadius = 17.0f;
+inline constexpr Box kPhialNeck{187.0f, 5489.0f, 203.0f, 5512.0f};  // the gold collar's top to the bulb
+inline constexpr float kSanctumMotto = 5756.0f;                     // "SOLVE ET COAGULA" (baseline)
+inline constexpr Box kSanctumPlaque{125.0f, 5777.0f, 265.0f, 5829.0f};
+inline constexpr float kMapEnd = 5850.0f;  // "the end of the map" (baseline)
+Box SanctumStep(int k);                    // k 0..5: 230 - 20k wide, centred on 195, 14 tall from 5078 + 14k
+float CandleAngle(int candle);             // degrees, -90 + 24 i (up, clockwise)
+Vec2 SanctumCandle(int candle);            // 0..14, on kCandleRing round kSanctumCentre
+Vec2 CandleStar(int candle, int k);  // its star k (solve, lean, swift): on kCandleStarRing, 9.5 apart along the tangent
+Vec2 SanctumRing(int challenge);     // 0..2: -90, 30, 150 degrees on kChallengeRing
+inline int StrokeTo(int candle) { return (candle + 7) % 15; }  // level i's stroke: candle i -> i + 7
+std::array<Vec2, 2> StrokeEnds(int candle);
+// The elixir's surface (map y) in the phial when `level` (0..1) of the star is drawn.
+float ElixirTop(float level);
+// The scroll that shows a candle in the middle of the view (a ring, or lamp < 0: the sigil's centre).
+float SanctumScroll(int lamp, float view);
 
 // ---- The view ----
 // Scroll (map y at the top of a view `view` tall) that shows lantern i, the window, or the gate of a world.

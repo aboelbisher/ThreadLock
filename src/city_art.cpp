@@ -21,11 +21,9 @@ using wlw::ui::Align;
 using wlw::ui::Canvas;
 using wlw::ui::Rect;
 
-constexpr float kLow = 1400.0f;              // everything under the tower stands this much lower than in the first mock
-constexpr float kShop = 284.0f;              // World 2's shop front made the map this much taller (3f)
-constexpr float kDeep = kLow + kShop;        // the canal quarter and the sanctum: under the market
-constexpr float kQuarter = 284.0f;           // World 3's canal quarter made it taller again (World 3 step f)
-constexpr float kDeeper = kDeep + kQuarter;  // the sanctum: under the canal quarter
+constexpr float kLow = 1400.0f;     // everything under the tower stands this much lower than in the first mock
+constexpr float kShop = 284.0f;     // World 2's shop front made the map this much taller (3f)
+constexpr float kQuarter = 284.0f;  // World 3's quarter made it taller (the mist bands)
 constexpr int kTilePool = 3;
 constexpr float kText = 1.15f;  // the mock's CSS font sizes -> canvas line heights
 
@@ -75,6 +73,12 @@ constexpr Rgba kHarbourRing = Hex(0x8A9AC0), kHarbourLocked = Hex(0x2C3550), kHa
 constexpr Rgba kCanalLit = Hex(0x1E5A7A), kBargeAmber = Hex(0xFFC53D), kBargeBlue = Hex(0x4D8DFF);
 constexpr Rgba kHoodWarm = canal::color::kWarm;  // a lit neighbourhood
 constexpr float kBargeSpeed = 25.0f;             // map units a second
+// The sanctum (World 4): its floor and the glow on it, the slabs' joints, the sigil's gold, a lit stroke, the elixir,
+// the hall's dark and edges.
+constexpr Rgba kSanctumFloor = Hex(0x08070C), kFloorGlow = Hex(0x1B1526), kSlab = Hex(0x8A78B8, 0.07f);
+constexpr Rgba kSigilGold = Hex(0xC9A85A), kStrokeLit = Hex(0xFFE9A8), kElixir = Hex(0x3FE0A0);
+constexpr Rgba kElixirLight = Hex(0xC8FFE6);
+constexpr Rgba kHallDark = Hex(0x120E1A), kHallEdge = Hex(0x3A3048), kHallDim = Hex(0x5E5670);
 
 uint64_t Mix(uint64_t h, uint64_t v) {
   h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
@@ -98,6 +102,21 @@ class Rng {
 
  private:
   int64_t s_;
+};
+
+// The sanctum mock's random numbers (mulberry32), so its runes stand where it drew them.
+class Mulberry32 {
+ public:
+  explicit Mulberry32(uint32_t seed) : s_(seed) {}
+  float operator()() {
+    s_ += 0x6D2B79F5u;
+    uint32_t t = (s_ ^ (s_ >> 15)) * (1u | s_);
+    t = (t + (t ^ (t >> 7)) * (61u | t)) ^ t;
+    return static_cast<float>(static_cast<double>(t ^ (t >> 14)) / 4294967296.0);
+  }
+
+ private:
+  uint32_t s_;
 };
 
 float Clamp01(float v) { return std::clamp(v, 0.0f, 1.0f); }
@@ -259,6 +278,20 @@ void Dashes(Canvas& c, const At& at, float s, const art::Path& path, float on, f
   }
 }
 
+// A dashed straight line, `on` long every `period` (canvas units).
+void DashedLine(Canvas& c, glm::vec2 a, glm::vec2 b, float on, float period, float width, const Rgba& color) {
+  const float length = glm::distance(a, b);
+  if (length <= 0.0f || period <= 0.0f) return;
+  const glm::vec2 u = (b - a) / length;
+  for (float d = 0.0f; d < length; d += period) c.Line(a + u * d, a + u * std::min(length, d + on), width, color);
+}
+
+// A dashed ring (canvas units).
+void DashedRing(Canvas& c, glm::vec2 centre, float r, float on, float period, float width, const Rgba& color) {
+  if (r <= 0.0f) return;
+  for (float d = 0.0f; d + 0.01f < 2.0f * kPi * r; d += period) c.Arc(centre, r, width, d / r, on / r, color);
+}
+
 }  // namespace
 
 void CityArt::Create(wlw::app::Application& app) {
@@ -313,21 +346,24 @@ void CityArt::Build() {
   std::vector<glm::vec2> canal;
   for (const Vec2 q : city::CanalPart(city::CanalLength(), 2.5f)) canal.push_back({q.x, q.y});
   grand_canal_ = art::MakePath(std::move(canal));
-  for (int w = 4; w <= city::kDistricts; ++w) {
-    // The dotted path through a sleeping district's first 15 lamps: the same smooth curve as the lantern path
-    // (World 2's market has its own trail, city::MarketTrail; World 3's lamps stand on the Grand Canal).
-    const auto lamps = city::DistrictLamps(w);
-    std::vector<Vec2>& path = lamp_paths_[static_cast<size_t>(w - 1)];
-    for (int j = 0; j + 1 < 15; ++j) {
-      const Vec2 p0 = lamps[std::max(0, j - 1)], p1 = lamps[j], p2 = lamps[j + 1], p3 = lamps[std::min(14, j + 2)];
-      const city::Cubic piece{p1,
-                              {p1.x + (p2.x - p0.x) / 6.0f, p1.y + (p2.y - p0.y) / 6.0f},
-                              {p2.x - (p3.x - p1.x) / 6.0f, p2.y - (p3.y - p1.y) / 6.0f},
-                              p2};
-      std::vector<Vec2> points = piece.Points(10);
-      path.insert(path.end(), points.begin() + (j == 0 ? 0 : 1), points.end());
+  // The sanctum's runes round its sigil, between the gold rings (the mock's random numbers, so they stand where it
+  // drew them), and the groove down its stair.
+  Mulberry32 rune(4);
+  for (int i = 0; i < 60; ++i) {
+    const float a = static_cast<float>(i * 6 + 3) * kPi / 180.0f;
+    const Vec2 c{city::kSanctumCentre.x + std::cos(a) * 172.0f, city::kSanctumCentre.y + std::sin(a) * 172.0f};
+    const glm::vec2 t{-std::sin(a), std::cos(a)}, n{std::cos(a), std::sin(a)};
+    const int strokes = 2 + static_cast<int>(rune() * 2.0f);
+    for (int k = 0; k < strokes; ++k) {
+      const float u0 = (rune() - 0.5f) * 6.0f;
+      const float v0 = (rune() - 0.5f) * 7.0f;
+      const float u1 = (rune() - 0.5f) * 6.0f;
+      const float v1 = (rune() - 0.5f) * 7.0f;
+      runes_.push_back({Vec2{c.x + t.x * u0 + n.x * v0 * 0.5f, c.y + t.y * u0 + n.y * v0 * 0.5f},
+                        Vec2{c.x + t.x * u1 + n.x * v1 * 0.5f, c.y + t.y * u1 + n.y * v1 * 0.5f}});
     }
   }
+  groove_ = art::MakePath({{195.0f, city::kSanctumGrooveTop}, {195.0f, city::kSanctumGrooveBottom}});
   for (size_t p = 0; p < city::Trail().size(); ++p) trail_.push_back(city::TrailPoints(static_cast<int>(p), 16));
 }
 
@@ -374,6 +410,7 @@ void CityArt::Draw(Canvas& picture, Canvas& canvas, const CityFrame& frame, floa
   DrawLights(picture, x, frame);
   DrawMarket(picture, canvas, x, frame);
   DrawQuarter(picture, canvas, x, frame);
+  DrawSanctum(picture, canvas, x, frame);
   DrawMist(picture, x, frame);
   DrawDistricts(picture, canvas, x, frame);
   DrawWindow(picture, x, frame);
@@ -486,7 +523,7 @@ void CityArt::DrawTown(Canvas& c, const Xf& x, float top, float bottom) {
   // The districts' ground.
   DrawMarketStill(c, x, top, bottom);
   DrawQuarterStill(c, x, top, bottom);
-  c.FillRect({x(0, 3040 + kDeeper), x(kWidth, 4000 + kDeeper)}, Hex(0x0A0810));
+  DrawSanctumStill(c, x, top, bottom);
   // The square under the tower, cobbled.
   if (top < 1060 + kLow && bottom > 930 + kLow) {
     c.FillRect({x(0, 930 + kLow), x(kWidth, 1060 + kLow)}, Hex(0x0D1320));
@@ -501,43 +538,10 @@ void CityArt::DrawTown(Canvas& c, const Xf& x, float top, float bottom) {
     FillShape(c, points, shape.fill);
     Outline(c, points, shape.width * s, shape.stroke);
   }
-  // The sanctum, deep under the city: strata, a domed hall with its columns and spire.
-  if (bottom > 3070 + kDeeper) {
-    for (float y = 3070.0f + kDeeper; y < 4000.0f + kDeeper; y += 34.0f) {
-      if (y < top - 10.0f || y > bottom + 10.0f) continue;
-      std::vector<glm::vec2> wave;
-      for (int i = 0; i <= 20; ++i) {
-        const float t = static_cast<float>(i) / 20.0f;
-        wave.push_back(x(t * kWidth, y + 4.0f * std::sin(t * 2.0f * kPi)));
-      }
-      art::Polyline(c, wave, 1.2f * s, Hex(0x16121F));
-    }
-    const float yb = 3640.0f + kDeeper;
-    const Rgba fill = Hex(0x120E1C), edge = Hex(0x2E2846);
-    if (top < yb + 40.0f && bottom > yb - 250.0f) {
-      c.Circle(x(195, yb - 70), 126.6f * s, edge);
-      c.Circle(x(195, yb - 70), 125.0f * s, fill);
-      c.FillRect({x(68.4f, yb - 70), x(321.6f, yb)}, edge);
-      c.FillRect({x(70, yb - 70), x(320, yb - 1.6f)}, fill);
-      art::FillConvex(c, {x(183, yb - 195), x(183, yb - 222), x(195, yb - 240), x(207, yb - 222), x(207, yb - 195)},
-                      fill);
-      Outline(c, {x(183, yb - 195), x(183, yb - 222), x(195, yb - 240), x(207, yb - 222), x(207, yb - 195)}, 1.6f * s,
-              edge);
-      for (int k = 0; k < 6; ++k) {
-        const float cx = 88.0f + static_cast<float>(k) * 40.0f;
-        Outline(c, {x(cx, yb), x(cx, yb - 60), x(cx + 14, yb - 60), x(cx + 14, yb)}, 1.6f * s, edge);
-      }
-      c.FillRect({x(40, yb + 14), x(350, yb + 30)}, edge);
-      c.FillRect({x(41.5f, yb + 15.5f), x(348.5f, yb + 28.5f)}, fill);
-    }
-  }
-  // Each district's dotted path and the pipes between the gates.
+  // The pipes between the gates.
   for (int w = 2; w <= city::kDistricts; ++w) {
     const city::District& d = city::Districts()[static_cast<size_t>(w - 1)];
     if (d.bottom < top - 100.0f || d.top > bottom + 300.0f) continue;
-    std::vector<glm::vec2> path;
-    for (Vec2 p : lamp_paths_[static_cast<size_t>(w - 1)]) path.push_back(x(p));
-    Dots(c, path, 11.0f * s, 0.0f, 1.25f * s, Hex(0x25324A));
     std::vector<city::Cubic> pipes{city::GatePipe(w)};
     if (w >= 3) pipes.push_back(city::LinkPipe(w));
     for (const city::Cubic& pipe : pipes) {
@@ -588,14 +592,6 @@ void CityArt::DrawLights(Canvas& p, const Xf& x, const CityFrame& frame) {
       p.FillRect({x(w.x, w.y + kLow), x(w.x + 6, w.y + 8 + kLow)}, Hex(0xFFCF7A, k < on ? 0.85f : 0.08f));
     }
   }
-  if (visible(3300.0f + kDeeper, 3900.0f + kDeeper)) {
-    static constexpr Vec2 kCandles[] = {{60, 3500}, {330, 3480}, {120, 3720}, {270, 3740},
-                                        {40, 3860}, {350, 3880}, {195, 3780}, {150, 3330}};
-    for (int k = 0; k < 8; ++k) {
-      const float f = frame.calm ? 0.75f : 0.75f + 0.25f * std::sin(t * 2.0f + static_cast<float>(k) * 1.7f);
-      p.Circle(x(kCandles[k].x, kCandles[k].y + kDeeper), 2.2f * s, Hex(0xE6CC88, 0.5f * f));
-    }
-  }
   // Light rising down the tower's pipe toward World 2's gate.
   if (frame.tower_fill > 0.0f && visible(city::kTowerPipeTop.y, city::kTowerPipeBottom.y)) {
     const glm::vec2 a = x(city::kTowerPipeTop);
@@ -615,11 +611,10 @@ void CityArt::DrawMist(Canvas& p, const Xf& x, const CityFrame& frame) {
   for (int m = 0; m < 3; ++m) {
     const float y = kBands[m][0] + kLow;
     if (y > view_bottom + 20.0f || y + 220.0f < frame.scroll - 20.0f) continue;
-    // Thinner over a district that has woken; the market's and the canal quarter's lift as they wake.
-    const float thick = m == 0                                         ? 1.0f - frame.market.awake
-                        : m == 1                                       ? 1.0f - frame.quarter.awake
-                        : frame.districts[static_cast<size_t>(m)].open ? 0.45f
-                                                                       : 1.0f;
+    // The market's, the canal quarter's and the sanctum's lift as they wake.
+    const float thick = m == 0   ? 1.0f - frame.market.awake
+                        : m == 1 ? 1.0f - frame.quarter.awake
+                                 : 1.0f - frame.sanctum.awake;
     if (thick <= 0.0f) continue;
     for (int k = 0; k < 22; ++k) {
       const float f = (static_cast<float>(k) + 0.5f) / 22.0f;
@@ -652,39 +647,6 @@ void CityArt::DrawDistricts(Canvas& p, Canvas& c, const Xf& x, const CityFrame& 
       const art::Path part = path.Part(0.0f, path.Length() * Clamp01(df.pour));
       art::Stroke(p, part, 0.0f, 5.0f * s, kLight);
       if (df.pour >= 1.0f) Dots(p, points, 15.0f * s, (frame.calm ? 0.0f : t * 33.0f) * s, 1.5f * s, kBead);
-    }
-    // The lamps: asleep (dark), open (a ring and its number), lit (its level solved). The market and the canal
-    // quarter draw their own.
-    const auto lamps = city::DistrictLamps(w);
-    for (int j = 0; w == 4 && j < city::kDistrictLamps; ++j) {
-      const city::Light& light = df.lamps[static_cast<size_t>(j)];
-      const bool challenge = j >= 15;
-      const glm::vec2 at = x(lamps[static_cast<size_t>(j)]);
-      float awake = (light.bits & kSolveStar) ? 1.0f : 0.0f;
-      if (j == 0 && df.wake > 0.0f && df.wake < 1.0f)
-        awake = std::max(awake, std::sin(df.wake * kPi));  // the gate opening
-      const bool open = !light.locked;
-      const float r = (open ? (challenge ? 13.0f : 12.0f) : (challenge ? 8.0f : 7.0f)) * s;
-      if (awake > 0.0f) glow_.Draw(p, at, (10.0f + 26.0f * awake) * s, WithAlpha(kLight, 0.9f * awake));
-      const Rgba fill = Mixed(Hex(0x101826), Hex(0xFFD47A), awake);
-      const Rgba stroke = awake > 0.0f ? kBrassLit : open ? kBrass : challenge ? Hex(0x3A3550) : Hex(0x2C3B55);
-      if (challenge) {
-        const std::vector<glm::vec2> diamond = DiamondPoints(at, r + 2.0f * s);
-        art::FillConvex(p, diamond, stroke);
-        art::FillConvex(p, DiamondPoints(at, r), fill);
-      } else {
-        p.Circle(at, r + 2.0f * s, stroke);
-        p.Circle(at, r, fill);
-      }
-      if (open) {
-        const std::string number = challenge ? "C" + std::to_string(j - 14) : std::to_string(j + 1);
-        c.Text(font, number, at, (challenge ? 11.0f : 13.0f) * kText * s, Align::Center,
-               awake > 0.5f ? wlw::ui::TextStyle{.color = Hex(0x2A1A00)} : Outlined(ui_color::kInk));
-      }
-      if (j == df.current) {
-        const float o = frame.calm ? 0.8f : 0.6f + 0.4f * std::sin(t * 2.0f * kPi / 2.4f);
-        p.Ring(at, r + 7.0f * s, 3.0f * s, WithAlpha(kBrassLit, o));
-      }
     }
     // The gate: a brass valve on the pipe, its plate saying how many stars open it.
     const float vy = d.valve;
@@ -741,6 +703,31 @@ void CityArt::DrawDistricts(Canvas& p, Canvas& c, const Xf& x, const CityFrame& 
       Spaced(c, font, number, left, line.y, small, tracking, teal);
       c.Circle({left + wn + gap * 0.5f, line.y}, small * 0.09f, teal);
       Spaced(c, font, name, left + wn + gap, line.y, small, tracking, teal);
+      continue;
+    }
+    if (w == 4 && frame.sigil) {  // the sanctum's: violet and old gold, its name in Cinzel, lit as it wakes
+      const city::Box& b = city::kSanctumPlate;
+      const float awake = frame.sanctum.awake;
+      RoundRect(c, {x(b.x0, b.y0), x(b.x1, b.y1)}, 6.0f * s, Hex(0x140F1E), Hex(0xD8C8A0), 1.5f * s);
+      Outline(c, {x(b.x0 + 6, b.y0 + 6), x(b.x1 - 6, b.y0 + 6), x(b.x1 - 6, b.y1 - 6), x(b.x0 + 6, b.y1 - 6)}, 1.0f * s,
+              Hex(0x4A3E5E));
+      const std::string place = "THE SANCTUM";  // Cinzel: capitals
+      float size = 18.0f * kText * s, spacing = 3.0f * s;
+      const float wide = SpacedWidth(*frame.sigil, place, size, spacing), room = (b.x1 - b.x0 - 24.0f) * s;
+      if (wide > room) size *= room / wide, spacing *= room / wide;
+      const glm::vec2 big = x(195, b.y0 + 24);
+      Spaced(c, *frame.sigil, place, big.x - SpacedWidth(*frame.sigil, place, size, spacing) * 0.5f, big.y, size,
+             spacing, Mixed(Hex(0x7F7898), Hex(0xF4EEDD), awake));
+      // "4 · THE MIXING HALL": the world's number and name, small, old gold.
+      const float small = 9.5f * kText * s, gap = small * 0.55f, tracking = 1.5f * s;
+      const std::string number = std::to_string(w), name = Upper(df.name);
+      const float wn = SpacedWidth(font, number, small, tracking), wt = SpacedWidth(font, name, small, tracking);
+      const glm::vec2 line = x(195, b.y0 + 40);
+      const float left = line.x - (wn + gap + wt) * 0.5f;
+      const Rgba gold = WithAlpha(Hex(0xE6CC88), 0.4f + 0.6f * awake);
+      Spaced(c, font, number, left, line.y, small, tracking, gold);
+      c.Circle({left + wn + gap * 0.5f, line.y}, small * 0.09f, gold);
+      Spaced(c, font, name, left + wn + gap, line.y, small, tracking, gold);
       continue;
     }
     RoundRect(c, {x(92, py), x(298, py + 54)}, 9.0f * s, Hex(0x0B111C), kBrassDim, 1.5f * s);
@@ -1377,6 +1364,248 @@ void CityArt::DrawQuarterLamps(Canvas& p, Canvas& c, const Xf& x, const CityFram
     const std::vector<glm::vec2> ring =
         q.breathe >= 15 ? DiamondPoints(at, 30.0f * s) : CirclePoints(at, 27.0f * s, 36);
     Outline(p, ring, 3.0f * s, WithAlpha(kTealLit, o));
+  }
+}
+
+// ---- The sanctum floor (World 4) ----
+
+void CityArt::DrawSanctumStill(Canvas& c, const Xf& x, float top, float bottom) {
+  const city::District& d = city::Districts()[3];
+  if (bottom < d.top || top > city::kHeight) return;
+  const float s = x.s;
+  const Vec2 centre = city::kSanctumCentre;
+  const glm::vec2 C = x(centre);
+  auto shows = [&](float y0, float y1) { return y1 > top - 10.0f && y0 < bottom + 10.0f; };
+  // The floor, a faint glow round the sigil (cut off above the district).
+  c.FillRect({x(0, d.top), x(kWidth, city::kHeight)}, kSanctumFloor);
+  wlw::ui::ImageStyle floor_glow;
+  floor_glow.tint = kFloorGlow;
+  floor_glow.uv = {{0.0f, (d.top - (centre.y - 560.0f)) / 1120.0f}, {1.0f, 1.0f}};
+  c.Image({x(centre.x - 560.0f, d.top), x(centre.x + 560.0f, centre.y + 560.0f)}, soft_, floor_glow);
+  // The slabs' joints: rings round the sigil and spokes out from it.
+  for (float r = 200.0f; r < 560.0f; r += 46.0f) c.Ring(C, r * s, 1.0f * s, kSlab);
+  for (int j = 0; j < 24; ++j) {
+    const float b = static_cast<float>(j) * 15.0f * kPi / 180.0f;
+    const glm::vec2 dir{std::cos(b), std::sin(b)}, middle{centre.x, centre.y};
+    const glm::vec2 a = middle + dir * 200.0f;
+    glm::vec2 e = middle + dir * 620.0f;
+    if (a.y < d.top) continue;
+    if (e.y < d.top) e = a + (e - a) * ((d.top - a.y) / (e.y - a.y));
+    c.Line(x(a.x, a.y), x(e.x, e.y), 1.0f * s, kSlab);
+  }
+  // The stair down from the plate, the pillars, the groove down the stair.
+  if (shows(city::kSanctumPlate.y1, 5800.0f)) {
+    for (int k = 0; k < city::kSanctumSteps; ++k) {
+      const city::Box b = city::SanctumStep(k);
+      c.FillRect({x(b.x0, b.y0), x(b.x1, b.y1)}, k % 2 ? Hex(0x17121F) : Hex(0x1C1626));
+      c.Line(x(b.x0, b.y0), x(b.x1, b.y0), 1.0f * s, WithAlpha(kSigilGold, 0.35f));
+    }
+    for (const Vec2 pillar : city::kSanctumPillars) {
+      wlw::ui::ImageStyle shadow;
+      shadow.tint = Hex(0x000000, 0.45f);
+      const glm::vec2 at = x(pillar);
+      c.Image({at - glm::vec2(26.0f * s), at + glm::vec2(26.0f * s)}, soft_, shadow);
+      c.Circle(at, 19.0f * s, kHallEdge);
+      c.Circle(at, 17.0f * s, Hex(0x1E1828));
+      c.Ring(at, 12.0f * s, 1.0f * s, WithAlpha(kSigilGold, 0.3f));
+    }
+    const glm::vec2 a = x(195, city::kSanctumGrooveTop), b = x(195, city::kSanctumGrooveBottom);
+    c.Line(a, b, 16.0f * s, Hex(0xB49450, 0.35f));
+    c.Line(a, b, 10.0f * s, Hex(0x040307));
+  }
+  // The sigil inlaid in the floor: its gold rings, the runes between them, the dashed and inner rings, the guide of
+  // the star the strokes will draw.
+  if (shows(centre.y - 200.0f, centre.y + 200.0f)) {
+    c.Circle(C, 200.0f * s, WithAlpha(kSigilGold, 0.04f));
+    c.Ring(C, city::kSigilRing * s, 2.6f * s, kSigilGold);
+    c.Ring(C, 166.0f * s, 1.0f * s, kSigilGold);
+    for (const auto& rune : runes_) c.Line(x(rune[0]), x(rune[1]), 1.2f * s, WithAlpha(kSigilGold, 0.7f));
+    DashedRing(c, C, 104.0f * s, 4.0f * s, 10.0f * s, 0.9f * s, WithAlpha(kSigilGold, 0.5f));
+    c.Ring(C, 40.0f * s, 1.4f * s, WithAlpha(kSigilGold, 0.8f));
+    for (int i = 0; i < 15; ++i) {
+      const auto ends = city::StrokeEnds(i);
+      DashedLine(c, x(ends[0]), x(ends[1]), 3.0f * s, 8.0f * s, 0.8f * s, WithAlpha(kSigilGold, 0.12f));
+    }
+  }
+  // The plaque at the floor's foot.
+  const city::Box& plaque = city::kSanctumPlaque;
+  if (shows(plaque.y0 - 10.0f, plaque.y1)) {
+    c.Line(x(120, plaque.y0 - 1), x(270, plaque.y0 - 1), 1.0f * s, WithAlpha(kSigilGold, 0.4f));
+    RoundRect(c, {x(plaque.x0, plaque.y0), x(plaque.x1, plaque.y1)}, 6.0f * s, Hex(0x140F1E), kHallEdge, 2.0f * s);
+    const float rows[][2] = {{5791.0f, 251.0f}, {5803.0f, 239.0f}, {5815.0f, 245.0f}};
+    for (const auto& row : rows) c.Line(x(139, row[0]), x(row[1], row[0]), 1.2f * s, Hex(0xD8C49A, 0.18f));
+  }
+}
+
+void CityArt::DrawSanctum(Canvas& p, Canvas& c, const Xf& x, const CityFrame& frame) {
+  const city::District& d = city::Districts()[3];
+  const float s = x.s, t = frame.time, view_top = frame.scroll, view_bottom = frame.scroll + frame.ViewHeight();
+  if (view_bottom < d.top - 40.0f || view_top > city::kHeight) return;
+  const CityFrame::Sanctum& S = frame.sanctum;
+  const Vec2 centre = city::kSanctumCentre;
+  const glm::vec2 C = x(centre);
+  float level = 0.0f;
+  for (const float stroke : S.stroke) level += Ease(Clamp01(stroke)) / 15.0f;
+  const float all = Clamp01(S.all);
+
+  // The elixir's green down the groove from the stair (once the gate is open), a glow at its head while it runs.
+  if (S.pour > 0.0f) {
+    const float head = city::kSanctumGrooveTop + (city::kSanctumGrooveBottom - city::kSanctumGrooveTop) * Ease(S.pour);
+    const art::Path path = S.pour >= 1.0f ? groove_ : groove_.Part(0.0f, head - city::kSanctumGrooveTop);
+    Dashes(p, x, s, path, 8.0f, 20.0f, frame.calm ? 0.0f : t * 25.0f, 4.0f, WithAlpha(kElixir, 0.85f), view_top,
+           view_bottom);
+    if (S.running) glow_.Draw(p, x(195, head), 16.0f * s, WithAlpha(kElixirLight, 0.8f));
+  }
+  if (view_bottom > centre.y - 200.0f && view_top < centre.y + 200.0f) {
+    // The haze over the sigil grows with the star; the ring lights round once it's closed.
+    const float extra = 0.08f * level + 0.06f * all;
+    if (extra > 0.0f) p.Circle(C, 200.0f * s, WithAlpha(kSigilGold, extra));
+    if (all > 0.0f) {
+      p.Arc(C, city::kSigilRing * s, 7.0f * s, 0.0f, 2.0f * kPi * Ease(all), WithAlpha(kStrokeLit, 0.25f));
+      p.Arc(C, city::kSigilRing * s, 3.0f * s, 0.0f, 2.0f * kPi * Ease(all), WithAlpha(kStrokeLit, 0.9f));
+    }
+    // The strokes of the star, each from its candle (thicker for a level with all three stars).
+    for (int i = 0; i < 15; ++i) {
+      const size_t n = static_cast<size_t>(i);
+      if (S.stroke[n] <= 0.0f) continue;
+      const auto ends = city::StrokeEnds(i);
+      const float u = Ease(Clamp01(S.stroke[n]));
+      const Vec2 e{ends[0].x + (ends[1].x - ends[0].x) * u, ends[0].y + (ends[1].y - ends[0].y) * u};
+      const auto& a = S.lamp[n];
+      const bool perfect = a[0] >= 1.0f && a[1] >= 1.0f && a[2] >= 1.0f;
+      const float w = perfect ? 2.6f : 2.0f, op = perfect ? 0.95f : 0.79f;
+      p.Line(x(ends[0]), x(e), (w + 4.0f) * s, WithAlpha(kStrokeLit, 0.22f * op));
+      p.Line(x(ends[0]), x(e), w * s, WithAlpha(kStrokeLit, op));
+      if (u < 1.0f) glow_.Draw(p, x(e), 12.0f * s, Hex(0xFFF2C8, 0.9f));
+    }
+    // The challenges' rings at the heart.
+    const bool shut = !frame.districts[2].open;
+    for (int k = 0; k < 3; ++k) {
+      const Vec2 ring_at = city::SanctumRing(k);
+      const glm::vec2 R = x(ring_at);
+      const size_t n = static_cast<size_t>(15 + k);
+      const float on = Clamp01(S.ring[static_cast<size_t>(k)]);
+      const bool locked = S.locked[n];
+      if (on > 0.0f) glow_.Draw(p, R, 30.0f * s, WithAlpha(kStrokeLit, 0.55f * on));
+      const Rgba col = on > 0.0f ? kStrokeLit : locked ? kHallEdge : kSigilGold;
+      p.Circle(R, 16.0f * s, kHallDark);
+      p.Ring(R, 16.0f * s, (on > 0.0f ? 2.6f : 1.6f) * s, col);
+      DashedRing(p, R, 11.0f * s, 2.0f * s, 4.4f * s, 1.0f * s, WithAlpha(col, 0.8f));
+      art::FillConvex(p, DiamondPoints(R, 6.0f * s),
+                      S.lamp[n][0] > 0.0f ? kStrokeLit
+                      : locked            ? Hex(0x2A2236)
+                                          : Hex(0x6E5E8A));
+      if (shut || locked) continue;
+      c.Text(*frame.font, "C" + std::to_string(k + 1), x(ring_at.x, ring_at.y + 23.0f), 9.0f * kText * s, Align::Center,
+             {.color = Hex(0xC2B6E2)});
+      const float angle = (-90.0f + 120.0f * static_cast<float>(k)) * kPi / 180.0f;
+      const Vec2 mid{centre.x + std::cos(angle) * 93.0f, centre.y + std::sin(angle) * 93.0f};
+      for (int j = 0; j < 3; ++j) {
+        const float along = 9.0f * static_cast<float>(j - 1);
+        const glm::vec2 star = x(mid.x - std::sin(angle) * along, mid.y + std::cos(angle) * along);
+        const float lit = Clamp01(S.lamp[n][static_cast<size_t>(j)]);
+        const float r = lit > 0.0f ? 3.5f + 2.0f * (1.0f - lit) : 3.5f;
+        StarShape(c, star, (r + 1.0f) * s, lit > 0.0f ? Hex(0xB5781C, std::max(0.4f, lit)) : Hex(0x4A3E5E, 0.9f));
+        StarShape(c, star, r * s, lit > 0.0f ? Hex(0xFFC24D, std::max(0.4f, lit)) : Hex(0x1E1828, 0.9f));
+      }
+    }
+    // The elixir's phial at the centre: a halo, the beam once the star is closed, the glass, the liquid rising.
+    glow_.Draw(p, C, (34.0f + 30.0f * level + 20.0f * all) * s, WithAlpha(kElixir, 0.06f + 0.25f * level + 0.2f * all));
+    if (all > 0.0f) {
+      const glm::vec2 beam_top = x(centre.x, centre.y - 160.0f * Ease(all));
+      p.Line(C, beam_top, 11.0f * s, WithAlpha(kElixirLight, 0.3f * S.beam));
+      p.Line(C, beam_top, 7.0f * s, WithAlpha(kElixirLight, S.beam));
+    }
+    p.FillRect({x(190, 5492), x(200, 5512)}, Hex(0xE8DEFF, 0.07f), 2.0f * s);
+    Outline(p, {x(190, 5492), x(200, 5492), x(200, 5512), x(190, 5512)}, 1.4f * s, Hex(0xEDE4FF, 0.6f));
+    p.FillRect({x(city::kPhialNeck.x0, city::kPhialNeck.y0), x(city::kPhialNeck.x1, city::kPhialNeck.y0 + 4.5f)},
+               Hex(0xB49450), 2.0f * s);
+    const float r = city::kPhialRadius;
+    p.Circle(C, r * s, Hex(0xE8DEFF, 0.06f));
+    if (level > 0.0f) {
+      const float surface = city::ElixirTop(level);
+      const std::vector<glm::vec2> band = ClipSlab(CirclePoints(C, r * s, 32), x(0, surface).y, C.y + r * s, 1);
+      if (band.size() >= 3) FillShape(p, band, kElixir);
+      glow_.Draw(p, C + glm::vec2(0.0f, 8.0f * s), 20.0f * s, WithAlpha(kElixir, 0.4f * level));
+      const float dy = surface - centre.y;
+      const float half = std::sqrt(std::max(0.0f, r * r - dy * dy));
+      art::FilledEllipse(p, x(centre.x, surface), glm::vec2(half, 2.0f) * s, Hex(0xD8FFEE, 0.85f));
+    }
+    p.Ring(C, r * s, 1.8f * s, Hex(0xEDE4FF, 0.7f));
+    p.Arc(C, 15.0f * s, 1.8f * s, -1.02f, 0.64f, Hex(0xFFFFFF, 0.5f));
+  }
+  DrawSanctumCandles(p, c, x, frame);
+  // The motto and the map's end.
+  if (frame.sigil && view_bottom > city::kSanctumMotto - 30.0f) {
+    const std::string motto = "SOLVE ET COAGULA";
+    const float size = 13.0f * kText * s, spacing = 4.0f * s;
+    const glm::vec2 at = x(195, city::kSanctumMotto - 4.5f);
+    Spaced(c, *frame.sigil, motto, at.x - SpacedWidth(*frame.sigil, motto, size, spacing) * 0.5f, at.y, size, spacing,
+           Mixed(kHallDim, Hex(0xE6CC88), all));
+    const std::string end = "the end of the map";
+    const float small = 10.0f * kText * s, tracking = 2.0f * s;
+    const glm::vec2 foot = x(195, city::kMapEnd - 3.5f);
+    Spaced(c, *frame.sigil, end, foot.x - SpacedWidth(*frame.sigil, end, small, tracking) * 0.5f, foot.y, small,
+           tracking, kHallDim);
+  }
+  // Asleep behind its gate: the floor lies dark under the mist, which lifts as it wakes.
+  if (S.awake < 1.0f) p.FillRect({x(0, d.top), x(kWidth, city::kHeight)}, Hex(0x0A0812, 0.62f * (1.0f - S.awake)));
+}
+
+void CityArt::DrawSanctumCandles(Canvas& p, Canvas& c, const Xf& x, const CityFrame& frame) {
+  const float s = x.s, t = frame.time, view_bottom = frame.scroll + frame.ViewHeight();
+  const CityFrame::Sanctum& S = frame.sanctum;
+  const bool shut = !frame.districts[2].open;
+  const wlw::ui::Font& font = *frame.font;
+  for (int i = 0; i < 15; ++i) {
+    const size_t n = static_cast<size_t>(i);
+    const Vec2 l = city::SanctumCandle(i);
+    if (l.y + 70.0f < frame.scroll || l.y - 70.0f > view_bottom) continue;
+    const glm::vec2 at = x(l);
+    const auto& a = S.lamp[n];
+    const bool locked = S.locked[n], perfect = a[0] >= 1.0f && a[1] >= 1.0f && a[2] >= 1.0f;
+    const float lit = Clamp01(S.flame[n]);
+    const bool next = i == S.breathe;
+    if (lit > 0.0f) glow_.Draw(p, at, 56.0f * s, Hex(0xFF9E3D, 0.22f * lit));  // its pool of light
+    const Rgba ring = perfect ? Hex(0xFFE6A6) : locked ? Hex(0x2A2236) : next ? kElixirLight : Hex(0x8C7CB0);
+    p.Ring(at, 16.0f * s, (next ? 3.0f : 2.0f) * s, ring);
+    p.Circle(at, 12.8f * s, locked ? Hex(0x3A3242) : Hex(0xB8A888));
+    p.Circle(at, 11.2f * s, locked ? Hex(0x2A2430) : Hex(0xE8DCC0));
+    if (lit > 0.0f) {
+      const float k = static_cast<float>(i);
+      const float flicker = frame.calm ? 0.0f : std::sin(t * 7.0f + k * 1.7f) * 1.2f + std::sin(t * 11.3f + k) * 0.8f;
+      glow_.Draw(p, at, (22.0f + flicker) * s, Hex(0xFFB14D, 0.6f * lit));
+      glow_.Draw(p, at, 7.0f * s, Hex(0xFFF2C8, lit));
+    }
+    if (S.flash[n] > 0.0f) p.Ring(at, 16.0f * s, 5.0f * s, Hex(0xFFFFFF, S.flash[n]));
+    if (shut) continue;
+    wlw::ui::TextStyle style{.color = Hex(0xF4F0FF), .outline = 0.1f, .outline_color = Hex(0x0A0810, 0.9f)};
+    if (locked) {
+      style = {.color = Hex(0xF4F0FF, 0.22f)};
+    } else if (a[0] > 0.0f) {
+      style = {
+          .color = Hex(0x2A1A00), .outline = 0.1f, .outline_color = Rgba{1.0f, 240.0f / 255.0f, 210.0f / 255.0f, 0.7f}};
+    }
+    c.Text(font, std::to_string(i + 1), at, 13.0f * kText * s, Align::Center, style);
+    if (locked) continue;
+    for (int k = 0; k < 3; ++k) {
+      const glm::vec2 star = x(city::CandleStar(i, k));
+      const float on = Clamp01(a[static_cast<size_t>(k)]);
+      const float r = on > 0.0f ? 4.5f + 2.5f * (1.0f - on) : 4.5f;
+      StarShape(c, star, (r + 1.0f) * s, on > 0.0f ? Hex(0xB5781C, std::max(0.4f, on)) : Hex(0x4A3E5E, 0.9f));
+      StarShape(c, star, r * s, on > 0.0f ? Hex(0xFFC24D, std::max(0.4f, on)) : Hex(0x1E1828, 0.9f));
+    }
+  }
+  // The next to play breathes (quickly, a pulse, after a solve).
+  if (S.breathe >= 0 && S.breathe < city::kDistrictLamps) {
+    const glm::vec2 at = x(city::DistrictLamps(4)[static_cast<size_t>(S.breathe)]);
+    float o = 0.8f;
+    if (!frame.calm) {
+      const float k = std::fmod(t, 0.6f) / 0.6f;
+      o = S.pulse ? 1.0f - 0.85f * (1.0f - (1.0f - k) * (1.0f - k))
+                  : 0.25f + 0.75f * (0.5f - 0.5f * std::cos(2.0f * kPi * t / 1.8f));
+    }
+    p.Ring(at, 19.0f * s, 3.0f * s, WithAlpha(kElixirLight, o));
   }
 }
 

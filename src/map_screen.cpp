@@ -8,6 +8,7 @@
 
 #include "audio_synth.h"
 #include "ui_parts.h"
+#include "world_look.h"
 #include "wlw/core/cvar.h"
 #include "wlw/ui/icons.h"
 #include "wlw/ui/widgets.h"
@@ -33,6 +34,10 @@ constexpr float kBar = 58.0f;     // the top bar under the safe area's top
 constexpr float kRound = 64.0f;   // Daily, Lab
 constexpr float kAppear = 0.45f;  // seconds for a star or a pane to light
 constexpr float kFlash = 0.7f;
+// The sanctum (World 4): a stroke of the star drawing, a candle catching, a ring lighting, the ring round the sigil,
+// the green down the groove from the stair.
+constexpr float kStrokeSeconds = 1.3f, kFlameSeconds = 0.6f, kRingSeconds = 0.8f, kGreatSeconds = 1.6f;
+constexpr float kGrooveSeconds = 1.6f;
 constexpr int kAnimated = 3;  // at most this many levels light one by one; earlier news shows at once
 
 constexpr Rgba kHudFill = Rgba{20.0f / 255.0f, 28.0f / 255.0f, 44.0f / 255.0f, 0.9f};
@@ -106,6 +111,7 @@ void MapScreen::Build() {
   }
   frame_.hand = &app_.GetHand();
   frame_.street = &app_.GetStreet();
+  frame_.sigil = &app_.GetSigil();
   dev_stars_.reset();
   if (const std::string dev = cv_stars.Get(); !dev.empty()) {
     StarMap stars;
@@ -184,6 +190,11 @@ void MapScreen::Start(float view) {
   }
   for (auto& bottle : bottle_at_) bottle.fill(kNever);
   hood_at_.fill(kNever);
+  flame_at_.fill(kNever);
+  stroke_at_.fill(kNever);
+  ring_at_.fill(kNever);
+  all_at_ = kNever;
+  groove_at_ = kLongAgo;
   stars_shown_ = 0;
   for (const city::WorldLevels& w : levels_) {
     auto lit = [&](const std::string& id, int index) {
@@ -198,6 +209,11 @@ void MapScreen::Start(float view) {
   }
   for (int w = 2; w <= 4; ++w) gate_shown_[static_cast<size_t>(w - 2)] = seen.gates >= w;
   CanalRest();
+  auto count_strokes = [this] {
+    strokes_planned_ =
+        static_cast<int>(std::count_if(stroke_at_.begin(), stroke_at_.end(), [](float a) { return a < kNever; }));
+  };
+  count_strokes();
 
   const Level* current = CurrentLevel();
   const Level* target = focus_ && !dev_stars_ ? focus_ : current;
@@ -216,6 +232,7 @@ void MapScreen::Start(float view) {
     }
     news.reveals.erase(news.reveals.begin(), news.reveals.begin() + static_cast<long>(quiet));
     CanalRest();
+    count_strokes();
   }
 
   // Where the view starts: the window on the first visit, else the first news.
@@ -223,6 +240,7 @@ void MapScreen::Start(float view) {
   auto scroll_for = [&](const city::Reveal& r) {
     if (r.world == 1) return city::LanternScroll(r.index, view);
     if (r.world == 3) return city::QuarterScroll(r.index, view);
+    if (r.world == 4) return city::SanctumScroll(r.index, view);
     const Vec2 lamp = city::DistrictLamps(r.world)[static_cast<size_t>(r.index)];
     return city::ClampScroll(lamp.y - view * (560.0f / city::kMockView), view);
   };
@@ -249,7 +267,9 @@ void MapScreen::Start(float view) {
       glide(city::GateScroll(world, view), 1.0f, 0.3f);
       t = OpenGate(world, t);
       // The pour moved the view (in the canal quarter, down to the first harbour to play).
-      planned = world == 3 ? RideScroll(city::CanalTrail(NextLamp()), view) : -1.0f;
+      planned = world == 3   ? RideScroll(city::CanalTrail(NextLamp()), view)
+                : world == 4 ? city::SanctumScroll(15, view)
+                             : -1.0f;
     }
     for (const city::Reveal& r : news.reveals) {
       if (r.world != world) continue;
@@ -269,8 +289,11 @@ void MapScreen::Start(float view) {
         if (top < planned + view * 0.12f) glide(city::ShopScroll(view, challenge >= 0), 0.8f, 0.15f);
         t = FillBottle(r.index, r.fresh, t);
       } else {
-        glide(scroll_for(r), 0.8f, 0.2f);
+        glide(scroll_for(r), r.world == 4 ? 0.7f : 0.8f, r.world == 4 ? 0.15f : 0.2f);
         t = LightLamp(r.world, r.index, r.fresh, t);
+        // The fifteenth stroke glided the view to the heart.
+        if (r.world == 4 && (r.fresh & kSolveStar) && r.index < 15 && strokes_planned_ == 15)
+          planned = city::SanctumScroll(15, view);
         // A harbour's solve ran the light on down the canal, the view with it.
         if (r.world == 3 && (r.fresh & kSolveStar) && r.index < 15)
           planned = RideScroll(city::CanalTrail(r.index + 1), view);
@@ -286,6 +309,7 @@ void MapScreen::Start(float view) {
   for (int j = 0; j < city::kDistrictLamps && current && next < 0; ++j) {
     if (lamps_[0][static_cast<size_t>(j)] == current) next = j, next_world = 2;
     if (lamps_[1][static_cast<size_t>(j)] == current) next = j, next_world = 3;
+    if (lamps_[2][static_cast<size_t>(j)] == current) next = j, next_world = 4;
   }
   if (y >= 0.0f) {
     const float before = t;
@@ -341,17 +365,11 @@ float MapScreen::LightPanes(int lantern, int fresh, float start) {
 }
 
 float MapScreen::LightLamp(int world, int lamp, int fresh, float start) {
-  if (world != 2 && world != 3) {
-    At(start, [this, world, lamp, fresh] {
-      Show(world, lamp, fresh, clock_);
-      stars_shown_ += StarsIn(fresh);
-      app_.GetFeedback().Play(synth::Sound::PaneChime, 0.55f, Chime());
-    });
-    return start + 0.7f;
-  }
   // The lamp lights with its first star, then its stars pop, a note each: the market's on the marimba (its
-  // bottle waits for FillBottle), the quarter's on the vibes.
-  const synth::Sound note = world == 2 ? synth::Sound::MarimbaNote : synth::Sound::VibesNote;
+  // bottle waits for FillBottle), the quarter's on the vibes, the sanctum's on the harp.
+  const synth::Sound note = world == 2   ? synth::Sound::MarimbaNote
+                            : world == 3 ? synth::Sound::VibesNote
+                                         : synth::Sound::HarpNote;
   float t = start;
   int j = 0;
   for (int k = 0; k < 3; ++k) {
@@ -365,7 +383,9 @@ float MapScreen::LightLamp(int world, int lamp, int fresh, float start) {
     t += 0.26f;
     ++j;
   }
-  if (world == 2 || !(fresh & kSolveStar) || lamp >= 15) return t + 0.4f;  // a buoy: its own light only
+  if (world == 2 || !(fresh & kSolveStar)) return t + 0.4f;  // Lean or Swift only: its stars only
+  if (world == 4) return LightCandle(lamp, t);
+  if (lamp >= 15) return t + 0.4f;  // a buoy: its own light only
 
   // A harbour's solve: its neighbourhood lights out from it (the level's harbour sound, by its first colour), then
   // the light runs on down the canal to the next harbour (from the last one, into the lagoon), which pulses.
@@ -385,6 +405,54 @@ float MapScreen::LightLamp(int world, int lamp, int fresh, float start) {
     if (lamps_[1][next]) {
       pulse_ = static_cast<int>(next);
       pulse_world_ = 3;
+      pulse_until_ = clock_ + 1.8f;
+    }
+  });
+  return t + 0.5f;
+}
+
+// The candle's flame catches, then its stroke of the star draws across the floor to candle i + 7 (the level's phial
+// sound, by its first colour) and the elixir rises a fifteenth; the fifteenth stroke closes the star: the ring lights
+// round, the beam rises, the great work plays and the view glides to the heart. Then the next candle pulses. A
+// challenge lights its ring instead.
+float MapScreen::LightCandle(int lamp, float start) {
+  float t = start + 0.25f;
+  if (lamp >= 15) {
+    const size_t k = static_cast<size_t>(lamp - 15);
+    At(t, [this, k] {
+      ring_at_[k] = clock_;
+      app_.GetFeedback().Play(synth::Sound::SealBell, 0.7f);
+      app_.GetFeedback().Play(synth::Sound::MixSwell, 0.5f, 1.0f);
+    });
+    return t + 1.2f;
+  }
+  const size_t n = static_cast<size_t>(lamp);
+  At(t, [this, n] {
+    flame_at_[n] = clock_;
+    app_.GetFeedback().Play(synth::Sound::Kindle, 0.7f);
+  });
+  t += 0.45f;
+  const std::vector<Color> colors = lamps_[2][n] ? city::LanternColors(*lamps_[2][n]) : std::vector<Color>{};
+  const synth::Sound phial = synth::ChordFor(synth::SoundSet::Sanctum, colors.empty() ? Color::Green : colors.front());
+  At(t, [this, n, phial] {
+    stroke_at_[n] = clock_;
+    app_.GetFeedback().Play(phial, 0.7f);
+  });
+  t += 1.5f;  // the stroke draws (1.3 s), then a breath
+  if (++strokes_planned_ == 15) {
+    At(t, [this] {
+      all_at_ = clock_;
+      app_.GetFeedback().Play(synth::Sound::GreatWork, 0.8f);
+    });
+    At(t + 0.6f, [this] { Glide(city::SanctumScroll(15, view_), 0.9f); });
+    t += 3.6f;
+  }
+  const size_t next = n + 1;  // 4-15 -> C1
+  At(t, [this, next] {
+    app_.GetFeedback().Play(synth::Sound::SealBell, 0.6f, next < 15 ? 1.0f : 1.5f);
+    if (lamps_[2][next]) {
+      pulse_ = static_cast<int>(next);
+      pulse_world_ = 4;
       pulse_until_ = clock_ + 1.8f;
     }
   });
@@ -416,9 +484,9 @@ float MapScreen::CanalShown() const {
   return canal_.from + (canal_.to - canal_.from) * Clamp01((clock_ - canal_.t0) / canal_.seconds);
 }
 
-int MapScreen::NextLamp() const {
+int MapScreen::NextLamp(int world) const {
   for (int j = 0; j < 15; ++j) {
-    if (lamp_at_[1][static_cast<size_t>(j)][0] > clock_) return j;
+    if (lamp_at_[static_cast<size_t>(world - 2)][static_cast<size_t>(j)][0] > clock_) return j;
   }
   return -1;
 }
@@ -498,9 +566,8 @@ float MapScreen::OpenGate(int world, float start) {
     if (world == 2) {  // the shop wakes: its sign lights, the mist lifts, the door bell rings
       bell_at_ = clock_;
       app_.GetFeedback().Play(synth::Sound::ShopBell, 0.7f);
-    } else if (world != 3) {
-      app_.GetFeedback().Play(synth::Sound::Chime, 0.7f, 1.0f);
     }
+    if (world == 4) groove_at_ = kNever;  // the groove waits for the green
   });
   if (world == 3) {
     // The quarter wakes (its plate lights, the mist lifts), then the light runs in at the sluice and down the
@@ -514,6 +581,27 @@ float MapScreen::OpenGate(int world, float start) {
       if (lamps_[1][pulse]) {
         pulse_ = static_cast<int>(pulse);
         pulse_world_ = 3;
+        pulse_until_ = clock_ + 1.8f;
+      }
+    });
+    return t + 0.6f;
+  }
+  if (world == 4) {
+    // The sanctum wakes (its plate lights, the mist lifts), then the elixir's green runs down the groove from the stair
+    // into the sigil's rim, the view gliding down with it; candle 1 (the first to play) pulses to the seal bell.
+    t += 0.6f;
+    const int next = NextLamp(4);
+    At(t, [this] {
+      groove_at_ = clock_;
+      Glide(city::SanctumScroll(15, view_), kGrooveSeconds);
+    });
+    t += kGrooveSeconds;
+    const size_t pulse = next < 0 ? 15 : static_cast<size_t>(next);
+    At(t, [this, pulse] {
+      app_.GetFeedback().Play(synth::Sound::SealBell, 0.7f);
+      if (lamps_[2][pulse]) {
+        pulse_ = static_cast<int>(pulse);
+        pulse_world_ = 4;
         pulse_until_ = clock_ + 1.8f;
       }
     });
@@ -569,6 +657,14 @@ void MapScreen::Show(int world, int index, int bits, float when, bool window) {
       lamp = std::min(lamp, when);
       if (world == 2 && window) bottle_at_[i][k] = std::min(bottle_at_[i][k], when);
       if (world == 3 && window && k == 0 && i < hood_at_.size()) hood_at_[i] = std::min(hood_at_[i], when);
+      if (world == 4 && window && k == 0) {
+        if (i < 15) {
+          flame_at_[i] = std::min(flame_at_[i], when);
+          stroke_at_[i] = std::min(stroke_at_[i], when);
+        } else {
+          ring_at_[i - 15] = std::min(ring_at_[i - 15], when);
+        }
+      }
     }
   }
   // All three stars seal the bottle in gold, with the last of them.
@@ -576,6 +672,11 @@ void MapScreen::Show(int world, int index, int bits, float when, bool window) {
     auto& bottle = bottle_at_[i];
     const float last = std::max({bottle[0], bottle[1], bottle[2]});
     if (last < kNever) bottle[3] = std::min(bottle[3], last);
+  }
+  // All fifteen strokes close the star: the ring lights round once the last has drawn.
+  if (world == 4 && window) {
+    const float last = *std::max_element(stroke_at_.begin(), stroke_at_.end());
+    if (last < kNever) all_at_ = std::min(all_at_, last + kStrokeSeconds);
   }
 }
 
@@ -585,12 +686,15 @@ void MapScreen::Skip() {
   pulse_ = -1;
   ShowAll();
   CanalRest();
+  groove_at_ = kLongAgo;
   SnapTo(ScrollFor(CurrentLevel()));
 }
 
 float MapScreen::ScrollFor(const Level* level) const {
   for (int j = 0; j < city::kDistrictLamps && level; ++j) {
     if (lamps_[1][static_cast<size_t>(j)] == level) return city::QuarterScroll(j, view_);
+    // 4-15 (the finished floor): the heart, where the ring and the beam are.
+    if (lamps_[2][static_cast<size_t>(j)] == level) return city::SanctumScroll(j == 14 ? 15 : j, view_);
   }
   return city::ClampScroll(LanternY(level) - view_ * (560.0f / city::kMockView), view_);
 }
@@ -632,16 +736,19 @@ void MapScreen::Update(float dt) {
   // The sound and the top bar follow the district in view.
   if (!started_) return;
   shop_tint_ = std::clamp(shop_tint_ + (MarketInView() ? dt : -dt) * 2.5f, 0.0f, 1.0f);
-  // (The canal quarter keeps the night-blue bar; only its sound changes.)
-  const Ambience::Bed bed = shop_tint_ > 0.5f ? Ambience::Bed::Shop
-                            : QuarterInView() ? Ambience::Bed::Canal
-                                              : Ambience::Bed::Lantern;
+  sanctum_tint_ = std::clamp(sanctum_tint_ + (SanctumInView() ? dt : -dt) * 2.5f, 0.0f, 1.0f);
+  // (The canal quarter keeps the night-blue bar; only its sound changes. The sanctum's violet panel isn't close to it.)
+  const Ambience::Bed bed = shop_tint_ > 0.5f      ? Ambience::Bed::Shop
+                            : sanctum_tint_ > 0.5f ? Ambience::Bed::Sanctum
+                            : QuarterInView()      ? Ambience::Bed::Canal
+                                                   : Ambience::Bed::Lantern;
   app_.GetFeedback().SetAmbience(true, true, bed);
 }
 
 bool MapScreen::MarketInView() const { return gate_shown_[0] && city::DistrictAt(camera_.Y() + view_ * 0.5f) == 2; }
 
 bool MapScreen::QuarterInView() const { return gate_shown_[1] && city::DistrictAt(camera_.Y() + view_ * 0.5f) == 3; }
+bool MapScreen::SanctumInView() const { return gate_shown_[2] && city::DistrictAt(camera_.Y() + view_ * 0.5f) == 4; }
 
 bool MapScreen::LockedShown(int lantern) const {
   // Locked as drawn: the lantern before it hasn't lit yet (so a solve unlocks the next one as it lights).
@@ -777,12 +884,46 @@ void MapScreen::Fill(CityFrame& frame, glm::vec2 screen, float scale) {
     quarter.pulse = true;
   }
   quarter.awake = !canals.open ? 0.0f : wake_at_[1] > 0.0f ? Clamp01((clock_ - wake_at_[1]) / 1.6f) : 1.0f;
+
+  // The sanctum floor: candles light like the quarter's lamps; a lit candle's stroke draws across the floor, the
+  // fifteenth closes the star (the ring lights round, the elixir's beam), a challenge's ring lights.
+  CityFrame::Sanctum& sanctum = frame.sanctum;
+  const CityFrame::District& hall = frame.districts[2];
+  for (int j = 0; j < city::kDistrictLamps; ++j) {
+    const size_t n = static_cast<size_t>(j);
+    sanctum.locked[n] = !hall.open || !lamps_[2][n] || LampLockedShown(4, j);
+    for (size_t k = 0; k < 3; ++k) sanctum.lamp[n][k] = alpha(lamp_at_[2][n][k]);
+  }
+  for (size_t i = 0; i < 15; ++i) {
+    sanctum.flame[i] = Clamp01((clock_ - flame_at_[i]) / kFlameSeconds);
+    sanctum.flash[i] = flash(flame_at_[i]);
+    sanctum.stroke[i] = Clamp01((clock_ - stroke_at_[i]) / kStrokeSeconds);
+  }
+  for (size_t k = 0; k < 3; ++k) sanctum.ring[k] = Clamp01((clock_ - ring_at_[k]) / kRingSeconds);
+  sanctum.all = Clamp01((clock_ - all_at_) / kGreatSeconds);
+  sanctum.beam = sanctum.all > 0.0f ? 0.85f * (1.0f - 0.4f * Clamp01((clock_ - all_at_ - kGreatSeconds) / 1.5f)) : 0.0f;
+  sanctum.pour = hall.open ? Clamp01((clock_ - groove_at_) / kGrooveSeconds) : 0.0f;
+  sanctum.running = sanctum.pour > 0.0f && sanctum.pour < 1.0f;
+  sanctum.breathe = hall.current;
+  sanctum.pulse = false;
+  if (pulse_ >= 0 && pulse_world_ == 4 && clock_ < pulse_until_) {
+    sanctum.breathe = pulse_;
+    sanctum.pulse = true;
+  }
+  sanctum.awake = !hall.open ? 0.0f : wake_at_[2] > 0.0f ? Clamp01((clock_ - wake_at_[2]) / 1.6f) : 1.0f;
 }
 
 bool MapScreen::LampLockedShown(int world, int lamp) const {
   const auto& lamps = lamp_at_[static_cast<size_t>(world - 2)];
   auto shown = [&](int j) { return lamps[static_cast<size_t>(j)][0] <= clock_; };
   if (shown(lamp)) return false;
+  // The sanctum's first candle opens as the green reaches the rim, each next one as the stroke before it has drawn
+  // (the rings: the fifteenth stroke).
+  if (world == 4) {
+    if (lamp == 0 && groove_at_ + kGrooveSeconds > clock_) return true;
+    const int before = lamp < 15 ? lamp - 1 : 14;
+    if (before >= 0 && stroke_at_[static_cast<size_t>(before)] + kStrokeSeconds > clock_) return true;
+  }
   // The canal quarter's next harbour opens as the light down the canal reaches it (the buoys: the lagoon).
   if (world == 3 && CanalShown() + 0.5f < (lamp < 15 ? city::CanalAt(lamp) : city::CanalLength())) return true;
   if (lamp < city::kDistrictLamps - city::kLobes) return lamp > 0 && !shown(lamp - 1);
@@ -863,6 +1004,7 @@ void MapScreen::RenderUI(UIContext& ui) {
     started_ = true;
     Start(view_);
     shop_tint_ = MarketInView() ? 1.0f : 0.0f;
+    sanctum_tint_ = SanctumInView() ? 1.0f : 0.0f;
   }
 
   // The finger: a drag scrolls (and flings), a tap picks a lantern; any touch skips an animation.
@@ -916,9 +1058,10 @@ void MapScreen::DrawHud(UIContext& ui) {
   // The slim top bar: stars, hints; trophies and settings.
   // Night blue over the tower, the shop's dark wood over the market.
   const float top = safe.min.y, bottom = top + kBar, mid = top + kBar * 0.5f;
-  const Rgba bar = Mixed(Hex(0x060910), Hex(0x140C07), shop_tint_);
-  const Rgba hud_fill = Mixed(kHudFill, kShopHudFill, shop_tint_);
-  const Rgba hud_border = Mixed(kHudBorder, kShopHudBorder, shop_tint_);
+  const WorldLook& hall = LookForWorld(4);  // over the open sanctum: World 4's panel
+  const Rgba bar = Mixed(Mixed(Hex(0x060910), Hex(0x140C07), shop_tint_), Hex(0x08070C), sanctum_tint_);
+  const Rgba hud_fill = Mixed(Mixed(kHudFill, kShopHudFill, shop_tint_), hall.panel, sanctum_tint_);
+  const Rgba hud_border = Mixed(Mixed(kHudBorder, kShopHudBorder, shop_tint_), hall.panel_edge, sanctum_tint_);
   for (int k = 0; k < 8; ++k) {
     const float y0 = bottom * static_cast<float>(k) / 8.0f, y1 = bottom * static_cast<float>(k + 1) / 8.0f;
     canvas.FillRect({{0.0f, y0}, {width, y1}}, WithAlpha(bar, 0.94f - 0.39f * static_cast<float>(k) / 7.0f));

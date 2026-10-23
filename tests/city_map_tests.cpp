@@ -20,6 +20,11 @@ using namespace threadlock::city;
 namespace {
 
 float Distance(Vec2 a, Vec2 b) { return std::sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)); }
+// How far a point is from the line through two others.
+float LineDistance(const std::array<Vec2, 2>& line, Vec2 p) {
+  const Vec2 a = line[0], b = line[1];
+  return std::fabs((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) / Distance(a, b);
+}
 float Radius(Vec2 at) { return Distance(at, kWindow); }
 
 // Four worlds of 15 levels and 3 challenges, gates as shipped.
@@ -171,11 +176,7 @@ TEST_SUITE("city map") {
       CHECK(d.plate < lamps[0].y);
       const Cubic gate = GatePipe(w);
       CHECK(gate.a.y == doctest::Approx(d.valve + 22.0f));
-      if (w <= 3) {
-        CHECK(gate.d.y == doctest::Approx(d.plate - 4.0f));  // into the market's or the quarter's name plate
-      } else {
-        CHECK(Distance(gate.d, {lamps[0].x, lamps[0].y - 10.0f}) < 0.01f);
-      }
+      CHECK(gate.d.y == doctest::Approx(d.plate - 4.0f));  // into the district's name plate
       if (w >= 3) {
         const Cubic link = LinkPipe(w);
         CHECK(link.a.y > DistrictLamps(w - 1)[kDistrictLamps - 1].y);
@@ -492,5 +493,110 @@ TEST_SUITE("city map") {
       for (Color c : LanternColors(world.levels[i])) got += c == Color::Amber ? 'A' : c == Color::Blue ? 'B' : '?';
       CHECK(got == expected[i]);
     }
+  }
+
+  TEST_CASE("the sanctum floor: fifteen candles round the sigil, one star through them all, three rings at its heart") {
+    const District& d = Districts()[3];
+    CHECK(d.top == 5008.0f);
+    CHECK(d.bottom == kHeight);
+    CHECK(kHeight == 5968.0f);
+    CHECK(d.valve == 4978.0f);
+    CHECK(d.plate == kSanctumPlate.y0);
+    CHECK(kSanctumPlate.y0 == 5014.0f);
+    CHECK(GatePipe(4).a.y == doctest::Approx(5000.0f));
+    CHECK(GatePipe(4).d.y == doctest::Approx(5010.0f));
+    CHECK(LinkPipe(4).d.y == doctest::Approx(d.valve - 22.0f));
+    const auto lamps = DistrictLamps(4);
+    constexpr float kPi = 3.14159265358979f;
+    for (int i = 0; i < 15; ++i) {  // candles on r148, clockwise from the top, 24 degrees apart
+      CAPTURE(i);
+      CHECK(Distance(lamps[i], kSanctumCentre) == doctest::Approx(kCandleRing));
+      const float a = std::atan2(lamps[i].y - kSanctumCentre.y, lamps[i].x - kSanctumCentre.x) * 180.0f / kPi;
+      CHECK(std::fabs(std::remainder(a - (-90.0f + 24.0f * static_cast<float>(i)), 360.0f)) < 0.01f);
+      CHECK(Distance(lamps[i], SanctumCandle(i)) < 0.001f);
+      CHECK(Distance(lamps[i], lamps[(i + 1) % 15]) == doctest::Approx(61.54f).epsilon(0.001));
+      CHECK(Distance(CandleStar(i, 1), kSanctumCentre) == doctest::Approx(kCandleStarRing));
+      CHECK(Distance(CandleStar(i, 0), CandleStar(i, 2)) == doctest::Approx(19.0f).epsilon(0.001));
+    }
+    CHECK(kCandleRing + 16.0f < 166.0f);  // inside the inner gold ring
+    CHECK(Distance(lamps[0], {195.0f, 5380.0f}) < 0.01f);
+    CHECK(lamps[1].x > 195.0f);
+    // The strokes: candle i -> i + 7, one closed line through all fifteen (gcd(7, 15) = 1).
+    std::array<int, 15> in{};
+    int at = 0;
+    for (int step = 0; step < 15; ++step) {
+      const auto ends = StrokeEnds(at);
+      CHECK(Distance(ends[0], lamps[at]) < 0.001f);
+      CHECK(Distance(ends[1], lamps[StrokeTo(at)]) < 0.001f);
+      ++in[static_cast<size_t>(StrokeTo(at))];
+      at = StrokeTo(at);
+      if (step < 14) CHECK(at != 0);
+    }
+    CHECK(at == 0);
+    for (int c : in) CHECK(c == 1);
+    // Every stroke passes 148 cos 84 = 15.5 from the centre: under the phial.
+    for (int i = 0; i < 15; ++i)
+      CHECK(LineDistance(StrokeEnds(i), kSanctumCentre) == doctest::Approx(15.47f).epsilon(0.01));
+    // The rings: r66 at -90 / 30 / 150.
+    CHECK(Distance(lamps[15], {195.0f, 5462.0f}) < 0.01f);
+    CHECK(Distance(lamps[16], {252.16f, 5561.0f}) < 0.05f);
+    CHECK(Distance(lamps[17], {137.84f, 5561.0f}) < 0.05f);
+    for (int k = 0; k < 3; ++k) {
+      CHECK(Distance(lamps[15 + k], kSanctumCentre) == doctest::Approx(kChallengeRing));
+      if (k == 0) CHECK(lamps[15].y + 16.0f < kPhialNeck.y0);  // C1 clear of the collar
+      for (int i = 0; i < 15; ++i) CHECK(Distance(lamps[15 + k], lamps[i]) > 16.0f + 16.0f + 40.0f);
+    }
+    // Taps: every candle and ring (and a candle's stars); not the gaps, the phial, the groove.
+    for (int j = 0; j < kDistrictLamps; ++j) CHECK(HitLamp(4, lamps[j]) == j);
+    for (int i = 0; i < 15; ++i) {
+      for (int k = 0; k < 3; ++k) CHECK(HitLamp(4, CandleStar(i, k)) == i);
+      const Vec2 a = lamps[i], b = lamps[(i + 1) % 15];
+      CHECK(HitLamp(4, {(a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f}) == -1);
+    }
+    CHECK(HitLamp(4, kSanctumCentre) == -1);
+    CHECK(HitLamp(4, {195.0f, 5300.0f}) == -1);
+    // The elixir rises with the strokes: empty at the bulb's bottom, full below the neck.
+    CHECK(ElixirTop(0.0f) == doctest::Approx(5545.0f));
+    CHECK(ElixirTop(1.0f) == doctest::Approx(5515.76f));
+    CHECK(ElixirTop(0.5f) < ElixirTop(0.2f));
+    CHECK(ElixirTop(2.0f) == ElixirTop(1.0f));
+    CHECK(ElixirTop(1.0f) > kSanctumCentre.y - kPhialRadius);
+    // The scroll: a candle in the middle of the view, a ring (or none) the centre, clamped at the map's end.
+    CHECK(SanctumScroll(0, kMockView) == doctest::Approx(4960.0f));
+    CHECK(SanctumScroll(15, kMockView) == doctest::Approx(5108.0f));
+    CHECK(SanctumScroll(17, kMockView) == doctest::Approx(5108.0f));
+    CHECK(SanctumScroll(-1, kMockView) == doctest::Approx(5108.0f));
+    CHECK(SanctumScroll(8, kMockView) == doctest::Approx(kHeight - kMockView));
+    CHECK(SanctumScroll(0, 1000.0f) == doctest::Approx(5380.0f - 1000.0f * 420.0f / kMockView));
+    // Plate, stair, groove, pillars, motto and plaque clear of the candles and rings; all inside the map.
+    CHECK(kSanctumPlate.y0 > d.valve + 22.0f);
+    CHECK(kSanctumGrooveTop == kSanctumPlate.y1);
+    CHECK(std::fabs(kSanctumGrooveBottom - (kSanctumCentre.y - kSigilRing)) < 3.0f);  // into the rim
+    CHECK(kSanctumGrooveBottom + 8.0f < lamps[0].y - 16.0f);
+    for (int k = 0; k < kSanctumSteps; ++k) {
+      const Box s = SanctumStep(k);
+      CHECK(s.x1 - s.x0 == doctest::Approx(230.0f - 20.0f * static_cast<float>(k)));
+      CHECK((s.x0 + s.x1) * 0.5f == doctest::Approx(195.0f));
+      CHECK(s.y0 == doctest::Approx(5078.0f + 14.0f * static_cast<float>(k)));
+      CHECK(s.y0 > kSanctumPlate.y1);
+      CHECK(s.y1 < lamps[0].y - 40.0f);
+      for (const Vec2 p : kSanctumPillars)
+        CHECK((p.x + kPillarRadius < s.x0 || p.x - kPillarRadius > s.x1 || p.y - kPillarRadius > s.y1));
+    }
+    for (const Vec2 p : kSanctumPillars) {
+      CHECK(p.x - kPillarRadius > 0.0f);
+      CHECK(p.x + kPillarRadius < kWidth);
+      CHECK(p.y - 22.0f > d.top);
+      CHECK(p.y + 22.0f < kHeight);
+      for (const Vec2 l : lamps) CHECK(Distance(p, l) > kPillarRadius + 16.0f + 40.0f);
+    }
+    float lowest = 0.0f;
+    for (const Vec2 l : lamps) lowest = std::max(lowest, l.y);
+    CHECK(lowest == doctest::Approx(5672.77f).epsilon(0.0001));
+    CHECK(kSanctumMotto - 12.0f > lowest + 16.0f);
+    CHECK(kSanctumPlaque.y0 > kSanctumMotto);
+    CHECK(kSanctumPlaque.y1 < kMapEnd);
+    CHECK(kMapEnd + 20.0f < kHeight);
+    for (const Vec2 l : lamps) CHECK(DistrictAt(l.y) == 4);
   }
 }

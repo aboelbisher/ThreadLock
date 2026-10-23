@@ -232,7 +232,7 @@ const std::array<District, kDistricts>& Districts() {
       {1, 0.0f, 2500.0f, "THE LANTERN WORKS", 0.0f, 262.0f, 0.0f, 0.0f, 0.0f},
       {2, 2500.0f, 3764.0f, "THE MARKET SQUARE", 2412.0f, 2452.0f, 3062.0f, 3442.0f, 0.0f},
       {3, 3764.0f, 5008.0f, "THE CANAL QUARTER", 3724.0f, 3760.0f, 3994.0f, 4634.0f, 0.0f},
-      {4, 5008.0f, kHeight, "THE SANCTUM", 4978.0f, 5128.0f, 5238.0f, 5888.0f, 2.6f},
+      {4, 5008.0f, kHeight, "THE SANCTUM", 4978.0f, kSanctumPlate.y0, SanctumCandle(0).y, SanctumCandle(7).y, 0.0f},
   }};
   return districts;
 }
@@ -265,11 +265,9 @@ std::array<Vec2, kDistrictLamps> DistrictLamps(int world) {
     for (int k = 0; k < kLobes; ++k) lamps[15 + k] = {kColumns[2 - k], 4788.0f};
     return lamps;
   }
-  const District& d = Districts()[world - 1];
-  for (int j = 0; j < kDistrictLamps; ++j) {
-    const float f = static_cast<float>(j);
-    lamps[j] = {195.0f + 120.0f * std::sin(f * 0.75f + d.phase),
-                d.lamps_top + (d.lamps_bottom - d.lamps_top) * f / static_cast<float>(kDistrictLamps - 1)};
+  if (world == 4) {
+    for (int j = 0; j < 15; ++j) lamps[j] = SanctumCandle(j);
+    for (int k = 0; k < kLobes; ++k) lamps[15 + k] = SanctumRing(k);
   }
   return lamps;
 }
@@ -303,9 +301,7 @@ std::vector<Vec2> Cubic::Points(int samples) const {
 Cubic GatePipe(int world) {
   if (world < 2 || world > kDistricts) return {};
   const District& d = Districts()[world - 1];
-  if (world <= 3) return Straight({195.0f, d.valve + 22.0f}, {195.0f, d.plate - 4.0f});
-  const Vec2 lamp = DistrictLamps(world)[0];
-  return DownPipe({195.0f, d.valve + 22.0f}, {lamp.x, lamp.y - 10.0f});
+  return Straight({195.0f, d.valve + 22.0f}, {195.0f, d.plate - 4.0f});
 }
 
 Cubic LinkPipe(int world) {
@@ -552,6 +548,46 @@ const std::vector<Vec2>& QuayLamps() {
 float QuarterScroll(int lamp, float view) {
   const Vec2 at = DistrictLamps(3)[static_cast<size_t>(std::clamp(lamp, 0, kDistrictLamps - 1))];
   return ClampScroll(at.y - view * (470.0f / kMockView), view);
+}
+
+// ---- The sanctum floor ----
+
+namespace {
+
+Vec2 OnCircle(Vec2 c, float r, float degrees) {
+  return {c.x + r * std::cos(degrees * kDegrees), c.y + r * std::sin(degrees * kDegrees)};
+}
+
+}  // namespace
+
+Box SanctumStep(int k) {
+  k = std::clamp(k, 0, kSanctumSteps - 1);
+  const float w = 230.0f - 20.0f * static_cast<float>(k), y = 5078.0f + 14.0f * static_cast<float>(k);
+  return {195.0f - w * 0.5f, y, 195.0f + w * 0.5f, y + 14.0f};
+}
+
+float CandleAngle(int candle) { return -90.0f + 24.0f * static_cast<float>(candle); }
+
+Vec2 SanctumCandle(int candle) { return OnCircle(kSanctumCentre, kCandleRing, CandleAngle(std::clamp(candle, 0, 14))); }
+
+Vec2 CandleStar(int candle, int k) {
+  const float a = CandleAngle(std::clamp(candle, 0, 14)) * kDegrees, along = 9.5f * static_cast<float>(k - 1);
+  const Vec2 c = OnCircle(kSanctumCentre, kCandleStarRing, CandleAngle(std::clamp(candle, 0, 14)));
+  return {c.x - std::sin(a) * along, c.y + std::cos(a) * along};  // the tangent (-sin, cos): clockwise
+}
+
+Vec2 SanctumRing(int challenge) {
+  return OnCircle(kSanctumCentre, kChallengeRing, -90.0f + 120.0f * static_cast<float>(std::clamp(challenge, 0, 2)));
+}
+
+std::array<Vec2, 2> StrokeEnds(int candle) { return {SanctumCandle(candle), SanctumCandle(StrokeTo(candle))}; }
+
+// The mock's 717 - 34 x 0.86 x level: the surface climbs 86% of the bulb.
+float ElixirTop(float level) { return kSanctumCentre.y + kPhialRadius - 29.24f * std::clamp(level, 0.0f, 1.0f); }
+
+float SanctumScroll(int lamp, float view) {
+  const float y = lamp >= 0 && lamp < 15 ? SanctumCandle(lamp).y : kSanctumCentre.y;
+  return ClampScroll(y - view * (420.0f / kMockView), view);
 }
 
 // ---- The view ----

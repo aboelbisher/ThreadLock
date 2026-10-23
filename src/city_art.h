@@ -20,7 +20,8 @@
 // The city map's look (DESIGN.md §5, the approved mock): the tower at dawn with its rose window and the
 // lantern path, then the market square (World 2: the apothecary's shop window is its progress picture, lamps across
 // the cobbles, a fountain), the canal quarter (World 3, seen from above: harbours down the Grand Canal, each level's
-// rooftops its neighbourhood, buoys in the lagoon) and the sanctum asleep in mist.
+// rooftops its neighbourhood, buoys in the lagoon) and the sanctum floor (World 4, from above by candlelight: fifteen
+// candles round a gold sigil, the strokes of a fifteen-pointed star, three rings and the elixir at the heart).
 //
 // What doesn't change while the map is open (the sky, the tower's stones, roofs, houses, canals, the
 // sanctum, the dark glass of the window, the pipes' iron) is drawn into a pooled column of screen-sized
@@ -95,6 +96,25 @@ struct CityFrame {
   } quarter;
   const wlw::ui::Font* street = nullptr;  // the quarter's plate (Cormorant SC)
 
+  // World 4's sanctum floor as drawn: its candles and rings like the quarter's lamps (star alphas), each candle's flame
+  // catching (0..1) with a white flash and its stroke of the star drawing (0..1, linear: the art eases), the challenge
+  // rings lit, the gold ring lighting round once all fifteen strokes are in (and the elixir's beam), the green down the
+  // groove from the stair.
+  struct Sanctum {
+    std::array<bool, city::kDistrictLamps> locked{};
+    std::array<std::array<float, 3>, city::kDistrictLamps> lamp{};  // its stars: solve, lean, swift
+    std::array<float, 15> flame{}, flash{}, stroke{};
+    std::array<float, 3> ring{};
+    float all = 0.0f;      // the ring round the sigil lighting from the top, 0..1
+    float beam = 0.0f;     // the elixir's beam's alpha (0.85 as it rises, 0.51 at rest)
+    float pour = 0.0f;     // the green down the groove, 0..1 (1: flowing)
+    bool running = false;  // still pouring: a glow at its head
+    int breathe = -1;      // the candle or ring that breathes
+    bool pulse = false;
+    float awake = 0.0f;  // its gate open: the plate lit, the mist lifted
+  } sanctum;
+  const wlw::ui::Font* sigil = nullptr;  // the sanctum's lettering (Cinzel Bold)
+
   glm::vec2 ToCanvas(Vec2 p) const { return {p.x * scale, (p.y - scroll) * scale}; }
   float ViewHeight() const { return screen.y / scale; }  // map units
 };
@@ -142,6 +162,11 @@ class CityArt {
   void DrawQuarterStill(wlw::ui::Canvas& c, const Xf& x, float top, float bottom);
   void DrawQuarter(wlw::ui::Canvas& p, wlw::ui::Canvas& c, const Xf& x, const CityFrame& frame);
   void DrawQuarterLamps(wlw::ui::Canvas& p, wlw::ui::Canvas& c, const Xf& x, const CityFrame& frame);
+  // World 4's district: the floor, slabs, stair, pillars, groove, the sigil's inlay, plaque (still); the green in the
+  // groove, the strokes, the rings, the phial, the candles, the motto and the veil (each frame).
+  void DrawSanctumStill(wlw::ui::Canvas& c, const Xf& x, float top, float bottom);
+  void DrawSanctum(wlw::ui::Canvas& p, wlw::ui::Canvas& c, const Xf& x, const CityFrame& frame);
+  void DrawSanctumCandles(wlw::ui::Canvas& p, wlw::ui::Canvas& c, const Xf& x, const CityFrame& frame);
 
   TilePool tiles_;
   std::shared_ptr<wlw::rendering::ShaderMaterial> sky_top_, sky_low_;  // ui_gradient: the sky's two halves
@@ -154,7 +179,8 @@ class CityArt {
     float r, alpha;
   };
   std::vector<Dot> sky_stars_;
-  std::array<std::vector<Vec2>, city::kDistricts> lamp_paths_;
+  std::vector<std::array<Vec2, 2>> runes_;  // the sanctum's, round its sigil (map units)
+  art::Path groove_;                        // down the sanctum's stair (map units)
   std::vector<std::vector<Vec2>> trail_;
   art::Path grand_canal_;  // the whole canal, bends rounded (map units)
 };

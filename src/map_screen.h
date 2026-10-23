@@ -23,7 +23,9 @@
 // an animation: the view glides to the lantern, it lights and its stars pop, the window's petal lights
 // (a glide up to it if it's off screen), then the next lantern breathes; a gate's valve turns and light
 // pours down to the district's first lamp. In the canal quarter a solve lights the harbour's neighbourhood,
-// then the light runs on down the canal to the next harbour, the view riding it. A tap skips it.
+// then the light runs on down the canal to the next harbour, the view riding it. In the sanctum a solve's candle
+// catches, then its stroke of the star draws across the floor; the fifteenth closes it (the ring lights round, the
+// elixir sends up a beam). A tap skips it.
 namespace threadlock {
 
 class MapScreen : public wlw::app::Screen {
@@ -61,17 +63,21 @@ class MapScreen : public wlw::app::Screen {
   // head; returns its seconds. CanalRest: the canal lit down to the next lamp shown (none while the gate is shut).
   float PourCanal(float from, float to, float delay);
   void CanalRest();
-  float CanalShown() const;                   // how far the canal is lit now
-  int NextLamp() const;                       // World 3's first harbour not lit yet, -1 if all are
+  float CanalShown() const;           // how far the canal is lit now
+  int NextLamp(int world = 3) const;  // World 3's (or 4's) first lamp not lit yet, -1 if all are
+  // World 4: the candle's flame, its stroke, the great work after the fifteenth, the next pulse; returns when done.
+  float LightCandle(int lamp, float start);
   float ScrollFor(const Level* level) const;  // the view that shows a level's lantern or lamp
 
   bool LockedShown(int lantern) const;
-  bool LampLockedShown(int world, int lamp) const;  // worlds 2 and 3, the same way (World 3: once the canal reaches it)
-  bool MarketInView() const;                        // the open market square fills the middle of the view
-  bool QuarterInView() const;                       // and the canal quarter
-  const StarMap& Stars() const;                     // the saved stars, or tl.stars' (dev)
-  const Level* CurrentLevel() const;                // the next level to play, by Stars()
-  float LanternY(const Level* level) const;         // map y of a level's lantern or lamp, < 0 if none
+  // Worlds 2-4, the same way (World 3: once the canal reaches it; World 4: once the stroke before it has drawn).
+  bool LampLockedShown(int world, int lamp) const;
+  bool MarketInView() const;                 // the open market square fills the middle of the view
+  bool QuarterInView() const;                // and the canal quarter
+  bool SanctumInView() const;                // and the sanctum
+  const StarMap& Stars() const;              // the saved stars, or tl.stars' (dev)
+  const Level* CurrentLevel() const;         // the next level to play, by Stars()
+  float LanternY(const Level* level) const;  // map y of a level's lantern or lamp, < 0 if none
   void Tap(glm::vec2 map);
   void Fill(CityFrame& frame, glm::vec2 screen, float scale);
   void DrawHud(wlw::ui::UIContext& ui);
@@ -112,8 +118,15 @@ class MapScreen : public wlw::app::Screen {
   struct CanalPour {
     float from = 0.0f, to = 0.0f, t0 = 0.0f, seconds = 1.0f;  // at rest: from == to
   } canal_;
+  // The sanctum: when each candle's flame caught and its stroke began, each challenge ring lit, the ring round the
+  // sigil (all fifteen strokes), the green down the groove (kLongAgo at rest).
+  std::array<float, 15> flame_at_{}, stroke_at_{};
+  std::array<float, 3> ring_at_{};
+  float all_at_ = kNever, groove_at_ = kLongAgo;
+  int strokes_planned_ = 0;  // World 4's strokes shown or on their way (the fifteenth closes the star)
   std::array<bool, 3> gate_shown_{};
-  float shop_tint_ = 0.0f;  // the top bar and the ambience follow the district in view: 1 = the market's
+  float shop_tint_ = 0.0f;     // the top bar and the ambience follow the district in view: 1 = the market's
+  float sanctum_tint_ = 0.0f;  // 1 = World 4's panel on the top bar
   std::array<float, 3> valve_at_{}, pour_at_{}, wake_at_{};
   int stars_shown_ = 0;
   int pulse_ = -1, pulse_world_ = 1;
