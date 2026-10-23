@@ -353,6 +353,13 @@ int Render(const Level& level, const std::string& out, const Placement& placemen
     image.Segment({0, static_cast<float>(g)}, {360, static_cast<float>(g)}, 0.4f, edge);
   for (int g = 20; g < 360; g += 20)
     image.Segment({static_cast<float>(g), 0}, {static_cast<float>(g), height}, 0.4f, edge);
+  // World 4's sigil, faintly: its rings and their points (where junctions go).
+  const float gold[3] = {0.3f, 0.26f, 0.14f};
+  const Sigil& sigil = level.look.sigil;
+  for (size_t r = 0; r < sigil.rings.size(); ++r) {
+    image.Ring(sigil.at, sigil.rings[r], 0.8f, gold);
+    for (int k = 0; k < kSigilPoints; ++k) image.Disc(SigilPoint(sigil, static_cast<int>(r), k), 1.6f, gold);
+  }
   for (const Pipe& pipe : level.pipes) image.Polyline(pipe.points, 24.0f, edge);
   for (const Pipe& pipe : level.pipes) image.Polyline(pipe.points, 17.0f, inside);
   Board board(level);

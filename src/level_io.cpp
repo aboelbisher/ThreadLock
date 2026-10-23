@@ -9,6 +9,7 @@
 
 #include "apothecary_look.h"
 #include "canal_look.h"
+#include "sigil_look.h"
 #include "json.hpp"  // nlohmann::json (vendored in the engine's third_party/tinygltf)
 
 namespace threadlock {
@@ -118,6 +119,23 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
       const float y = value.get<float>();
       if (y < 0.0f || y > level.look.height) reader.Error("a shelf is off the board");
       level.look.shelves.push_back(y);
+    }
+  }
+  if (json.contains("sigil")) {
+    // {"at": [180, 290], "rings": [150, 90]}
+    const Json& sigil = json["sigil"];
+    if (!sigil.is_object() || !sigil.contains("at") || !sigil.contains("rings") || !sigil["rings"].is_array()) {
+      reader.Error("a sigil is {\"at\": [x, y], \"rings\": [radius, ...]}");
+    } else {
+      reader.Point(sigil["at"], level.look.sigil.at);
+      for (const Json& value : sigil["rings"]) {
+        if (!value.is_number() || value.get<float>() <= 0.0f) {
+          reader.Error("a sigil's ring is a radius (above 0)");
+          continue;
+        }
+        level.look.sigil.rings.push_back(value.get<float>());
+      }
+      if (level.look.sigil.rings.empty()) reader.Error("a sigil needs a ring");
     }
   }
   const std::string type = reader.String(json, "type", "build");
@@ -267,6 +285,13 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
             pipe.drip_segment = shape["drip"].get<int>();
           } else {
             reader.Error("a drip is the number of a segment");
+          }
+        }
+        if (shape.contains("arc")) {
+          if (shape["arc"].is_number_integer()) {
+            pipe.arc_segment = shape["arc"].get<int>();
+          } else {
+            reader.Error("an arc is the number of a segment");
           }
         }
       }
@@ -478,6 +503,12 @@ std::string WriteLevel(const Level& level) {
     for (size_t s = 0; s < level.look.shelves.size(); ++s) out += (s ? ", " : "") + number(level.look.shelves[s]);
     out += "]";
   }
+  if (!level.look.sigil.rings.empty()) {
+    out += ", \"sigil\": {\"at\": " + point(level.look.sigil.at) + ", \"rings\": [";
+    for (size_t r = 0; r < level.look.sigil.rings.size(); ++r)
+      out += (r ? ", " : "") + number(level.look.sigil.rings[r]);
+    out += "]}";
+  }
   out += ",\n  \"nodes\": [\n";
   for (size_t i = 0; i < level.nodes.size(); ++i) {
     const Node& n = level.nodes[i];
@@ -529,7 +560,7 @@ std::string WriteLevel(const Level& level) {
     const Pipe& p = level.pipes[i];
     out += "[\"" + level.nodes[static_cast<size_t>(p.from)].id + "\", \"" + level.nodes[static_cast<size_t>(p.to)].id +
            "\"";
-    const bool shaped = p.coil_segment >= 0 || p.drip_segment >= 0;
+    const bool shaped = p.coil_segment >= 0 || p.drip_segment >= 0 || p.arc_segment >= 0;
     if (!p.via.empty() || shaped) {
       out += ", [";
       for (size_t k = 0; k < p.via.size(); ++k) out += (k ? ", " : "") + point(p.via[k]);
@@ -541,6 +572,9 @@ std::string WriteLevel(const Level& level) {
         out += "\"coil\": [" + std::to_string(p.coil_segment) + ", " + std::to_string(p.coil_turns) + "]";
       if (p.drip_segment >= 0)
         out += std::string(p.coil_segment >= 0 ? ", " : "") + "\"drip\": " + std::to_string(p.drip_segment);
+      if (p.arc_segment >= 0)
+        out += std::string(p.coil_segment >= 0 || p.drip_segment >= 0 ? ", " : "") +
+               "\"arc\": " + std::to_string(p.arc_segment);
       out += "}";
     }
     out += i + 1 < level.pipes.size() ? "], " : "]";
@@ -616,6 +650,10 @@ std::vector<std::string> LookProblems(const Level& level) {
   }
   if (canals) {
     const std::vector<std::string> more = canal::Problems(level);
+    problems.insert(problems.end(), more.begin(), more.end());
+  }
+  if (sigil::IsSigil(level)) {
+    const std::vector<std::string> more = sigil::Problems(level);
     problems.insert(problems.end(), more.begin(), more.end());
   }
   if (!level.look.shelves.empty()) {

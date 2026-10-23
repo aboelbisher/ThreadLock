@@ -5,6 +5,7 @@
 #include <cstdio>
 
 #include "liquid.h"
+#include "sigil_look.h"
 
 namespace threadlock {
 namespace {
@@ -129,10 +130,9 @@ void WorkshopArt::DrawBack(Canvas& canvas, const ArtFrame& frame) {
   const float s = frame.Scale();
   std::vector<std::vector<glm::vec2>> lines;
   for (const Pipe& pipe : level.pipes) {
-    // From node centre to node centre, so pipes reach into junctions and sockets.
-    std::vector<glm::vec2> points{layout.ToCanvas(level.nodes[static_cast<size_t>(pipe.from)].at)};
-    for (Vec2 p : pipe.via) points.push_back(layout.ToCanvas(p));
-    points.push_back(layout.ToCanvas(level.nodes[static_cast<size_t>(pipe.to)].at));
+    // From node centre to node centre, so pipes reach into junctions and sockets (along a sigil's arcs).
+    std::vector<glm::vec2> points;
+    for (Vec2 p : sigil::GroovePoints(level, pipe)) points.push_back(layout.ToCanvas(p));
     lines.push_back(std::move(points));
   }
   auto polyline = [&](const std::vector<glm::vec2>& points, float thickness, const Rgba& color) {

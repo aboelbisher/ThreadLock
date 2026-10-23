@@ -47,6 +47,9 @@ src/canal_look.{h,cpp}        World 3's canal city in board units (tool + art): 
 src/canal_art.{h,cpp}         World 3, The Canal City: the still city in tiles (roofs, canals, locks, harbours), the barges on
                               the picture, the harbours' pills and berths, the lock leaves (shut, or swung as it pours), the
                               mill (wheel, rods' pulse) and gates, the payoff light and the moments (murk, gridlock, short, spill)
+src/sigil_look.{h,cpp}        World 4's sanctum in board units (tool + art): the sigil's grooves (GroovePoints, arcs along
+                              its rings) and its look checks (sigil::Problems: junctions on its points and lines, flasks and
+                              phials outside it, grooves through nodes, along or across each other, twin bars)
 src/canal_palette.h           World 3's night colours, shared by canal_art and the map's canal quarter
 src/barges.{h,cpp}            World 3's barges (plain C++, tested): a drop's pose along its canal, the landed barges' glides,
                               a lock's leaves
@@ -156,7 +159,9 @@ solved: W1's rose window centre). W2 adds `"shelves": [y, ...]` (the shop wall; 
 across or down: `LookProblems`, checked by `check` and the tests) and a cup's or rack bottle's `"order": "Mrs Hale"`
 (its slip). W3 adds a cup's `"district": "Lantern Row"` (a harbour; any district makes the level a canal map:
 straight canals with round bends, `canal::Problems` in `LookProblems`) and a mill's rod bends, `"gears": [["g", [[250, 360]]]]`
-(look only: `RodPoints`; plain `"g"` = a straight rod). A coil winds its segment round its middle (`CoilPoints`: a turn is
+(look only: `RodPoints`; plain `"g"` = a straight rod). W4 adds `"sigil": {"at": [180, 290], "rings": [150]}` (rings
+round a centre, a point every 15 degrees: `sigil::Problems` in `LookProblems`) and a pipe shape `{"arc": segment}` (the
+segment runs along a ring, the shorter way, both ends on its points: `ArcPoints`, longer, so it changes the cells). A coil winds its segment round its middle (`CoilPoints`: a turn is
 ~70 long, ~5 cells more than straight, so it changes the timing and the pars); a drip is look only (drops fall
 through the air: nozzle, funnel).
 
@@ -166,7 +171,7 @@ PC tests and the tool without CMake/vcpkg, from a VS developer shell (repo root)
 cl /nologo /std:c++20 /EHsc /W4 /WX /O2 /external:W0 /external:I external\WLWengine\third_party\tinygltf ^
    /external:I external\WLWengine\third_party\doctest /Fe:build\pc\threadlock_tests.exe ^
    /external:I external\WLWengine\third_party\glm ^
-   tests\*.cpp src\threadlock_rules.cpp src\level_io.cpp src\apothecary_look.cpp src\canal_look.cpp src\polyline.cpp src\barges.cpp src\solver.cpp ^
+   tests\*.cpp src\threadlock_rules.cpp src\level_io.cpp src\apothecary_look.cpp src\canal_look.cpp src\sigil_look.cpp src\polyline.cpp src\barges.cpp src\solver.cpp ^
    src\generator.cpp src\board_camera.cpp ^
    src\audio_synth.cpp src\ambience.cpp src\sound_cues.cpp src\city_map.cpp
 (the tool: tools\threadlock_tool.cpp + the same sources but board_camera, sound_cues and city_map, plus /external:I ...\third_party\stb; json.hpp is in tinygltf)
@@ -182,7 +187,7 @@ The same tests on a phone (ARM64, the NDK's clang), from Git Bash with `MSYS_NO_
 ```
 $NDK/toolchains/llvm/prebuilt/windows-x86_64/bin/clang++.exe --target=aarch64-linux-android24 -std=c++20 -O2 \
   -static-libstdc++ -isystem external/WLWengine/third_party/tinygltf -isystem external/WLWengine/third_party/doctest -isystem external/WLWengine/third_party/glm \
-  tests/*.cpp src/threadlock_rules.cpp src/level_io.cpp src/apothecary_look.cpp src/canal_look.cpp src/polyline.cpp src/barges.cpp src/solver.cpp src/generator.cpp src/board_camera.cpp \
+  tests/*.cpp src/threadlock_rules.cpp src/level_io.cpp src/apothecary_look.cpp src/canal_look.cpp src/sigil_look.cpp src/polyline.cpp src/barges.cpp src/solver.cpp src/generator.cpp src/board_camera.cpp \
   src/audio_synth.cpp src/ambience.cpp src/sound_cues.cpp src/city_map.cpp \
   -o build/android-tests/threadlock_tests
 adb -s <serial> push build/android-tests/threadlock_tests /data/local/tmp/tl/   (+ assets/levels/*.json to /data/local/tmp/tl/assets/levels/)

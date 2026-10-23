@@ -19,6 +19,8 @@ set(THREADLOCK_RULES
   src/apothecary_look.h
   src/canal_look.cpp
   src/canal_look.h
+  src/sigil_look.cpp
+  src/sigil_look.h
   src/barges.cpp
   src/barges.h
   src/polyline.cpp

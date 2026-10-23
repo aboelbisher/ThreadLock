@@ -337,6 +337,15 @@ fills the view (the top bar stays night blue). The map grew ~284 units for it (r
   points, three joins, three colours); Twin Seals (two grooves, one seal: they arrive together); Hexagram
   (six points, two triangles, pearl at the heart). Drawn: 4-7 The Twin Seals, "Both seals open together,
   or not at all.", ≤ 2 pieces, ≤ 0:16.
+- **Grammar (format built 23 October):** a level's `"sigil": {"at": [180, 290], "rings": [150]}` makes it
+  a sigil: rings round one centre, a point every 15 degrees (24 a ring). Junctions (globes, seals) sit on
+  ring points, or on the figure's lines (straight between two junctions on ring points: 4-7's crossings on
+  its triangle's sides); flasks and phials sit outside the outer ring; grooves run straight, or along a ring
+  the shorter way (a pipe shape `{"arc": segment}`, both ends on one ring's points, never half a ring: the
+  rules count its cells from fixed 3.75-degree steps, the same on every device). Grooves never run through
+  a node, along each other or across one another except at a crossing; a twin pair's brass bar runs clear
+  of other nodes (`sigil::Problems`). 4-7 The Twin Seals is in world4.json (twin seals at p1/p2 + a mixer
+  on the merge: 0:09; nothing or the mixer alone = sludge at the first crossing, the seals alone = at the merge).
 
 ### Worlds 5–8
 Live updates after launch, to be re-planned (v2's plan: The Layer Bar, Signal Tower, Clockworks, The

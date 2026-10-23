@@ -296,4 +296,25 @@ inline const std::string kMillGateCanals = R"({
   "tray": ["turnstile", "tank4"]
 })";
 
+// 4-7 The Twin Seals, World 4's sigil: a ring round (180, 290); the twin pair and the mixer's merge on its
+// points (an equilateral triangle), the crossings on the triangle's sides, flasks and phials outside.
+inline const std::string kTwinSeals = R"({
+  "id": "t-4-7", "name": "The Twin Seals", "sigil": {"at": [180, 290], "rings": [150]},
+  "nodes": [
+    {"id": "sb", "kind": "spout", "at": [50, 60], "beads": "B*3", "beat": 8},
+    {"id": "sa", "kind": "spout", "at": [310, 60], "beads": "A*3", "beat": 12, "start": 4},
+    {"id": "sr", "kind": "spout", "at": [20, 330], "beads": "R*3", "beat": 10, "start": 6},
+    {"id": "p1", "kind": "pass", "at": [50, 215], "twin": "p2"},
+    {"id": "p2", "kind": "pass", "at": [310, 215]},
+    {"id": "x1", "kind": "cross", "at": [116, 330]},
+    {"id": "x2", "kind": "cross", "at": [244, 330]},
+    {"id": "m", "kind": "merge", "at": [180, 440], "socket": true},
+    {"id": "c", "kind": "cup", "at": [180, 515], "want": "G", "count": 6},
+    {"id": "cr", "kind": "cup", "at": [330, 430], "want": "R", "count": 3}
+  ],
+  "pipes": [["sb", "p1"], ["sa", "p2"], ["p1", "x1"], ["p2", "x2"], ["sr", "x1"], ["x1", "x2"], ["x2", "cr", [[330, 330]]],
+            ["x1", "m"], ["x2", "m"], ["m", "c"]],
+  "tray": ["twin", "mixer"]
+})";
+
 }  // namespace threadlock

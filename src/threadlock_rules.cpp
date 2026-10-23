@@ -425,6 +425,31 @@ std::vector<std::string> Level::Finalize() {
         }
       }
     }
+    // An arc runs its segment along a ring of the sigil, the shorter way round: the drops' way gets longer.
+    int arc_points = 0;
+    if (pipe.arc_segment >= 0) {
+      const int k = pipe.arc_segment;
+      if (k >= segments || k == pipe.coil_segment || k == pipe.drip_segment) {
+        problem("the arc on " + from.id + " -> " + to.id + " needs a segment of the pipe without a coil or a drip");
+      } else {
+        const int at = coil_points > 0 && k > pipe.coil_segment ? k + coil_points : k;
+        const std::vector<Vec2> arc =
+            ArcPoints(look.sigil, line[static_cast<size_t>(at)], line[static_cast<size_t>(at) + 1]);
+        if (arc.empty()) {
+          problem("the arc on " + from.id + " -> " + to.id +
+                  " needs both ends on points of one ring of the sigil (and less than half a ring apart)");
+        } else {
+          line.insert(line.begin() + at + 1, arc.begin() + 1, arc.end() - 1);
+          arc_points = static_cast<int>(arc.size()) - 2;
+        }
+      }
+    }
+    // Line point i of the drawing (from, via..., to) in the line with the coil's and the arc's points.
+    auto expanded = [&](int i) {
+      if (coil_points > 0 && i > pipe.coil_segment) i += coil_points;
+      if (arc_points > 0 && i > pipe.arc_segment) i += arc_points;
+      return i;
+    };
     // Where line point i is, measured along the pipe as drawn (from the edge of its first node).
     auto along_line = [&](int i) {
       float at = 0.0f;
@@ -433,8 +458,8 @@ std::vector<std::string> Level::Finalize() {
     };
     pipe.coil_start = pipe.coil_end = 0.0f;
     if (coil_points > 0) {
-      pipe.coil_start = along_line(pipe.coil_segment + 1);
-      pipe.coil_end = along_line(pipe.coil_segment + coil_points);
+      pipe.coil_start = along_line(expanded(pipe.coil_segment) + 1);
+      pipe.coil_end = along_line(expanded(pipe.coil_segment) + coil_points);
     }
     // A drip fall: where its segment starts and ends along the line (look only).
     pipe.drip_start = pipe.drip_end = 0.0f;
@@ -442,7 +467,6 @@ std::vector<std::string> Level::Finalize() {
       if (pipe.drip_segment >= segments || pipe.drip_segment == pipe.coil_segment) {
         problem("the drip on " + from.id + " -> " + to.id + " needs a straight segment of the pipe");
       } else {
-        auto expanded = [&](int i) { return pipe.coil_segment >= 0 && i > pipe.coil_segment ? i + coil_points : i; };
         pipe.drip_start = along_line(expanded(pipe.drip_segment));
         pipe.drip_end = along_line(expanded(pipe.drip_segment + 1));
       }
@@ -516,6 +540,83 @@ std::vector<Vec2> CoilPoints(Vec2 a, Vec2 b, int turns) {
                       static_cast<float>(static_cast<double>(a.y) + u[1] * along + v[1] * across)});
   }
   points.back() = b;
+  return points;
+}
+
+namespace {
+
+// sin(j pi / 48) for a quarter turn (j = 0..24) as exact constants, so every device builds the same arcs (and
+// the same cells).
+constexpr double kQuarterSin[25] = {0.0,
+                                    0.065403129230143062,
+                                    0.13052619222005157,
+                                    0.19509032201612825,
+                                    0.25881904510252074,
+                                    0.32143946530316159,
+                                    0.38268343236508978,
+                                    0.44228869021900125,
+                                    0.5,
+                                    0.55557023301960218,
+                                    0.60876142900872066,
+                                    0.65934581510006884,
+                                    0.70710678118654757,
+                                    0.75183980747897738,
+                                    0.79335334029123517,
+                                    0.83146961230254512,
+                                    0.86602540378443860,
+                                    0.89687274153268837,
+                                    0.92387953251128674,
+                                    0.94693012949510558,
+                                    0.96592582628906831,
+                                    0.98078528040323043,
+                                    0.99144486137381038,
+                                    0.99785892323860348,
+                                    1.0};
+constexpr int kArcSteps = kSigilPoints * kArcSamples;  // a whole ring: 96 steps of 3.75 degrees
+
+double StepSin(int j) {
+  j = ((j % kArcSteps) + kArcSteps) % kArcSteps;
+  if (j <= 24) return kQuarterSin[j];
+  if (j <= 48) return kQuarterSin[48 - j];
+  if (j <= 72) return -kQuarterSin[j - 48];
+  return -kQuarterSin[96 - j];
+}
+double StepCos(int j) { return StepSin(j + 24); }
+
+Vec2 RingStep(const Sigil& sigil, int ring, int j) {
+  const double r = static_cast<double>(sigil.rings[static_cast<size_t>(ring)]);
+  return {static_cast<float>(static_cast<double>(sigil.at.x) + r * StepCos(j)),
+          static_cast<float>(static_cast<double>(sigil.at.y) + r * StepSin(j))};
+}
+
+}  // namespace
+
+Vec2 SigilPoint(const Sigil& sigil, int ring, int k) { return RingStep(sigil, ring, k * kArcSamples); }
+
+bool OnSigilPoint(const Sigil& sigil, Vec2 p, int& ring, int& k) {
+  for (size_t r = 0; r < sigil.rings.size(); ++r) {
+    for (int i = 0; i < kSigilPoints; ++i) {
+      const Vec2 q = SigilPoint(sigil, static_cast<int>(r), i);
+      if (std::fabs(q.x - p.x) <= kSigilSnap && std::fabs(q.y - p.y) <= kSigilSnap) {
+        ring = static_cast<int>(r);
+        k = i;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+std::vector<Vec2> ArcPoints(const Sigil& sigil, Vec2 a, Vec2 b) {
+  int ring_a = 0, ring_b = 0, ka = 0, kb = 0;
+  if (!OnSigilPoint(sigil, a, ring_a, ka) || !OnSigilPoint(sigil, b, ring_b, kb) || ring_a != ring_b) return {};
+  const int turn = ((kb - ka) % kSigilPoints + kSigilPoints) % kSigilPoints;  // clockwise, in ring points
+  if (turn == 0 || turn == kSigilPoints / 2) return {};
+  const int way = turn < kSigilPoints / 2 ? 1 : -1;
+  const int steps = (way > 0 ? turn : kSigilPoints - turn) * kArcSamples;
+  std::vector<Vec2> points{a};
+  for (int s = 1; s < steps; ++s) points.push_back(RingStep(sigil, ring_a, ka * kArcSamples + way * s));
+  points.push_back(b);
   return points;
 }
 

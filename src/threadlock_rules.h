@@ -177,6 +177,7 @@ struct Pipe {
   int coil_segment = -1;  // wound into a coil of coil_turns turns round its middle: a longer way, so slower
   int coil_turns = 0;
   int drip_segment = -1;  // drops fall through the air here (look only: the timing is the same)
+  int arc_segment = -1;   // runs along a ring of the level's sigil, the shorter way (a longer way, so slower)
 
   // ---- Derived by Level::Finalize ----
   std::vector<Vec2> points;  // the drawn centre line: from its node's edge to the next one's
@@ -202,6 +203,24 @@ inline bool CoilFront(int k) {
   const int m = k % kCoilSamples;
   return m >= 4 && m < 12;
 }
+
+// World 4's sigil: rings round one centre, each with a point every 15 degrees (point k at k * 15 degrees from
+// +x, turning clockwise on the board: y is down). Its junctions sit on those points and its grooves run
+// straight between them or along a ring (an arc). No rings = no sigil.
+struct Sigil {
+  Vec2 at;
+  std::vector<float> rings;  // radii, board units
+  bool operator==(const Sigil&) const = default;
+};
+inline constexpr int kSigilPoints = 24;    // a ring
+inline constexpr int kArcSamples = 4;      // an arc's points per 15 degrees (from a constant table)
+inline constexpr float kSigilSnap = 1.5f;  // a point this close to a ring point is on it
+Vec2 SigilPoint(const Sigil& sigil, int ring, int k);
+// The ring point `p` is on (within kSigilSnap): false if none.
+bool OnSigilPoint(const Sigil& sigil, Vec2 p, int& ring, int& k);
+// An arc from a to b, both on points of one ring, the shorter way round: its points, a and b included (the
+// same on every device). Empty if a and b aren't on one ring's points, are the same point or half a ring apart.
+std::vector<Vec2> ArcPoints(const Sigil& sigil, Vec2 a, Vec2 b);
 
 // A piece in the level's tray, or placed by the level (`at` >= 0). Locked pieces can't be moved
 // or changed (repair levels place movable ones).
@@ -254,6 +273,7 @@ struct Level {
                                   // grand machine's view centres it
     std::vector<float> shelves;   // World 2: the shop wall's shelves (y, board units); with shelves, the
                                   // copper lines run along them and straight down (pipes axis-aligned)
+    Sigil sigil;                  // World 4: the sigil its grooves follow (a pipe's arcs run along its rings)
     bool operator==(const LevelLook&) const = default;
   } look;
 

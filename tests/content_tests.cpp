@@ -13,6 +13,7 @@
 #include "../src/canal_look.h"
 #include "../src/generator.h"
 #include "../src/level_io.h"
+#include "../src/sigil_look.h"
 #include "../src/solver.h"
 #include "doctest.h"
 #include "test_levels.h"
@@ -479,6 +480,94 @@ TEST_SUITE("content") {
     const Level old = MakeLevel(plain);
     CHECK(!canal::IsCanalMap(old));
     CHECK(LookProblems(old).empty());
+  }
+
+  TEST_CASE("a sigil: junctions on its points and lines, grooves straight or along its rings") {
+    // World 4's grammar, on 4-7 The Twin Seals.
+    const Level level = MakeLevel(kTwinSeals);
+    REQUIRE(sigil::IsSigil(level));
+    CHECK(level.look.sigil == Sigil{{180, 290}, {150}});
+    // Ring point k is k * 15 degrees clockwise from +x (y down): the triangle's corners.
+    CHECK(std::fabs(SigilPoint(level.look.sigil, 0, 14).x - 50.1f) < 0.1f);
+    CHECK(std::fabs(SigilPoint(level.look.sigil, 0, 14).y - 215.0f) < 0.01f);
+    CHECK(std::fabs(SigilPoint(level.look.sigil, 0, 6).y - 440.0f) < 0.01f);
+    CHECK(LookProblems(level).empty());
+    Level copy;
+    std::vector<std::string> errors;
+    REQUIRE(ParseLevel(WriteLevel(level), copy, errors));
+    CHECK(copy.look == level.look);
+
+    // An arc: sb's pipe comes round the ring from the top point to p1, 60 degrees the shorter way.
+    auto with = [](const std::string& from, const std::string& to) {
+      std::string json = kTwinSeals;
+      REQUIRE(json.find(from) != std::string::npos);
+      json.replace(json.find(from), from.size(), to);
+      return json;
+    };
+    const Level arc = MakeLevel(with(R"(["sb", "p1"])", R"(["sb", "p1", [[180, 140]], {"arc": 1}])"));
+    CHECK(LookProblems(arc).empty());
+    const Pipe& pipe = arc.pipes[0];
+    CHECK(pipe.arc_segment == 1);
+    // 16 steps of 3.75 degrees, each a chord of 2 r sin(1.875 degrees); the straight part; the nodes' edges.
+    const double chords = 16.0 * 2.0 * 150.0 * std::sin(1.875 * 3.14159265358979323846 / 180.0);
+    const double length = std::sqrt(130.0 * 130.0 + 80.0 * 80.0) + chords - 22.0 - 5.0;
+    CHECK(std::fabs(pipe.length - length) < 0.1);  // the rules' drawn length is a float sum
+    CHECK(pipe.cells == static_cast<int>(std::floor(length / 10.0 + 0.5)));
+    CHECK(pipe.points.size() == 2 + 15 + 1);  // the edges, the arc's inner points and its start (the bend)
+    const std::vector<Vec2> groove = sigil::GroovePoints(arc, pipe);
+    REQUIRE(groove.size() == 18);
+    CHECK(groove.front() == Vec2{50, 60});
+    CHECK(groove[1] == Vec2{180, 140});
+    CHECK(groove.back() == Vec2{50, 215});
+    for (size_t k = 1; k + 1 < groove.size(); ++k) {
+      const float r = std::sqrt((groove[k].x - 180) * (groove[k].x - 180) + (groove[k].y - 290) * (groove[k].y - 290));
+      CHECK(std::fabs(r - 150.0f) < 0.01f);
+      CHECK(groove[k].x <= 180.0f);  // the shorter way: over the top left, not round the right
+    }
+    Level arc_copy;
+    REQUIRE(ParseLevel(WriteLevel(arc), arc_copy, errors));
+    CHECK(arc_copy.pipes[0].arc_segment == 1);
+    CHECK(arc_copy.pipes[0].cells == pipe.cells);
+
+    // Arcs the rules refuse.
+    auto refused = [&](const std::string& json, const std::string& problem) {
+      Level bad;
+      std::vector<std::string> found;
+      CHECK(!ParseLevel(json, bad, found));
+      bool has = false;
+      for (const std::string& error : found) has = has || error.find(problem) != std::string::npos;
+      INFO(problem);
+      CHECK(has);
+    };
+    refused(with(R"(["sb", "p1"])", R"(["sb", "p1", [], {"arc": 0}])"),
+            "the arc on sb -> p1 needs both ends on points of one ring");
+    refused(with(R"(["sb", "p1"])", R"(["sb", "p1", [[309.9, 365]], {"arc": 1}])"),
+            "the arc on sb -> p1 needs both ends on points of one ring");  // half a ring apart
+    refused(with(R"(["sb", "p1"])", R"(["sb", "p1", [[180, 140]], {"arc": 1, "drip": 1}])"),
+            "the arc on sb -> p1 needs a segment of the pipe without a coil or a drip");
+
+    // Each broken variant is its one problem.
+    auto problems = [&](const std::string& from, const std::string& to) {
+      return LookProblems(MakeLevel(with(from, to)));
+    };
+    using List = std::vector<std::string>;
+    CHECK(problems(R"("at": [330, 430])", R"("at": [270, 400])") == List{"node cr is inside the sigil"});
+    CHECK(problems(R"("at": [180, 440], "socket")", R"("at": [180, 442], "socket")") ==
+          List{"node x1 isn't on the sigil's points or lines", "node x2 isn't on the sigil's points or lines",
+               "node m isn't on the sigil's points or lines"});
+    CHECK(problems(R"("rings": [150])", R"("rings": [150, 200])") ==
+          List{"the sigil is off the board", "node sr is inside the sigil"});
+    CHECK(problems(R"(["sr", "x1"])", R"(["sr", "x1", [[20, 380], [140, 380], [140, 330]]])") ==
+          List{"groove sr -> x1 crosses groove x1 -> x2 outside a crossing",  // its bend on it, then along it
+               "groove sr -> x1 crosses groove x1 -> m outside a crossing"});
+    CHECK(Has(problems(R"(["sb", "p1"])", R"(["sb", "p1", [[310, 60]]])"), "groove sb -> p1 runs through node sa"));
+    CHECK(problems(R"("at": [20, 330])", R"("at": [180, 215])") ==
+          List{"node sr is inside the sigil", "the bar of twin pair p1 + p2 runs over node sr"});
+
+    // Without a sigil none of this is checked.
+    const Level plain = MakeLevel(with(R"(, "sigil": {"at": [180, 290], "rings": [150]})", ""));
+    CHECK(!sigil::IsSigil(plain));
+    CHECK(LookProblems(plain).empty());
   }
 
   TEST_CASE("the canal city round 3-6: locks, harbours, the mill's house, the gate's lamp, rooftops") {

@@ -177,6 +177,36 @@ TEST_SUITE("machine parts") {
     CHECK(report.pars.ticks == 115);
   }
 
+  TEST_CASE("The Twin Seals (4-7): sludge without the seals or the mixer, both together solve it") {
+    const Level level = MakeLevel(kTwinSeals);
+    const int x1 = NodeOf(level, "x1"), m = NodeOf(level, "m"), p1 = NodeOf(level, "p1");
+    auto run = [&](bool twin, bool mixer) {
+      Board board(level);
+      if (twin) REQUIRE(board.Place(PieceOf(board, PieceType::TwinGate), p1));
+      if (mixer) REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), m));
+      return RunBoard(board).outcome;
+    };
+    // Rose meets blue in the first crossing.
+    for (const bool mixer : {false, true}) {
+      const Outcome outcome = run(false, mixer);
+      CHECK(outcome.failure == Failure::Mud);
+      CHECK(outcome.fail_node == x1);
+      CHECK(outcome.fail_tick == 34);
+    }
+    // The seals hold blue and amber back until both are there; then they meet in the merge.
+    const Outcome sealed = run(true, false);
+    CHECK(sealed.failure == Failure::Mud);
+    CHECK(sealed.fail_node == m);
+    CHECK(sealed.fail_tick == 42);
+    const Outcome both = run(true, true);
+    CHECK(both.solved);
+    CHECK(both.ticks == 76);
+    const SolveReport report = Solve(level);
+    CHECK(report.solutions == 2);  // the twin gate on either seal
+    CHECK(report.pars.pieces == 2);
+    CHECK(report.pars.ticks == 76);
+  }
+
   TEST_CASE("racks, mills and gates in level files") {
     for (const std::string& json : {kRack, kMillGate, TwoMills(true), kMillGateCanals}) {
       const Level level = MakeLevel(json);

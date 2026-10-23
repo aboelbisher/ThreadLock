@@ -30,7 +30,10 @@
 // at least 600 = one screen; it scrolls), "payoff": [180, 870] = where the payoff happens (World 1's rose
 // window), "shelves": [150, 330] = World 2's shop wall (its pipes then run straight across or down), and a
 // cup's or bottle's "order": "Mrs Hale" (the slip it fills); World 3's canal map: a harbour's (cup's)
-// "district": "Lantern Row" (the district it serves; its canals then run straight with round bends).
+// "district": "Lantern Row" (the district it serves; its canals then run straight with round bends); World 4's
+// "sigil": {"at": [180, 290], "rings": [150]} (rings round a centre, a point every 15 degrees: its junctions
+// sit on them, its grooves run straight between them or, with a pipe's shape {"arc": segment}, along a ring
+// the shorter way, which makes the pipe longer: the rules count an arc's cells).
 // Sockets ("socket": true; pass nodes are sockets unless false) go on forks, passes, crossings and
 // merges; any piece goes in any socket. A pipe leaving a fork is its side 0 or 1 in the order the
 // pipes are listed.
@@ -66,7 +69,8 @@ std::string WriteLevel(const Level& level);
 // cork board, the bell, a jar or its slate, a jar or slate off the board or on another, a bottle off the
 // counter, without an order or not filled from above; on a canal map (World 3, a harbour with a district) a
 // canal at a slant and canal::Problems (bends, locks, canals through nodes, alongside or across each other,
-// rods). Empty = good.
+// rods); on a sigil (World 4) sigil::Problems (junctions on its points, flasks and phials outside it,
+// grooves through nodes, along or across each other, twin bars). Empty = good.
 std::vector<std::string> LookProblems(const Level& level);
 
 }  // namespace threadlock
