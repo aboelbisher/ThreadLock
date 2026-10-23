@@ -12,6 +12,7 @@
 #include "city_art.h"
 #include "feedback.h"
 #include "lantern_art.h"
+#include "sanctum_art.h"
 #include "liquid.h"
 #include "palette.h"
 #include "progress.h"
@@ -64,6 +65,7 @@ class ThreadlockApp : public wlw::app::System {
   const wlw::ui::Font& GetFont() const { return *font_; }
   const wlw::ui::Font& GetHand() const { return *hand_; }      // handwriting (Caveat Bold): slips, bottle labels
   const wlw::ui::Font& GetStreet() const { return *street_; }  // the canal city's lettering (Cormorant SC Bold)
+  const wlw::ui::Font& GetSigil() const { return *sigil_; }    // the sanctum's lettering (Cinzel Bold)
   const Palette& GetPalette() const { return PaletteByKey(progress_->settings.palette); }
   wlw::app::Application& Services() { return App(); }
   float Time() const { return time_; }
@@ -109,9 +111,10 @@ class ThreadlockApp : public wlw::app::System {
   LanternArt lantern_art_;
   ApothecaryArt apothecary_art_;
   CanalArt canal_art_;
+  SanctumArt sanctum_art_;
   CityArt city_art_;
   std::shared_ptr<wlw::rendering::ShaderMaterial> action_material_;
-  std::shared_ptr<wlw::ui::Font> font_, hand_, street_;
+  std::shared_ptr<wlw::ui::Font> font_, hand_, street_, sigil_;
   std::unique_ptr<wlw::kit::Ads> ads_;
   wlw::kit::AdPacing pacing_;
   std::deque<Level> kept_;  // generated levels (a deque: pointers stay valid as it grows)

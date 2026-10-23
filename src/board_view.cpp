@@ -201,6 +201,8 @@ void BoardView::ClearMarkers() {
   for (NodeAnim& anim : anims_) {
     anim.tick = -1000000;
     anim.flip = -1000000;
+    anim.mixed = Color::None;
+    anim.mix = -1000000;
   }
   for (std::vector<barges::Landing>& landed : landed_) landed.clear();
   std::fill(cup_fill_.begin(), cup_fill_.end(), 0.0f);
@@ -231,7 +233,13 @@ void BoardView::OnEvents(const std::vector<Event>& events, const Board& board) {
         if (level_->nodes[static_cast<size_t>(e.node)].kind == NodeKind::Mill)
           anims_[static_cast<size_t>(e.node)].spin_target += kPi / 3.0f;  // a notch
         break;
-      case EventType::Mix: anims_[static_cast<size_t>(e.node)].flash = 1.0f; break;
+      case EventType::Mix: {
+        NodeAnim& anim = anims_[static_cast<size_t>(e.node)];
+        anim.flash = 1.0f;
+        anim.mixed = e.bead.a;
+        anim.mix = board.Ticks();
+        break;
+      }
       case EventType::Flip:
         anims_[static_cast<size_t>(e.node)].flash = 1.0f;
         anims_[static_cast<size_t>(e.node)].tick = board.Ticks();
@@ -247,6 +255,8 @@ void BoardView::OnEvents(const std::vector<Event>& events, const Board& board) {
             !(e.bead.a == want && (!e.bead.IsBlend() || e.bead.b == want)) && !e.bead.IsMud()) {
           add(Marker::WrongCup, e.node, e.slot);
         }
+        // A mud mix lands in the cup it fails: the failure is shown there.
+        if (node.kind == NodeKind::Cup && e.bead.IsMud()) add(Marker::Mud, e.node);
         if (node.kind == NodeKind::Cup) landed_[static_cast<size_t>(e.node)].push_back({e.bead, board.Ticks()});
         break;
       }

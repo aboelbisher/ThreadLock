@@ -53,6 +53,8 @@ wlw_add_game(threadlock
     src/apothecary_art.h
     src/canal_art.cpp
     src/canal_art.h
+    src/sanctum_art.cpp
+    src/sanctum_art.h
     src/canal_palette.h
     src/art_shapes.cpp
     src/art_shapes.h

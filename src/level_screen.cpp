@@ -9,6 +9,7 @@
 
 #include "art_shapes.h"
 #include "canal_look.h"
+#include "sigil_look.h"
 #include "solver.h"
 #include "ui_parts.h"
 #include "world_look.h"
@@ -181,6 +182,7 @@ std::string HarbourCounts(const Level& level, const Board& board) {
 }
 
 std::string FailureText(const Level& level, const Board& board, const Outcome& outcome) {
+  if (sigil::IsSigil(level)) return sigil::FailureText(level, board, outcome);  // World 4's sanctum
   const Node* node = outcome.fail_node >= 0 ? &level.nodes[static_cast<size_t>(outcome.fail_node)] : nullptr;
   // A rack's bottle, or a cup with an order (World 2), is named after its order; a harbour after its district.
   std::string bottle;

@@ -570,6 +570,144 @@ TEST_SUITE("content") {
     CHECK(LookProblems(plain).empty());
   }
 
+  TEST_CASE("the sanctum round 4-7: flasks, phials, pills, runes, the figure, candles") {
+    const Level level = MakeLevel(kTwinSeals);
+    auto near = [](Vec2 a, Vec2 b, float within) {
+      return std::fabs(a.x - b.x) <= within && std::fabs(a.y - b.y) <= within;
+    };
+    // The blue flask behind its spout, its groove running down; the rose one shrunk to stay on the board.
+    const sigil::Vessel sb = sigil::FlaskAt(level, NodeOf(level, "sb"));
+    CHECK(near(sb.centre, {50, 44}, 0.01f));
+    CHECK(sb.r == 23.0f);
+    const sigil::Vessel sr = sigil::FlaskAt(level, NodeOf(level, "sr"));
+    CHECK(sr.r == 14.0f);
+    CHECK(near(sr.centre, {16, 330}, 1.0f));
+    // The phials hang past their cups the way their grooves arrive: the big green one, the small rose one.
+    const sigil::Vessel c = sigil::PhialAt(level, NodeOf(level, "c"));
+    CHECK(near(c.centre, {180, 548}, 0.01f));
+    CHECK(c.r == 24.0f);
+    const sigil::Vessel cr = sigil::PhialAt(level, NodeOf(level, "cr"));
+    CHECK(near(cr.centre, {330, 454}, 0.01f));
+    CHECK(cr.r == 15.0f);
+    CHECK(near(sigil::PillAt(level, NodeOf(level, "c")), {180, 594}, 0.01f));
+    CHECK(sigil::GlobeRadius(level, NodeOf(level, "m")) == 26.0f);
+    CHECK(sigil::GlobeRadius(level, NodeOf(level, "x1")) == 15.0f);
+    CHECK(sigil::GlobeRadius(level, NodeOf(level, "p2")) == 15.0f);
+
+    // Five grooves meet the ring: blue and amber at the seals, rose coming in, rose going out, green below.
+    const std::vector<float> ports = sigil::Ports(level, level.look.sigil, 150.0f);
+    CHECK(ports.size() == 5);
+    auto has_port = [&](float angle) {
+      return std::any_of(ports.begin(), ports.end(), [&](float p) { return std::fabs(p - angle) < 1.0f; });
+    };
+    CHECK(has_port(90.0f));
+    CHECK(has_port(210.0f));
+    CHECK(has_port(330.0f));
+    // The runes: the same every time, none at a port.
+    const std::vector<sigil::Stroke2> runes = sigil::Runes(level, level.look.sigil, 150.0f);
+    CHECK(runes.size() > 40);
+    const std::vector<sigil::Stroke2> again = sigil::Runes(level, level.look.sigil, 150.0f);
+    REQUIRE(again.size() == runes.size());
+    for (size_t k = 0; k < runes.size(); ++k) CHECK((runes[k].a == again[k].a && runes[k].b == again[k].b));
+    for (const sigil::Stroke2& rune : runes) {
+      const float angle = std::atan2(rune.a.y - 290.0f, rune.a.x - 180.0f) * 57.29578f;
+      for (const float port : ports) {
+        const float d = std::fmod(std::fabs((angle < 0 ? angle + 360.0f : angle) - port), 360.0f);
+        CHECK(std::min(d, 360.0f - d) > 5.5f);
+      }
+    }
+    // The figure: the triangle of the seals and the mixer, inlaid with its half turn (a hexagram).
+    CHECK(sigil::Figure(level, level.look.sigil).size() == 3);
+    const auto lines = sigil::FigureLines(level, level.look.sigil);
+    REQUIRE(lines.size() == 2);
+    CHECK(near(lines[1][0], {180, 140}, 0.5f));
+    CHECK(sigil::Candles(level).size() == 4);
+    CHECK(LookProblems(level).empty());
+
+    // Vessels that don't fit.
+    auto problems = [&](const std::string& from, const std::string& to) {
+      std::string json = kTwinSeals;
+      REQUIRE(json.find(from) != std::string::npos);
+      json.replace(json.find(from), from.size(), to);
+      return LookProblems(MakeLevel(json));
+    };
+    std::string edge = kTwinSeals;
+    edge.replace(edge.find("[330, 430]"), 10, "[350, 430]");
+    edge.replace(edge.find("[[330, 330]]"), 12, "[[350, 330]]");
+    CHECK(Has(LookProblems(MakeLevel(edge)), "phial cr is off the board"));
+    CHECK(Has(problems(R"("at": [20, 330])", R"("at": [36, 240])"), "flask sr covers node p1"));
+  }
+
+  TEST_CASE("the sanctum's moments round 4-7: the ignite, the partner, the circle of waiting") {
+    const Level level = MakeLevel(kTwinSeals);
+    auto pipe_of = [&](const char* from, const char* to) {
+      for (size_t p = 0; p < level.pipes.size(); ++p) {
+        if (level.pipes[p].from == NodeOf(level, from) && level.pipes[p].to == NodeOf(level, to))
+          return static_cast<int>(p);
+      }
+      return -1;
+    };
+    // The green phial's grooves light back up to both flasks; the rose lane through the crossings stays dark.
+    const std::vector<sigil::Ignite> ignites = sigil::IgniteFrom(level, NodeOf(level, "c"));
+    auto delay = [&](int pipe) {
+      for (const sigil::Ignite& ignite : ignites) {
+        if (ignite.pipe == pipe) return ignite.delay;
+      }
+      return -1.0f;
+    };
+    CHECK(ignites.size() == 7);  // m -> c, x1 -> m, x2 -> m, p1 -> x1, p2 -> x2, sb -> p1, sa -> p2
+    CHECK(delay(pipe_of("m", "c")) == doctest::Approx(sigil::kIgniteStart));
+    CHECK(delay(pipe_of("x1", "m")) == doctest::Approx(sigil::kIgniteStart + 75.0f / sigil::kIgniteSpeed));
+    CHECK(delay(pipe_of("x1", "m")) < delay(pipe_of("p1", "x1")));
+    CHECK(delay(pipe_of("p1", "x1")) < delay(pipe_of("sb", "p1")));
+    CHECK(delay(pipe_of("sr", "x1")) < 0.0f);
+
+    // A blue drop waiting at its seal waits for amber, which comes down from the amber flask and along the bar.
+    CHECK(sigil::PartnerColor(level, NodeOf(level, "p1"), 0) == Color::Amber);
+    CHECK(sigil::PartnerColor(level, NodeOf(level, "p2"), 0) == Color::Blue);
+    const int m = NodeOf(level, "m");
+    CHECK(sigil::PartnerColor(level, m, 0) != Color::None);
+    const std::vector<Vec2> route = sigil::PartnerRoute(level, NodeOf(level, "p1"), 0);
+    REQUIRE(route.size() >= 3);
+    CHECK(route.front() == Vec2{310, 60});
+    CHECK(route.back() == Vec2{50, 215});
+
+    // The result card's words: the mixer alone lets rose meet blue at the first crossing.
+    {
+      Board board(level);
+      REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), m));
+      const Run run = RunBoard(board);
+      REQUIRE(run.outcome.failure == Failure::Mud);
+      CHECK(run.outcome.fail_node == NodeOf(level, "x1"));
+      const std::string text = sigil::FailureText(level, board, run.outcome);
+      INFO(text);
+      CHECK(text.rfind("Nothing held the crossing: ", 0) == 0);
+      CHECK(text.find("rose") != std::string::npos);
+      CHECK(text.find("lue") != std::string::npos);
+    }
+    // With one amber short, the last blue waits at its seal for an amber twin that never comes.
+    {
+      std::string json = kTwinSeals;
+      json.replace(json.find("A*3"), 3, "A*2");
+      const Level lonely = MakeLevel(json);
+      Board board(lonely);
+      REQUIRE(board.Place(PieceOf(board, PieceType::TwinGate), NodeOf(lonely, "p1")));
+      REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), NodeOf(lonely, "m")));
+      const Run run = RunBoard(board);
+      REQUIRE(run.outcome.failure == Failure::Jam);
+      CHECK(board.Jam().lonely == NodeOf(lonely, "p1"));
+      CHECK(sigil::FailureText(lonely, board, run.outcome) ==
+            "The last blue waits at its seal for an amber twin, but the amber flask is empty. The seals never open "
+            "again. Green 4/6, rose 3/3.");
+      CHECK(sigil::PartnerRoute(lonely, NodeOf(lonely, "p1"), 0).front() == Vec2{310, 60});
+    }
+
+    // Two crossings waiting on each other: out along the groove and back, closed.
+    const std::vector<Vec2> loop = sigil::JamLoop(level, {NodeOf(level, "x1"), NodeOf(level, "x2")});
+    REQUIRE(loop.size() >= 3);
+    CHECK(loop.front() == loop.back());
+  }
+
   TEST_CASE("the canal city round 3-6: locks, harbours, the mill's house, the gate's lamp, rooftops") {
     const Level level = MakeLevel(kMillGateCanals);
     auto near = [](Vec2 a, Vec2 b) { return std::fabs(a.x - b.x) < 0.01f && std::fabs(a.y - b.y) < 0.01f; };

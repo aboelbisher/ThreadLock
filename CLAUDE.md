@@ -48,8 +48,15 @@ src/canal_art.{h,cpp}         World 3, The Canal City: the still city in tiles (
                               the picture, the harbours' pills and berths, the lock leaves (shut, or swung as it pours), the
                               mill (wheel, rods' pulse) and gates, the payoff light and the moments (murk, gridlock, short, spill)
 src/sigil_look.{h,cpp}        World 4's sanctum in board units (tool + art): the sigil's grooves (GroovePoints, arcs along
-                              its rings) and its look checks (sigil::Problems: junctions on its points and lines, flasks and
-                              phials outside it, grooves through nodes, along or across each other, twin bars)
+                              its rings), its look checks (sigil::Problems: junctions on its points and lines, flasks and
+                              phials outside it, grooves through nodes, along or across each other, twin bars), the still
+                              picture's parts (flasks, phials, pills, globes, runes, the figure, candles), the payoff's ignite,
+                              a waiting drop's partner and route, the circle of waiting, the result card's words (FailureText)
+src/sanctum_art.{h,cpp}       World 4, The Mixing Hall: the still sanctum in tiles (obsidian table: assets/shaders/sanctum_table.shader,
+                              candles, the sigil inlaid in gold with runes and its figure, gold-lipped grooves, glass flasks,
+                              globes, phials, seals); the candles' light, groove stains, flask/phial contents + pills (Cinzel
+                              labels), the mixers' swirl, twin seals' bar and leaves, the payoff (elixir, the sigil igniting
+                              back to the rim) and the moments (sludge, the lonely seal's crack, the circle of waiting, short, spill)
 src/canal_palette.h           World 3's night colours, shared by canal_art and the map's canal quarter
 src/barges.{h,cpp}            World 3's barges (plain C++, tested): a drop's pose along its canal, the landed barges' glides,
                               a lock's leaves

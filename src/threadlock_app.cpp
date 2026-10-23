@@ -57,6 +57,7 @@ void ThreadlockApp::OnStart() {
   font_ = wlw::ui::Font::Load("fonts/LilitaOne-Regular.ttf");
   hand_ = wlw::ui::Font::Load("fonts/Caveat-Bold.ttf");
   street_ = wlw::ui::Font::Load("fonts/CormorantSC-Bold.ttf");
+  sigil_ = wlw::ui::Font::Load("fonts/Cinzel-Bold.ttf");
   progress_ = std::make_unique<Progress>(wlw::platform::GetSaveDirectory("Threadlock"));
   progress_->Load();
   if (!catalog_.Load()) WLW_LOG_ERROR("Some levels didn't load");
@@ -66,6 +67,7 @@ void ThreadlockApp::OnStart() {
   lantern_art_.Create(App());
   apothecary_art_.Create(App(), hand_);
   canal_art_.Create(App(), street_);
+  sanctum_art_.Create(App(), sigil_);
   city_art_.Create(App());
   action_material_ =
       wlw::rendering::ShaderMaterial::Create(wlw::rendering::Shader::FromFile("shaders/ui_gradient.shader"));
@@ -104,6 +106,9 @@ BoardArt& ThreadlockApp::ArtFor(const Level& level) {
     case ArtKind::Apothecary: return apothecary_art_;
     case ArtKind::Canal:
       if (canal::IsCanalMap(level)) return canal_art_;
+      break;
+    case ArtKind::Sanctum:
+      if (sigil::IsSigil(level)) return sanctum_art_;
       break;
     case ArtKind::Workshop: break;
   }

@@ -42,6 +42,8 @@ struct NodeAnim {
   float flash = 0.0f;                     // a mix, a gate flipping
   int tick = -1000000;                    // the tick of its last pour, leave or flip (long ago = never)
   int flip = -1000000;                    // the tick of a gate's last flip (its leaves swing the tick after)
+  Color mixed = Color::None;              // the last mix's colour (World 4's mixer globe)
+  int mix = -1000000;                     // and its tick
 };
 
 // A moment on the board, shown where it happened (from the board's events): what went wrong, a near miss,
