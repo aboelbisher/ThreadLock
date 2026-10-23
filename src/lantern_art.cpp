@@ -207,7 +207,10 @@ glm::vec2 LanternArt::PipePoint(const ArtFrame& frame, int pipe, float distance)
   return tube.whole.PointAt(at) + frame.layout.ScrollOffset();
 }
 
-float LanternArt::WindowRadius(const ArtFrame& frame) const { return 172.0f * frame.Scale(); }
+// The Lab borrows the glassworks without the window: its boards are generated, with no payoff of their own.
+float LanternArt::WindowRadius(const ArtFrame& frame) const {
+  return frame.level->type == LevelType::Lab ? 0.0f : 172.0f * frame.Scale();
+}
 
 float LanternArt::SocketRadius(const Node& node) const {
   return node.kind == NodeKind::Cross || node.kind == NodeKind::Merge ? kGlobe + 6.0f : 26.0f;
@@ -293,7 +296,7 @@ void LanternArt::DrawBack(Canvas& picture, const ArtFrame& frame) {
   auto want = [&](int k) {
     const uint64_t base = Mix(board_key, static_cast<uint64_t>(k) + 1u);
     const float top = static_cast<float>(k) * h;
-    const bool lit = top < lit_bottom && top + h > lit_top;
+    const bool lit = radius > 0.0f && top < lit_bottom && top + h > lit_top;
     return Want{base, lit ? Mix(base, light_key) : base};
   };
   // A tile showing another board (or nothing) draws now; of those that only need the new light, one a

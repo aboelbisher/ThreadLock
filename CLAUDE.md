@@ -99,7 +99,7 @@ src/apothecary_art.{h,cpp}    World 2, The Apothecary: still tiles (planked wall
                               shelves + stock, counter, cork board, jars, sink); overlay: copper lines with portholes, bottles,
                               the lazy-susan rack + clock, slips (Caveat), bell, the moments (cork, label, PAID stamp,
                               spill puddle, short ghost fill, unpaid) and the sludge mud
-src/workshop_art.{h,cpp}      the v2 look (the Lab, a world's levels outside its grammar) + shared machine parts
+src/workshop_art.{h,cpp}      the v2 look (a world's levels outside its grammar) + shared machine parts
 src/art_shapes.{h,cpp}        drawing helpers: paths with round bends, Ribbon (seamless translucent bands), strokes,
                               glyphs, glows, brass (medallion, plate, bar)
 src/liquid.{h,cpp}            metaball liquid: blobs per drop from the rules' state -> SpriteBatch -> RGBA16F viewport
@@ -237,5 +237,5 @@ open everything, hints, wipe, ads).
 
 ## Next steps
 DESIGN.md §11 is the build order. All four launch worlds are done (World 4, The Mixing Hall, 23 October), each with
-its district on the map. Next: decide and build the Lab's look (it still uses the v2 workshop
-look), then DESIGN §11 step 4 (playtest World 1 with 5-10 people) and step 5 (launch).
+its district on the map. The Lab draws its boards in the Lantern Works' art without the rose window, tinted mint
+(world_look.h kLabLook). Next: DESIGN §11 step 4 (playtest World 1 with 5-10 people) and step 5 (launch).

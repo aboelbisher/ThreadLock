@@ -8,8 +8,8 @@
 
 // How a world looks around its machines (DESIGN.md §5): the HUD and the cards keep one layout in every
 // world, tinted with the world's colours, and each world draws its boards with its own art and plays
-// its own instruments. A world whose art isn't built yet uses the workshop look and sounds (v2), as does
-// the Lab.
+// its own instruments. The Lab draws its generated boards with World 1's glassworks (no rose window), tinted
+// in its own mint and played with the workshop's sounds (v2).
 namespace threadlock {
 
 enum class ArtKind : uint8_t { Workshop, Lantern, Apothecary, Canal, Sanctum };
@@ -30,21 +30,21 @@ struct WorldLook {
   const char* solved_line = "Every cup full and pure";  // the status line once the level is solved
 };
 
-inline constexpr WorldLook kWorkshopLook{ArtKind::Workshop,
-                                         "The Workshop",
-                                         Hex(0x070B10),
-                                         Hex(0x0D141C, 0.92f),
-                                         Hex(0xD4E3F2, 0.16f),
-                                         Hex(0xD4E3F2),
-                                         Hex(0x8FA4B8),
-                                         Hex(0x9EE3B0),
-                                         Hex(0xC4F2D0),
-                                         Hex(0x7CCB93),
-                                         Hex(0x3C7A4E),
-                                         Hex(0x08140C),
-                                         synth::SoundSet::Workshop,
-                                         "Mud!",
-                                         "Every cup full and pure"};
+inline constexpr WorldLook kLabLook{ArtKind::Lantern,
+                                    "The Lab",
+                                    Hex(0x070B10),
+                                    Hex(0x0D141C, 0.92f),
+                                    Hex(0xD4E3F2, 0.16f),
+                                    Hex(0xD4E3F2),
+                                    Hex(0x8FA4B8),
+                                    Hex(0x9EE3B0),
+                                    Hex(0xC4F2D0),
+                                    Hex(0x7CCB93),
+                                    Hex(0x3C7A4E),
+                                    Hex(0x08140C),
+                                    synth::SoundSet::Workshop,
+                                    "Mud!",
+                                    "Every cup full and pure"};
 
 inline constexpr WorldLook kWorldLooks[] = {
     // World 1, First Light: the glassworks at the top of the tower, at dawn.
@@ -65,10 +65,10 @@ inline constexpr WorldLook kWorldLooks[] = {
      synth::SoundSet::Sanctum, "Sludge!", "The sigil wakes"},
 };
 
-// `world` counts from 1; anything else (the Lab) gets the workshop look.
+// `world` counts from 1; anything else (the Lab) gets the Lab's look.
 inline const WorldLook& LookForWorld(int world) {
   if (world >= 1 && world <= static_cast<int>(std::size(kWorldLooks))) return kWorldLooks[world - 1];
-  return kWorkshopLook;
+  return kLabLook;
 }
 
 }  // namespace threadlock

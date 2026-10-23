@@ -487,14 +487,14 @@ committed after the owner's OK, in small commits:
    mixer globes; sludge, the lonely seal, the circle of waiting, short, spill moments), 14 levels + 3
    challenges + The Great Work (two sigils), its choir / harp / organ sounds and sanctum ambience, the
    sanctum floor district. **All four launch worlds are built.** The daily puzzle was removed (23 October: the owner's call); the Lab
-   stays. Next: the Lab's look.
+   stays; it draws its boards in the Lantern Works' glass and brass, without the rose window, tinted mint.
 4. Playtest World 1 with 5–10 people; adjust levels with the tool.
 5. Launch: Threadlock's own AdMob app and units, analytics, store page, closed test. Then worlds 5–8 as
    live updates.
 
 The cost the owner accepted: four looks are about four times the drawing work (each world needs its own
 pipes, containers, junctions, background, payoff animation and sounds), and the level files gain
-per-world extras. To decide next: which look the Lab uses (it still uses the v2 workshop look); later, the W5–8 re-plan.
+per-world extras. The Lab borrows the Lantern Works (23 October). To decide later: the W5–8 re-plan.
 
 ## 12. Decisions
 

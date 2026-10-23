@@ -23,7 +23,7 @@
 namespace threadlock {
 namespace {
 
-// Development shortcuts (adb: am start ... --es wlw "tl.open=1-6;tl.solve=1;tl.autoplay=2").
+// Development shortcuts (adb: am start ... --es wlw "tl.open=1-6;tl.solve=1;tl.autoplay=2"; tl.open=lab: the Lab).
 wlw::CVar<std::string> cv_open{"tl.open", "", "Open this level at startup (dev)"};
 wlw::CVar<bool> cv_calm{"tl.calm", false, "Reduced motion, whatever the setting (dev)"};
 
@@ -84,6 +84,10 @@ void ThreadlockApp::OnStart() {
 
   // First launch: no menu, level 1-1 straight away. The map appears after 1-3.
   const Level* current = progress_->Current(catalog_);
+  if (cv_open.Get() == "lab") {
+    OpenLab();
+    return;
+  }
   if (const Level* wanted = catalog_.Find(cv_open.Get())) {
     OpenLevel(wanted);
     return;

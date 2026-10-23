@@ -83,7 +83,7 @@ class LanternArt : public BoardArt {
   void DrawCrucible(wlw::ui::Canvas& canvas, const ArtFrame& frame, int node, bool front) const;
   void DrawLantern(wlw::ui::Canvas& canvas, const ArtFrame& frame, int node, bool front) const;
   void DrawGlobe(wlw::ui::Canvas& canvas, const ArtFrame& frame, int node, bool front) const;
-  float WindowRadius(const ArtFrame& frame) const;
+  float WindowRadius(const ArtFrame& frame) const;  // 0: no window (the Lab)
 
   // The still picture.
   TilePool tiles_;

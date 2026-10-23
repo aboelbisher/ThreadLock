@@ -8,7 +8,7 @@ uniform vec2 uCanvas;       // this tile's canvas size in units
 uniform vec2 uOffset;       // where this tile starts in the whole picture (units)
 uniform vec2 uTotal;        // the whole picture's size (units): one screen, or a tall board's column
 uniform vec2 uScreen;       // one screen (units)
-uniform vec3 uWindow;       // the window's centre (units) and outer radius (units)
+uniform vec3 uWindow;       // the window's centre (units) and outer radius (units); radius 0: no window (the Lab)
 uniform sampler2D uPanes;   // 24 x 1: rgb = a pane's light, a = how lit (0-11 outer, 12-23 inner)
 uniform vec4 uBeam;         // the light falling from the window: rgb, strength
 
@@ -111,7 +111,7 @@ void fragment() {
   float width = mix(50.0, 120.0, t);
   col += vec3(0.81, 0.90, 1.0) * 0.055 * smoothstep(width, width * 0.2, across);
 
-  col = Window(col, p, aa);
+  if (uWindow.z > 0.0) col = Window(col, p, aa);
 
   // The window's light falling into the room: a soft wedge below it, the colour of its lit panes.
   vec2 from = uWindow.xy + vec2(0.0, uWindow.z * 0.3);
@@ -121,7 +121,7 @@ void fragment() {
   float spread = uWindow.z * 0.35 + along * 0.22;
   float beam = smoothstep(spread, spread * 0.25, side) * smoothstep(0.0, uWindow.z * 0.6, along) *
                (1.0 - smoothstep(uScreen.y * 0.3, uScreen.y * 0.9, along));
-  col += uBeam.rgb * uBeam.a * 0.12 * beam;
+  if (uWindow.z > 0.0) col += uBeam.rgb * uBeam.a * 0.12 * beam;
 
   // Vignette: round one screen, which slides along a tall column (the ends stay dark).
   vec2 middle = vec2(uTotal.x * 0.5, clamp(p.y, uScreen.y * 0.5, uTotal.y - uScreen.y * 0.5));
