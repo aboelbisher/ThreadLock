@@ -269,3 +269,123 @@ TEST_SUITE("sound cues") {
     CHECK(Count(heard.cues, Sound::ShortQuay) == 0);
   }
 }
+
+TEST_SUITE("sound cues") {
+  TEST_CASE("the Sanctum set: harp, a phial full, the flasks' pours") {
+    const std::vector<Cue> cues = RunCues(LanternLevel("B*4"), SoundSet::Sanctum);
+    CHECK(Count(cues, Sound::HarpNote) == 4);
+    CHECK(Count(cues, Sound::PhialBlue) == 1);
+    CHECK(Count(cues, Sound::FlaskPour) == 4);
+    CHECK(Count(cues, Sound::NoteBlue) == 0);
+    CHECK(Count(cues, Sound::HollowPhial) == 0);
+    CHECK(Count(cues, Sound::SealBell) == 0);
+  }
+
+  TEST_CASE("a mix sings the colour it made in the sanctum; elsewhere as before") {
+    const Level level = MakeLevel(kTwinSeals);
+    Board board(level);
+    board.Start();
+    const int m = NodeOf(level, "m");
+    auto mix = [&](SoundSet set, Color made, const Listener& listener = {}) {
+      const Cues cues =
+          CuesFor({{.type = EventType::Mix, .node = m, .bead = Bead::Pure(made)}}, level, board, set, listener);
+      REQUIRE(cues.sounds.size() == 1);
+      return cues.sounds[0];
+    };
+    const Cue green = mix(SoundSet::Sanctum, Color::Green);
+    CHECK(green.sound == Sound::MixSwell);
+    CHECK(green.pitch == doctest::Approx(1.0f));
+    CHECK(green.volume == doctest::Approx(0.5f));
+    const Cue pearl = mix(SoundSet::Sanctum, Color::Pearl);
+    CHECK(pearl.sound == Sound::MixSwell);
+    CHECK(pearl.pitch == doctest::Approx(1.5f));
+    const Cue clot = mix(SoundSet::Sanctum, Color::Mud, {0.0f, 100.0f});  // m is off the view: a failure, in full
+    CHECK(clot.sound == Sound::Clot);
+    CHECK(clot.volume == doctest::Approx(0.9f));
+    const Cue workshop = mix(SoundSet::Workshop, Color::Green);
+    CHECK(workshop.sound == Sound::NoteGreen);
+    CHECK(workshop.volume == doctest::Approx(0.45f));
+    CHECK(workshop.pitch == doctest::Approx(0.75f));
+    CHECK(mix(SoundSet::Canal, Color::Mud).sound == Sound::RhodesNote);
+    CHECK(mix(SoundSet::Shop, Color::Pearl).sound == Sound::NoteGreen);
+    CHECK(mix(SoundSet::Lantern, Color::Green).sound == Sound::NoteGreen);
+  }
+
+  TEST_CASE("4-7: the twin seals ring once per release, the mixer sings, the phials fill") {
+    const Level level = MakeLevel(kTwinSeals);
+    auto ticks_of = [](const Heard& heard, Sound sound) {
+      std::vector<int> ticks;
+      for (size_t k = 0; k < heard.cues.size(); ++k) {
+        if (heard.cues[k].sound == sound) ticks.push_back(heard.ticks[k]);
+      }
+      return ticks;
+    };
+    Board board(level);
+    REQUIRE(board.Place(PieceOf(board, PieceType::TwinGate), NodeOf(level, "p1")));
+    REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), NodeOf(level, "m")));
+    const Heard heard = HearRun(board, level, SoundSet::Sanctum);
+    REQUIRE(board.GetOutcome().solved);
+    CHECK(ticks_of(heard, Sound::SealBell) == std::vector<int>{18, 30, 42});
+    for (const Cue& cue : heard.cues) {
+      if (cue.sound == Sound::SealBell) CHECK(cue.pan == doctest::Approx(0.0f));
+      if (cue.sound == Sound::MixSwell) CHECK(cue.pitch == doctest::Approx(1.0f));
+    }
+    CHECK(ticks_of(heard, Sound::MixSwell) == std::vector<int>{42, 54, 66});
+    std::vector<float> organ;
+    for (const Cue& cue : heard.cues) {
+      if (cue.sound == Sound::OrganNote) organ.push_back(cue.pitch);
+    }
+    REQUIRE(organ.size() == 6);
+    for (int k = 0; k < 6; ++k) CHECK(organ[static_cast<size_t>(k)] == doctest::Approx(synth::ClimbPitch(k)));
+    CHECK(Count(heard.cues, Sound::BowlNote) == 3);
+    CHECK(ticks_of(heard, Sound::PhialRose) == std::vector<int>{65});
+    CHECK(ticks_of(heard, Sound::PhialGreen) == std::vector<int>{76});
+    CHECK(Count(heard.cues, Sound::FlaskPour) == 9);
+    CHECK(Count(heard.cues, Sound::Clot) == 0);
+    CHECK(Count(heard.cues, Sound::SealCrack) == 0);
+    // The same placement in the workshop: no bell.
+    Board workshop(level);
+    REQUIRE(workshop.Place(PieceOf(workshop, PieceType::TwinGate), NodeOf(level, "p1")));
+    REQUIRE(workshop.Place(PieceOf(workshop, PieceType::Mixer), NodeOf(level, "m")));
+    CHECK(Count(HearRun(workshop, level, SoundSet::Workshop).cues, Sound::SealBell) == 0);
+    // The mixer alone: no seals, and the sludge at the first crossing clots.
+    Board alone(level);
+    REQUIRE(alone.Place(PieceOf(alone, PieceType::Mixer), NodeOf(level, "m")));
+    const Heard sludge = HearRun(alone, level, SoundSet::Sanctum);
+    CHECK(Count(sludge.cues, Sound::SealBell) == 0);
+    CHECK(Count(sludge.cues, Sound::Clot) >= 1);
+  }
+
+  TEST_CASE("a lonely seal cracks: THREADLOCKED in the sanctum") {
+    std::string json = kTwinSeals;
+    json.replace(json.find("A*3"), 3, "A*2");
+    const Level level = MakeLevel(json);
+    Board board(level);
+    REQUIRE(board.Place(PieceOf(board, PieceType::TwinGate), NodeOf(level, "p1")));
+    REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), NodeOf(level, "m")));
+    const Heard heard = HearRun(board, level, SoundSet::Sanctum);
+    CHECK(board.GetOutcome().jammed);
+    CHECK(board.Jam().lonely == NodeOf(level, "p1"));
+    CHECK(Count(heard.cues, Sound::SealCrack) == 1);
+    CHECK(Count(heard.cues, Sound::Grind) == 0);
+    CHECK(Count(heard.cues, Sound::HollowPhial) == 0);
+    CHECK(Count(heard.cues, Sound::SealBell) == 2);
+  }
+
+  TEST_CASE("the Sanctum set: sludge, a spill at the brim, a short phial") {
+    CHECK(Count(RunCues(LanternLevel("B*5"), SoundSet::Sanctum), Sound::PhialSpill) == 1);
+    CHECK(Count(RunCues(LanternLevel("B*5"), SoundSet::Sanctum), Sound::Splash) == 0);
+    const std::vector<Cue> short_run = RunCues(LanternLevel("B*3"), SoundSet::Sanctum, {0.0f, 100.0f});
+    REQUIRE(Count(short_run, Sound::HollowPhial) == 1);
+    for (const Cue& cue : short_run) {
+      if (cue.sound == Sound::HollowPhial) CHECK(cue.volume == doctest::Approx(0.8f));
+    }
+    const Level level = LanternLevel("B*4");
+    Board board(level);
+    board.Start();
+    const Cues mud =
+        CuesFor({{.type = EventType::Collide, .node = NodeOf(level, "c")}}, level, board, SoundSet::Sanctum);
+    REQUIRE(mud.sounds.size() == 1);
+    CHECK(mud.sounds[0].sound == Sound::Clot);
+  }
+}

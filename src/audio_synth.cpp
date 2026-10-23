@@ -1,12 +1,15 @@
 #include "audio_synth.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <initializer_list>
 #include <iterator>
 #include <numbers>
 
 #include "apothecary_look.h"
 #include "barges.h"
+#include "sigil_look.h"
 
 namespace threadlock::synth {
 namespace {
@@ -322,7 +325,7 @@ std::vector<float> Paid(Color color, uint32_t rate) {
 
 // A grinding stop (a saw running down, rough noise), then a low organ chord (C minor): THREADLOCKED in
 // every world.
-void GrindStop(Buffer& out) {
+void GrindStop(Buffer& out, float grind = 1.0f) {
   Noise noise;
   float phase = 0.0f, low = 0.0f;
   for (size_t i = 0; i < out.At(0.55f); ++i) {
@@ -331,7 +334,7 @@ void GrindStop(Buffer& out) {
     phase += f / static_cast<float>(out.rate);
     const float saw = 2.0f * (phase - std::floor(phase)) - 1.0f;
     low += 0.2f * (noise.Next() - low);
-    out.samples[i] += (0.6f * saw + 0.5f * low) * Decay(t, 0.005f, 0.25f);
+    out.samples[i] += (0.6f * saw + 0.5f * low) * grind * Decay(t, 0.005f, 0.25f);
   }
   const float organ[] = {65.41f, 98.0f, 130.81f, 155.56f};  // C2 G2 C3 Eb3
   for (float f : organ) {
@@ -501,6 +504,268 @@ std::vector<float> Harbour(Color color, uint32_t rate) {
   return out.samples;
 }
 
+// ---- The Sanctum set: a choir, a harp and an organ in candlelight ----
+
+constexpr float kC2 = 65.41f, kG2 = 98.0f, kG3 = 196.0f;
+// Open fifths + sus2 from a root: root, fifth, octave, ninth, twelfth. On C (C G C D G) or G (G D G A D) every note is
+// in the C pentatonic the drops climb, so nothing clashes.
+constexpr float kSus[] = {1.0f, 1.5f, 2.0f, 2.25f, 3.0f};
+
+// The correction that takes a naive sawtooth's step apart over one sample each side (no aliasing hiss).
+float PolyBlep(float t, float dt) {
+  if (t < dt) {
+    t /= dt;
+    return t + t - t * t - 1.0f;
+  }
+  if (t > 1.0f - dt) {
+    t = (t - 1.0f) / dt;
+    return t * t + t + t + 1.0f;
+  }
+  return 0.0f;
+}
+
+// A sung vowel: three formants (resonances of the throat) and how wide they are (Svf damping ~ bandwidth / freq).
+struct Vowel {
+  float freq[3], amp[3], damping[3];
+};
+constexpr Vowel kAh{{800.0f, 1150.0f, 2900.0f}, {1.0f, 0.5f, 0.12f}, {0.12f, 0.10f, 0.08f}};
+constexpr Vowel kEh{{480.0f, 1720.0f, 2520.0f}, {1.0f, 0.45f, 0.15f}, {0.14f, 0.09f, 0.08f}};  // the "-men"
+
+// A choir: two singers per note (PolyBLEP sawtooths 6 cents apart), each with its own ~5 Hz vibrato that grows in after
+// 0.15 s, all sung through one formant bank (the vowel's three band-passes) with a little breath (noise in the second
+// formant's band). Each note swells in over `attack` (note i from start + enter[i]: a choir joining voice by voice),
+// holds for `hold`, and fades out over `release`.
+void Choir(Buffer& out, const float* notes, int count, float start, float attack, float hold, float release, float gain,
+           const Vowel& vowel = kAh, const float* enter = nullptr) {
+  const int singers = 2 * count;
+  std::vector<float> phase(static_cast<size_t>(singers)), inc(static_cast<size_t>(singers), 0.0f);
+  std::vector<float> env(static_cast<size_t>(count), 0.0f);
+  for (int s = 0; s < singers; ++s) phase[static_cast<size_t>(s)] = std::fmod(0.37f * static_cast<float>(s), 1.0f);
+  float k[3];
+  for (int j = 0; j < 3; ++j) k[j] = Svf::K(vowel.freq[j], out.rate);
+  Svf bank[3], breath;
+  Noise noise;
+  float latest = 0.0f;
+  for (int n = 0; enter && n < count; ++n) latest = std::max(latest, enter[n]);
+  const float rate = static_cast<float>(out.rate);
+  const size_t from = out.At(start), to = out.At(start + latest + attack + hold + release);
+  for (size_t i = from, n = 0; i < to; ++i, ++n) {
+    const float t = static_cast<float>(n) / rate;
+    if (n % 32 == 0) {
+      const float depth = 0.0035f * Ease((t - 0.15f) / 0.4f);
+      for (int s = 0; s < singers; ++s) {
+        const float f = notes[s / 2] * (s % 2 ? 1.0035f : 0.9965f);
+        const float vibrato = 5.1f + 0.37f * static_cast<float>(s % 3);
+        inc[static_cast<size_t>(s)] =
+            f * (1.0f + depth * std::sin(kTau * vibrato * t + 1.7f * static_cast<float>(s))) / rate;
+      }
+    }
+    float loudest = 0.0f;
+    for (int note = 0; note < count; ++note) {
+      const float u = t - (enter ? enter[note] : 0.0f);
+      const float e = u <= 0.0f           ? 0.0f
+                      : u < attack        ? Ease(u / attack)
+                      : u < attack + hold ? 1.0f
+                                          : 1.0f - Ease((u - attack - hold) / release);
+      env[static_cast<size_t>(note)] = e;
+      loudest = std::max(loudest, e);
+    }
+    float x = 0.0f;
+    for (int s = 0; s < singers; ++s) {
+      float& p = phase[static_cast<size_t>(s)];
+      const float dt = inc[static_cast<size_t>(s)];
+      x += env[static_cast<size_t>(s / 2)] * (2.0f * p - 1.0f - PolyBlep(p, dt));
+      p += dt;
+      if (p >= 1.0f) p -= 1.0f;
+    }
+    x /= static_cast<float>(count);
+    float y = 0.0f;
+    for (int j = 0; j < 3; ++j) y += vowel.amp[j] * vowel.damping[j] * bank[j].BandK(x, k[j], vowel.damping[j]);
+    y += 0.1f * bank[0].low;
+    const float air = 0.04f * breath.BandK(noise.Next(), k[1], 0.6f);
+    out.samples[i] += gain * (y + loudest * air);
+  }
+}
+
+// A concert harp: a finger's pluck brighter than the bass's in a loop that holds its tone long, through the
+// soundboard's two resonances (190 Hz, 1.25 kHz), plus the string's pure fundamental for the round, sweet core.
+void Harp(Buffer& out, float freq, float start, float gain, float ring = 1.0f) {
+  Noise noise;
+  const size_t period = std::max<size_t>(2, static_cast<size_t>(static_cast<float>(out.rate) / freq));
+  std::vector<float> line(period);
+  float soft = 0.0f, mean = 0.0f;
+  for (float& s : line) mean += s = soft += 0.6f * (noise.Next() - soft);
+  mean /= static_cast<float>(period);
+  for (float& s : line) s -= mean;
+  size_t pos = 0;
+  float last = 0.0f;
+  Svf low, high;
+  const float k_low = Svf::K(190.0f, out.rate), k_high = Svf::K(1250.0f, out.rate);
+  const size_t from = out.At(start), rise = std::max<size_t>(1, out.At(0.0015f));
+  const float fall = std::exp(-1.0f / (ring * static_cast<float>(out.rate)));
+  float env = 1.0f;
+  for (size_t i = from, n = 0; i < out.samples.size(); ++i, ++n) {
+    const float current = line[pos];
+    line[pos] = 0.5f * (current + last) * 0.9985f;
+    last = current;
+    if (++pos == period) pos = 0;
+    const float body = 0.3f * low.BandK(current, k_low, 0.9f) + 0.15f * high.BandK(current, k_high, 1.1f);
+    float level = static_cast<float>(n) / static_cast<float>(rise);
+    if (n >= rise) {
+      level = env;
+      env *= fall;
+      if (env < 3e-4f) break;
+    }
+    out.samples[i] += gain * (0.75f * current + body) * level;
+  }
+  Partial(out, from, freq, gain * 0.3f, 0.004f, 0.8f * ring);
+}
+
+// An organ stop: one cycle of its waveform, built once from its harmonics and scaled to peak 1.
+struct Stop {
+  std::array<float, 2049> table{};  // table[2048] = table[0]
+};
+Stop MakeStop(std::initializer_list<float> amps) {
+  Stop stop;
+  float most = 0.0f;
+  for (size_t i = 0; i < 2048; ++i) {
+    float v = 0.0f, h = 1.0f;
+    for (const float amp : amps) {
+      v += amp * std::sin(kTau * h * static_cast<float>(i) / 2048.0f);
+      h += 1.0f;
+    }
+    stop.table[i] = v;
+    most = std::max(most, std::fabs(v));
+  }
+  for (size_t i = 0; i < 2048; ++i) stop.table[i] /= most;
+  stop.table[2048] = stop.table[0];
+  return stop;
+}
+const Stop& Flute() {  // 8' flute
+  static const Stop stop = MakeStop({1.0f, 0.12f, 0.05f});
+  return stop;
+}
+const Stop& Principal() {
+  static const Stop stop = MakeStop({1.0f, 0.55f, 0.35f, 0.22f, 0.14f, 0.09f, 0.06f, 0.04f});
+  return stop;
+}
+const Stop& Reed() {
+  static const Stop stop = MakeStop({1.0f, 0.08f, 0.5f, 0.06f, 0.32f, 0.05f, 0.22f, 0.04f, 0.15f});
+  return stop;
+}
+const Stop& Mixture() {
+  static const Stop stop = MakeStop({1.0f, 0.75f, 0.55f, 0.5f, 0.2f, 0.4f, 0.08f, 0.32f});
+  return stop;
+}
+
+// An organ pipe: the stop's waveform at `freq`, eased in over `attack`, held for `hold`, then the church's tail (a
+// fixed factor a sample, stopped below hearing). `chiff` > 0: the pipe speaking (a puff of noise at its third harmonic
+// and its octave overblowing for 50 ms).
+void Organ(Buffer& out, const Stop& stop, float freq, float start, float attack, float hold, float release, float gain,
+           float chiff = 0.0f) {
+  const size_t from = out.At(start);
+  const double inc = static_cast<double>(freq) / static_cast<double>(out.rate);
+  const float fall = std::exp(-1.0f / (release * static_cast<float>(out.rate)));
+  const size_t held = out.At(start + attack + hold) - from;
+  double phase = 0.0;
+  float tail = 1.0f;
+  for (size_t i = from, n = 0; i < out.samples.size(); ++i, ++n) {
+    float level = 1.0f;
+    if (n < held) {
+      level = Ease(out.T(n) / attack);
+    } else {
+      level = tail;
+      tail *= fall;
+      if (tail < 1e-4f) break;
+    }
+    const double at = phase * 2048.0;
+    const size_t index = static_cast<size_t>(at);
+    const float f = static_cast<float>(at - static_cast<double>(index));
+    out.samples[i] += gain * level * (stop.table[index] + f * (stop.table[index + 1] - stop.table[index]));
+    phase += inc;
+    if (phase >= 1.0) phase -= 1.0;
+  }
+  if (chiff <= 0.0f) return;
+  Noise noise;
+  Svf puff;
+  const float k = Svf::K(std::min(3.0f * freq, 0.4f * static_cast<float>(out.rate)), out.rate);
+  for (size_t i = from; i < out.At(start + 0.12f); ++i)
+    out.samples[i] += 0.5f * chiff * gain * puff.BandK(noise.Next(), k, 0.5f) * Decay(out.T(i - from), 0.002f, 0.03f);
+  Partial(out, from, 2.0f * freq, gain * chiff * 0.4f, 0.004f, 0.05f);
+}
+
+// A singing bowl struck with a felt mallet: its modes 1 : 2.71 : 5.15 : 8.43, each a doublet a few Hz apart (the bowl
+// is never perfectly round: the slow beating). `doublets` = false for chords (half the cost).
+void Bowl(Buffer& out, float freq, float start, float gain, float ring = 1.0f, bool doublets = true) {
+  const float ratio[] = {1.0f, 2.71f, 5.15f, 8.43f}, amp[] = {1.0f, 0.45f, 0.2f, 0.08f};
+  const float time[] = {0.9f, 0.45f, 0.2f, 0.08f}, beat[] = {0.9f, 1.6f, 2.5f, 3.3f};
+  const size_t from = out.At(start);
+  for (int m = 0; m < 4; ++m) {
+    Partial(out, from, freq * ratio[m], gain * amp[m], 0.004f, time[m] * ring);
+    if (doublets) Partial(out, from, freq * ratio[m] + beat[m], gain * amp[m] * 0.8f, 0.004f, time[m] * ring, 1.1f);
+  }
+}
+
+// A soft glass ring (a phial's lip): the note and its beating twin, a glassy 2.76 and 5.4.
+void GlassRing(Buffer& out, float freq, float start, float gain) {
+  const size_t from = out.At(start);
+  Partial(out, from, freq, gain, 0.002f, 0.45f);
+  Partial(out, from, freq + 1.3f, gain * 0.6f, 0.002f, 0.45f, 0.9f);
+  Partial(out, from, freq * 2.76f, gain * 0.3f, 0.002f, 0.15f);
+  Partial(out, from, freq * 5.4f, gain * 0.1f, 0.002f, 0.05f);
+}
+
+// A cast bronze bell: hum, prime, tierce, quint, nominal and the upper partials; the hum and nominal warble (doublets).
+// Struck by a knock and a short high-passed tick.
+void Bell(Buffer& out, float freq, float start, float gain, float ring = 1.0f) {
+  const float ratio[] = {0.5f, 1.0f, 1.19f, 1.5f, 2.0f, 2.66f, 3.0f, 4.0f};
+  const float amp[] = {0.35f, 0.6f, 0.45f, 0.2f, 1.0f, 0.3f, 0.25f, 0.12f};
+  const float time[] = {1.6f, 1.4f, 1.1f, 0.8f, 1.2f, 0.5f, 0.4f, 0.25f};
+  const size_t from = out.At(start);
+  for (int p = 0; p < 8; ++p) Partial(out, from, freq * ratio[p], gain * amp[p], 0.001f, time[p] * ring);
+  Partial(out, from, freq * 0.5f + 0.3f, gain * amp[0] * 0.5f, 0.001f, time[0] * ring, 0.7f);
+  Partial(out, from, freq * 2.0f + 0.45f, gain * amp[4] * 0.5f, 0.001f, time[4] * ring, 0.7f);
+  Knock(out, start, 2.0f * freq, 0.35f * gain);
+  Noise noise;
+  float last = 0.0f;
+  for (size_t i = from; i < out.At(start + 0.003f); ++i) {
+    const float n = noise.Next();
+    out.samples[i] += gain * 0.35f * (n - last) * Decay(out.T(i - from), 0.0002f, 0.001f);
+    last = n;
+  }
+}
+
+// A phial full, timed like its payoff (sigil_look.h): the glass rings as the elixir starts to rise, the colour's chord
+// rolled under it, then the choir swells with the ignite (from kIgniteStart) and is gone by ~2 s.
+std::vector<float> Phial(Color color, uint32_t rate) {
+  Buffer out(rate, sigil::kIgniteStart + 2.1f);
+  const bool on_g = color == Color::Amber || color == Color::Rose;  // amber and rose sound on G, the rest on C
+  const float root = on_g ? kG3 : kC3;
+  GlassRing(out, on_g ? 783.99f : kC6, 0.0f, 0.5f);
+  for (int k = 0; k < 5; ++k) {
+    const float at = 0.03f + 0.05f * static_cast<float>(k), f = root * kSus[k];
+    switch (color) {
+      case Color::Blue: Harp(out, f, at, 0.35f, 0.6f); break;
+      case Color::Green:
+        Organ(out, Principal(), f, at, 0.03f, 0.40f - 0.05f * static_cast<float>(k), 0.25f, 0.3f, 0.3f);
+        break;
+      case Color::Rose: Bowl(out, f, at, 0.3f, 0.45f, false); break;
+      case Color::Pearl:
+        Harp(out, 2.0f * f, at, 0.3f, 0.5f);
+        Celesta(out, 4.0f * f, at, 0.15f);
+        break;
+      default: break;  // amber: sung, below
+    }
+  }
+  if (color == Color::Amber) {
+    const float sung[] = {kG3, kG3 * 1.5f, kG3 * 2.0f, kG3 * 2.25f};
+    Choir(out, sung, 4, 0.03f, 0.12f, 0.25f, 0.35f, 0.5f);
+  }
+  const float swell[] = {root, root * 1.5f, root * 2.0f};
+  Choir(out, swell, 3, sigil::kIgniteStart - 0.05f, 0.55f, 0.5f, 0.5f, 0.4f);
+  Normalize(out.samples, 0.85f);
+  return out.samples;
+}
 void Normalize(std::vector<float>& samples, float peak) {
   float most = 0.0f;
   for (float s : samples) most = std::max(most, std::fabs(s));
@@ -997,6 +1262,221 @@ std::vector<float> Make(Sound sound, uint32_t rate) {
       Normalize(out.samples, 0.85f);
       return out.samples;
     }
+    case Sound::HarpNote: {  // blue: a concert harp, C4
+      Buffer out(rate, 2.8f);
+      Harp(out, kC4, 0.0f, 1.0f, 1.0f);
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::ChoirNote: {  // amber: a short "ah" (it plays on every landing)
+      Buffer out(rate, 1.1f);
+      const float note[] = {kC4};
+      Choir(out, note, 1, 0.0f, 0.05f, 0.18f, 0.55f, 1.0f);
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::OrganNote: {  // green: an 8' flute, the pipe's chiff as it speaks
+      Buffer out(rate, 1.6f);
+      Organ(out, Flute(), kC4, 0.0f, 0.025f, 0.3f, 0.16f, 1.0f, 0.6f);
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::BowlNote: {  // rose: a singing bowl, its partials beating
+      Buffer out(rate, 3.4f);
+      Bowl(out, kC5, 0.0f, 1.0f, 1.0f);
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::PearlNote: {  // pearl: a bright harp and a celesta, a choir shimmer over them
+      Buffer out(rate, 2.2f);
+      Harp(out, kC5, 0.0f, 0.8f, 0.7f);
+      Celesta(out, kC5, 0.0f, 0.45f);
+      Celesta(out, kC6, 0.004f, 0.2f);
+      const float shimmer[] = {kC6};
+      Choir(out, shimmer, 1, 0.02f, 0.15f, 0.15f, 0.5f, 0.15f);
+      Normalize(out.samples, 0.8f);
+      return out.samples;
+    }
+    case Sound::PhialBlue: return Phial(Color::Blue, rate);
+    case Sound::PhialAmber: return Phial(Color::Amber, rate);
+    case Sound::PhialGreen: return Phial(Color::Green, rate);
+    case Sound::PhialRose: return Phial(Color::Rose, rate);
+    case Sound::PhialPearl: return Phial(Color::Pearl, rate);
+    case Sound::MixSwell: {  // a choir "ah" on Gsus2 (open), the globe's glass answering
+      Buffer out(rate, 1.4f);
+      const float chord[] = {kG3, kG3 * 1.5f, kG3 * 2.25f};
+      Choir(out, chord, 3, 0.0f, 0.3f, 0.2f, 0.55f, 1.0f);
+      GlassRing(out, kG3 * 4.0f, 0.02f, 0.12f);
+      Normalize(out.samples, 0.7f);
+      return out.samples;
+    }
+    case Sound::SealBell: {  // a low bell (G2), the brass leaves' shimmer as they slide
+      Buffer out(rate, 3.4f);
+      Bell(out, kG2, 0.0f, 1.0f);
+      Noise noise;
+      Svf brass;
+      const float k = Svf::K(5200.0f, rate);
+      for (size_t i = 0; i < out.At(0.6f); ++i) {
+        const float t = out.T(i);
+        out.samples[i] +=
+            0.12f * brass.BandK(noise.Next(), k, 0.6f) * Ease(t / 0.06f) * std::exp(-std::max(0.0f, t - 0.06f) / 0.12f);
+      }
+      for (const auto [f, a] : {std::pair{2350.0f, 0.06f}, std::pair{3170.0f, 0.05f}, std::pair{4410.0f, 0.04f}})
+        Partial(out, 0, f, a, 0.05f, 0.35f);
+      Normalize(out.samples, 0.75f);
+      return out.samples;
+    }
+    case Sound::FlaskPour: {  // a soft glass tick and a trickle
+      Buffer out(rate, 0.3f);
+      Partial(out, 0, 2093.0f, 1.0f, 0.0005f, 0.03f);
+      Partial(out, 0, 2093.0f * 2.76f, 0.3f, 0.0005f, 0.012f);
+      Noise noise;
+      Svf water;
+      for (size_t i = 0; i < out.samples.size(); ++i) {
+        const float t = out.T(i);
+        out.samples[i] += 0.5f * water.Band(noise.Next(), 900.0f + 1500.0f * t, 0.35f, rate) * Decay(t, 0.01f, 0.05f);
+      }
+      Plink(out, 0.02f, 700.0f, 0.35f);
+      Normalize(out.samples, 0.35f);
+      return out.samples;
+    }
+    case Sound::Clot: {  // a thick low smear, two beating low tones, bubbles popping
+      Buffer out(rate, 1.6f);
+      Noise noise;
+      Svf smear;
+      const float k = Svf::K(220.0f, rate);
+      for (size_t i = 0; i < out.At(1.45f); ++i) {
+        const float t = out.T(i);
+        smear.BandK(noise.Next(), k, 1.0f);
+        out.samples[i] += 0.9f * smear.low * Decay(t, 0.08f, 0.5f) * (1.0f - Ease((t - 1.1f) / 0.3f));
+      }
+      Partial(out, 0, 116.54f, 0.5f, 0.03f, 0.45f);
+      Partial(out, 0, 123.47f, 0.4f, 0.03f, 0.45f, 1.0f);
+      Partial(out, 0, 349.6f, 0.06f, 0.03f, 0.2f);
+      Partial(out, 0, 370.4f, 0.05f, 0.03f, 0.2f);
+      const float at[] = {0.22f, 0.47f, 0.75f, 1.05f}, freq[] = {180.0f, 150.0f, 210.0f, 130.0f};
+      const float gain[] = {0.35f, 0.3f, 0.25f, 0.2f};
+      for (int b = 0; b < 4; ++b) Plink(out, at[b], freq[b], gain[b]);
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
+    case Sound::SealCrack: {  // a seal cracking, a dissonant organ drone (D2 + F2) over the grinding stop
+      Buffer out(rate, 2.8f);
+      GrindStop(out, 0.5f);
+      Noise noise;
+      Svf crack, fracture;
+      const float k_crack = Svf::K(6000.0f, rate), k_fracture = Svf::K(2500.0f, rate);
+      float last = 0.0f;
+      for (size_t i = 0; i < out.At(0.08f); ++i) {
+        const float n = noise.Next();
+        out.samples[i] += 0.7f * crack.BandK(n - last, k_crack, 0.7f) * Decay(out.T(i), 0.0005f, 0.015f);
+        last = n;
+      }
+      const size_t second = out.At(0.09f);
+      for (size_t i = second; i < out.At(0.21f); ++i)
+        out.samples[i] +=
+            0.45f * fracture.BandK(noise.Next(), k_fracture, 0.8f) * Decay(out.T(i - second), 0.0005f, 0.03f);
+      Partial(out, 0, 3150.0f, 0.12f, 0.0003f, 0.04f);
+      Partial(out, 0, 4870.0f, 0.08f, 0.0003f, 0.025f);
+      Partial(out, second, 2650.0f, 0.1f, 0.0003f, 0.05f);
+      Organ(out, Reed(), 73.42f, 0.15f, 0.12f, 1.45f, 0.25f, 0.3f);
+      Organ(out, Reed(), 87.31f, 0.15f, 0.12f, 1.45f, 0.25f, 0.22f);
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
+    case Sound::PhialSpill: {  // a splash at the glass brim, drips on the obsidian
+      Buffer out(rate, 1.3f);
+      GlassRing(out, kC6, 0.0f, 0.3f);
+      Noise noise;
+      Svf splash;
+      for (size_t i = 0; i < out.At(0.45f); ++i) {
+        const float t = out.T(i);
+        out.samples[i] +=
+            splash.Band(noise.Next(), 1500.0f * std::exp(-6.0f * t) + 300.0f, 0.3f, rate) * Decay(t, 0.01f, 0.09f);
+      }
+      const float at[] = {0.42f, 0.64f, 0.92f}, freq[] = {1300.0f, 1150.0f, 1000.0f}, gain[] = {0.3f, 0.25f, 0.2f};
+      for (int d = 0; d < 3; ++d) {
+        Plink(out, at[d], freq[d], gain[d]);
+        Partial(out, out.At(at[d]), 2.76f * freq[d], 0.05f, 0.0005f, 0.02f);
+      }
+      Normalize(out.samples, 0.75f);
+      return out.samples;
+    }
+    case Sound::HollowPhial: {  // a hollow glass knock, then two harp notes falling (E4, C4): not enough
+      Buffer out(rate, 2.0f);
+      Knock(out, 0.0f, 330.0f, 0.7f);
+      Partial(out, 0, 660.0f, 0.3f, 0.001f, 0.08f);
+      Partial(out, 0, 1821.0f, 0.12f, 0.001f, 0.04f);
+      Harp(out, kC4 * 1.25f, 0.18f, 0.6f, 0.5f);
+      Harp(out, kC4, 0.42f, 0.65f, 0.6f);
+      Normalize(out.samples, 0.75f);
+      return out.samples;
+    }
+    case Sound::Amen: {  // after the last phial's own sound: the organ's IV-I and the choir's "a-men" as the sigil
+                         // lights
+      const float a = sigil::kIgniteStart, m = kAmenFinal;
+      Buffer out(rate, sigil::kSolvedLength + 1.1f);
+      // IV (F6/9: it holds C, G and D, the notes of every phial's swell under it), with a breath before the "-men".
+      const float four[] = {87.31f, 130.81f, 196.0f, 220.0f, 293.66f};
+      for (int k = 0; k < 5; ++k) {
+        const float at = a + 0.03f * static_cast<float>(k);
+        Organ(out, Principal(), four[k], at, 0.25f, (m - 0.25f) - (at + 0.25f), 0.3f, 0.22f);
+      }
+      const float ah[] = {174.61f, 220.0f, 261.63f};
+      Choir(out, ah, 3, a, 0.3f, 0.9f, 0.25f, 0.35f, kAh);
+      // I, the plagal amen: F -> E, A -> G, C held.
+      for (const float f : {kC2, kG2, kC3, kG3, kC4, kC4 * 1.25f})
+        Organ(out, Principal(), f, m, 0.12f, 0.85f, 0.35f, 0.22f);
+      const float men[] = {164.81f, 196.0f, 261.63f};
+      Choir(out, men, 3, m, 0.15f, 0.65f, 0.5f, 0.45f, kEh);
+      const float roll[] = {kC4, kC4 * 1.25f, kC4 * 1.5f, kC5};  // the sparkle as the rings light
+      for (int k = 0; k < 4; ++k) Harp(out, roll[k], m + 0.04f * static_cast<float>(k), 0.25f, 0.5f);
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
+    case Sound::GreatWork: {  // 4-15: the pedal swells, the choir joins voice by voice, a harp climbs the long groove,
+                              // the full chord as both sigils are lit
+      const float a = sigil::kIgniteStart, full = sigil::kGrandLength;
+      Buffer out(rate, 7.0f);
+      Organ(out, Principal(), kC2, a, 1.5f, full + 1.2f - a - 1.5f, 0.45f, 0.35f);
+      Organ(out, Principal(), kG2, a, 1.5f, full + 1.2f - a - 1.5f, 0.45f, 0.28f);
+      const float voices[] = {kG3, kC4, kC4 * 1.125f, kG3 * 2.0f}, enter[] = {0.0f, 0.4f, 0.8f, 1.2f};
+      Choir(out, voices, 4, a + 0.1f, 0.6f, (full - 0.2f) - (a + 0.1f) - 0.6f, 0.2f, 0.5f, kAh, enter);
+      for (int k = 0; k < 15; ++k) {
+        const float step = static_cast<float>(k);
+        Harp(out, kC3 * ClimbPitch(k), 2.0f + 0.12f * step, 0.2f + 0.01f * step, 0.3f);
+      }
+      for (const float f : {kC2, kG2, kC3, kG3, kC4, kC4 * 1.25f, kC4 * 1.5f, kC5})
+        Organ(out, Mixture(), f, full, 0.06f, 1.2f, 0.45f, 0.16f);
+      const float chord[] = {kC4, kC4 * 1.25f, kC4 * 1.5f, kC5};
+      Choir(out, chord, 4, full, 0.12f, 1.0f, 1.0f, 0.55f);
+      const float roll[] = {kC4, kC4 * 1.25f, kC4 * 1.5f, kC5, kC5 * 1.25f, kC5 * 1.5f};
+      for (int k = 0; k < 6; ++k) Harp(out, roll[k], full + 0.04f * static_cast<float>(k), 0.28f, 0.8f);
+      Bell(out, kC3, full, 0.5f);
+      GlassRing(out, 1567.98f, full + 0.05f, 0.12f);
+      Normalize(out.samples, 0.85f);
+      return out.samples;
+    }
+    case Sound::Kindle: {  // the map: a candle catching (a soft whoosh, a fwump, crackles)
+      Buffer out(rate, 0.9f);
+      Noise noise;
+      Svf air, spark;
+      for (size_t i = 0; i < out.At(0.85f); ++i) {
+        const float t = out.T(i);
+        out.samples[i] += 0.8f * air.Band(noise.Next(), 400.0f + 1400.0f * std::min(1.0f, t / 0.25f), 0.5f, rate) *
+                          Ease(t / 0.12f) * std::exp(-std::max(0.0f, t - 0.12f) / 0.16f);
+      }
+      Sine(out, 0.0f, 0.18f, 90.0f, 140.0f, 0.35f, 0.01f, 0.06f);
+      const float k = Svf::K(3000.0f, rate);
+      const float at[] = {0.30f, 0.42f, 0.55f}, gain[] = {0.3f, 0.2f, 0.15f};
+      for (int c = 0; c < 3; ++c) {
+        const size_t from = out.At(at[c]);
+        for (size_t i = from; i < out.At(at[c] + 0.004f); ++i)
+          out.samples[i] += gain[c] * spark.BandK(noise.Next(), k, 0.8f) * Decay(out.T(i - from), 0.0003f, 0.0015f);
+      }
+      Normalize(out.samples, 0.5f);
+      return out.samples;
+    }
     case Sound::Tap:
     case Sound::Count: {
       Buffer out(rate, 0.06f);
@@ -1016,6 +1496,16 @@ Sound NoteFor(SoundSet set, Color color) {
   if (set == SoundSet::Canal && color == Color::Blue) return Sound::VibesNote;
   if (set == SoundSet::Canal && color == Color::Amber) return Sound::BassNote;
   if (set == SoundSet::Canal && color == Color::Green) return Sound::RhodesNote;
+  if (set == SoundSet::Sanctum) {
+    switch (color) {
+      case Color::Blue: return Sound::HarpNote;
+      case Color::Amber: return Sound::ChoirNote;
+      case Color::Green: return Sound::OrganNote;
+      case Color::Rose: return Sound::BowlNote;
+      case Color::Pearl: return Sound::PearlNote;
+      default: break;  // ink, mud: the Workshop's
+    }
+  }
   switch (color) {
     case Color::Blue: return Sound::NoteBlue;
     case Color::Amber: return Sound::NoteAmber;
@@ -1033,6 +1523,16 @@ Sound ChordFor(SoundSet set, Color color) {
   if (set == SoundSet::Canal && color == Color::Blue) return Sound::HarbourBlue;
   if (set == SoundSet::Canal && color == Color::Amber) return Sound::HarbourAmber;
   if (set == SoundSet::Canal && color == Color::Green) return Sound::HarbourGreen;
+  if (set == SoundSet::Sanctum) {
+    switch (color) {
+      case Color::Blue: return Sound::PhialBlue;
+      case Color::Amber: return Sound::PhialAmber;
+      case Color::Green: return Sound::PhialGreen;
+      case Color::Rose: return Sound::PhialRose;
+      case Color::Pearl: return Sound::PhialPearl;
+      default: break;
+    }
+  }
   switch (color) {
     case Color::Blue: return Sound::ChordBlue;
     case Color::Amber: return Sound::ChordAmber;
@@ -1052,7 +1552,10 @@ const char* SoundName(Sound sound) {
       "PaidAmber",     "Sludge",       "JarTap",       "SpillWood",    "ShortDull",   "RackClack",  "Till",
       "MarketDay",     "CorkPop",      "ShopBell",     "VibesNote",    "BassNote",    "RhodesNote", "HarbourBlue",
       "HarbourAmber",  "HarbourGreen", "LockBrush",    "MillClunk",    "GateClank",   "Murk",       "Wash",
-      "ShortQuay",     "Gridlock",     "LastOrders",   "RushHour"};
+      "ShortQuay",     "Gridlock",     "LastOrders",   "RushHour",     "HarpNote",    "ChoirNote",  "OrganNote",
+      "BowlNote",      "PearlNote",    "PhialBlue",    "PhialAmber",   "PhialGreen",  "PhialRose",  "PhialPearl",
+      "MixSwell",      "SealBell",     "FlaskPour",    "Clot",         "SealCrack",   "PhialSpill", "HollowPhial",
+      "Amen",          "GreatWork",    "Kindle"};
   static_assert(std::size(kNames) == static_cast<size_t>(Sound::Count));
   return sound < Sound::Count ? kNames[static_cast<size_t>(sound)] : "?";
 }
@@ -1062,6 +1565,7 @@ Sound MudFor(SoundSet set) {
     case SoundSet::Lantern: return Sound::Smoke;
     case SoundSet::Shop: return Sound::Sludge;
     case SoundSet::Canal: return Sound::Murk;
+    case SoundSet::Sanctum: return Sound::Clot;
     default: return Sound::Thud;
   }
 }
@@ -1071,6 +1575,7 @@ Sound PourFor(SoundSet set) {
     case SoundSet::Lantern: return Sound::CruciblePour;
     case SoundSet::Shop: return Sound::JarTap;
     case SoundSet::Canal: return Sound::LockBrush;
+    case SoundSet::Sanctum: return Sound::FlaskPour;
     default: return Sound::Pour;
   }
 }
@@ -1078,16 +1583,24 @@ Sound PourFor(SoundSet set) {
 Sound SolvedFor(SoundSet set, bool grand) {
   if (set == SoundSet::Shop) return grand ? Sound::MarketDay : Sound::Till;
   if (set == SoundSet::Canal) return grand ? Sound::RushHour : Sound::LastOrders;
+  if (set == SoundSet::Sanctum) return grand ? Sound::GreatWork : Sound::Amen;
   if (set != SoundSet::Lantern) return Sound::Fanfare;
   return grand ? Sound::RoseWindow : Sound::Heart;
 }
 
-Sound JamFor(SoundSet set) { return set == SoundSet::Canal ? Sound::Gridlock : Sound::Grind; }
+Sound JamFor(SoundSet set) {
+  switch (set) {
+    case SoundSet::Canal: return Sound::Gridlock;
+    case SoundSet::Sanctum: return Sound::SealCrack;
+    default: return Sound::Grind;
+  }
+}
 
 Sound SpillFor(SoundSet set) {
   switch (set) {
     case SoundSet::Shop: return Sound::SpillWood;
     case SoundSet::Canal: return Sound::Wash;
+    case SoundSet::Sanctum: return Sound::PhialSpill;
     default: return Sound::Splash;
   }
 }
@@ -1096,6 +1609,7 @@ Sound ShortFor(SoundSet set) {
   switch (set) {
     case SoundSet::Shop: return Sound::ShortDull;
     case SoundSet::Canal: return Sound::ShortQuay;
+    case SoundSet::Sanctum: return Sound::HollowPhial;
     default: return Sound::Count;
   }
 }
@@ -1103,6 +1617,13 @@ Sound ShortFor(SoundSet set) {
 Sound TurnFor(SoundSet set) { return set == SoundSet::Shop ? Sound::RackClack : Sound::Click; }
 Sound MillFor(SoundSet set) { return set == SoundSet::Canal ? Sound::MillClunk : Sound::Click; }
 Sound GateFor(SoundSet set) { return set == SoundSet::Canal ? Sound::GateClank : Sound::Click; }
+
+MixVoice MixFor(SoundSet set, Color made) {
+  if (set != SoundSet::Sanctum)
+    return {NoteFor(set, Color::Green), 0.75f};  // as before, for every mix (pearl, mud too)
+  if (made == Color::Mud) return {Sound::Clot, 1.0f};
+  return {Sound::MixSwell, made == Color::Pearl ? 1.5f : 1.0f};
+}
 
 float HeartOnset(int j) { return -std::log(1.0f - 0.98f * static_cast<float>(std::clamp(j, 0, 11)) / 12.0f) / 3.5f; }
 

@@ -31,6 +31,20 @@ constexpr float kBassDecay[] = {1.1f, 0.7f, 0.4f, 0.25f};
 constexpr float kHornNotes[] = {146.83f, 130.81f};
 constexpr float kHornAmp[] = {1.0f, 0.6f, 0.35f, 0.2f, 0.1f};
 constexpr float kHornLength = 2.6f;
+// The sanctum: the organ's pedal (harmonics 1..4: a phone plays C2 + G2 from their 2nd-4th), the candles' crackle, a
+// far choir ("ah" on G3 + D4, then A3 + E4: harmonic weights for those singers' first two formants), a low bell (C3
+// then G2, ringing twice as long as the shop's).
+constexpr float kDroneNotes[] = {65.41f, 98.0f}, kDroneAmp[] = {1.0f, 0.75f};
+constexpr float kDroneHarm[] = {1.0f, 0.6f, 0.35f, 0.2f};
+constexpr float kDroneGain = 0.016f, kCrackleGain = 0.03f, kCrackleRate = 3.5f, kChoirGain = 0.012f,
+                kBreathGain = 0.03f;
+constexpr float kChoirNotes[2][2] = {{196.0f, 293.66f}, {220.0f, 329.63f}};
+constexpr float kChoirHarm[] = {0.25f, 0.3f, 0.45f, 0.8f, 0.5f, 0.45f};
+constexpr float kChoirLength = 6.0f;
+constexpr float kLowBellNotes[] = {130.81f, 98.0f};
+constexpr Ambience::FarBell kShopBell{Ambience::kBellSeconds, kBellFirst, kBellRing, kBellGain, 0.7f, 1.0f, kBellNotes};
+constexpr Ambience::FarBell kLowBell{
+    Ambience::kLowBellSeconds, Ambience::kLowBellFirst, 7.0f, 0.07f, 0.85f, 2.0f, kLowBellNotes};
 
 float Smooth(float x) {
   x = std::clamp(x, 0.0f, 1.0f);
@@ -68,22 +82,22 @@ void Ambience::SetTarget(float gain, float seconds) {
   target_.store(std::clamp(gain, 0.0f, 1.0f));
 }
 
-// The far bell at `frame` (silent between rings), from down the street on the left: softer on the right.
-float Ambience::Bell(uint64_t frame, int channel) const {
-  const uint64_t period = static_cast<uint64_t>(kBellSeconds * static_cast<float>(rate_));
-  const uint64_t shifted = frame + period - static_cast<uint64_t>(kBellFirst * static_cast<float>(rate_));
+// A far bell at `frame` (silent between rings), from off to the left: softer on the right.
+float Ambience::Bell(uint64_t frame, int channel, const FarBell& bell) const {
+  const uint64_t period = static_cast<uint64_t>(bell.seconds * static_cast<float>(rate_));
+  const uint64_t shifted = frame + period - static_cast<uint64_t>(bell.first * static_cast<float>(rate_));
   const double t = static_cast<double>(shifted % period) / static_cast<double>(rate_);
-  if (t >= kBellRing) return 0.0f;
-  const float note = kBellNotes[(shifted / period) % 2];
+  if (t >= bell.ring) return 0.0f;
+  const float note = bell.notes[(shifted / period) % 2];
   const float attack = std::min(1.0f, static_cast<float>(t) / 0.004f);
-  const float fade = 1.0f - Smooth((static_cast<float>(t) - (kBellRing - 0.5f)) / 0.5f);  // nothing cut short
+  const float fade = 1.0f - Smooth((static_cast<float>(t) - (bell.ring - 0.5f)) / 0.5f);  // nothing cut short
   float v = 0.0f;
   for (int k = 0; k < 5; ++k) {
     const double turns = t * static_cast<double>(note * kBellRatio[k]);
     v += kBellAmp[k] * Sine(static_cast<float>(turns - std::floor(turns))) *
-         std::exp(-static_cast<float>(t) / kBellDecay[k]);
+         std::exp(-static_cast<float>(t) / (kBellDecay[k] * bell.decay_scale));
   }
-  return kBellGain * (channel == 0 ? 1.0f : 0.7f) * attack * fade * v;
+  return bell.gain * (channel == 0 ? 1.0f : bell.right) * attack * fade * v;
 }
 
 // The canal's bass, `into` the chord: its root plucked as the chord starts, its fifth halfway through.
@@ -115,6 +129,26 @@ float Ambience::Horn(uint64_t frame) const {
   return kHornGain * env * v;
 }
 
+// The sanctum's far choir at `frame` (silent between breaths): a swell up and a long fade; `env` = how loud it is.
+float Ambience::Choir(uint64_t frame, float& env) const {
+  const uint64_t period = static_cast<uint64_t>(kChoirSeconds * static_cast<float>(rate_));
+  const uint64_t shifted = frame + period - static_cast<uint64_t>(kChoirFirst * static_cast<float>(rate_));
+  const double t = static_cast<double>(shifted % period) / static_cast<double>(rate_);
+  env = 0.0f;
+  if (t >= kChoirLength) return 0.0f;
+  const float s = static_cast<float>(t);
+  env = Smooth(s / 2.5f) * (1.0f - Smooth((s - 3.0f) / 3.0f));
+  const float* notes = kChoirNotes[(shifted / period) % 2];
+  float v = 0.0f;
+  for (int n = 0; n < 2; ++n) {
+    for (int h = 0; h < 6; ++h) {
+      const double turns = t * static_cast<double>(notes[n]) * static_cast<double>(h + 1);
+      v += kChoirHarm[h] * Sine(static_cast<float>(turns - std::floor(turns)));
+    }
+  }
+  return kChoirGain * env * v;
+}
+
 void Ambience::Render(float* stereo, uint32_t frames) {
   const float target = target_.load(), step = step_.load();
   const Bed wanted = wanted_.load();
@@ -127,6 +161,9 @@ void Ambience::Render(float* stereo, uint32_t frames) {
   const float k_water = 2.0f * std::sin(std::numbers::pi_v<float> * 320.0f / rate);
   const float k_trickle = 2.0f * std::sin(std::numbers::pi_v<float> * 1500.0f / rate);
   const float k_brush = 2.0f * std::sin(std::numbers::pi_v<float> * 3800.0f / rate);
+  const float k_breath = 2.0f * std::sin(std::numbers::pi_v<float> * 1100.0f / rate);  // the choir's breath
+  const float k_crackle = 2.0f * std::sin(std::numbers::pi_v<float> * 2000.0f / rate);
+  const float crackle_fall = std::exp(-1.0f / (0.002f * rate));
   for (uint32_t i = 0; i < frames; ++i, ++frame_) {
     if (gain_ < target) gain_ = std::min(target, gain_ + step);
     if (gain_ > target) gain_ = std::max(target, gain_ - step);
@@ -139,17 +176,18 @@ void Ambience::Render(float* stereo, uint32_t frames) {
         low_[0] = low_[1] = band_[0] = band_[1] = 0.0f;
         trickle_low_[0] = trickle_low_[1] = trickle_band_[0] = trickle_band_[1] = 0.0f;
         brush_low_[0] = brush_low_[1] = brush_band_[0] = brush_band_[1] = 0.0f;
+        crackle_low_[0] = crackle_low_[1] = crackle_band_[0] = crackle_band_[1] = crackle_[0] = crackle_[1] = 0.0f;
       }
     } else if (switch_ < 1.0f) {
       switch_ = std::min(1.0f, switch_ + switch_step);
     }
-    const bool shop = bed_ == Bed::Shop, canal = bed_ == Bed::Canal;
+    const bool shop = bed_ == Bed::Shop, canal = bed_ == Bed::Canal, sanctum = bed_ == Bed::Sanctum;
     const uint64_t chord = frame_ / chord_frames;
     const float into = static_cast<float>(frame_ - chord * chord_frames) / rate;
     float out[2] = {0.0f, 0.0f};
     // Phases: [layer][voice][channel]; chords alternate between two layers, so the one fading out
     // keeps its phases while the next fades in.
-    for (int age = 0; age < 2 && !canal; ++age) {  // the current chord and the one before it (the canal: no pad)
+    for (int age = 0; age < 2 && !canal && !sanctum; ++age) {  // the chord and the one before (canal, sanctum: no pad)
       if (age == 1 && chord == 0) break;
       const uint64_t c = chord - static_cast<uint64_t>(age);
       const float env = Envelope(into + kChordSeconds * static_cast<float>(age));
@@ -200,12 +238,19 @@ void Ambience::Render(float* stereo, uint32_t frames) {
       const float push = 0.5f + 0.5f * Sine(static_cast<float>(beats - std::floor(beats)));
       swirl = 0.3f + 0.4f * round + 0.3f * push * push * push * push;
     }
-    const float k = canal ? k_water : shop ? k_street : k_air;
+    // The sanctum: the far choir (one voice for both sides) and the drone's slow breathing.
+    float choir_env = 0.0f, sanctum_mono = 0.0f, drone_swell = 0.0f;
+    if (sanctum) {
+      sanctum_mono = Choir(frame_, choir_env);
+      const double turns16 = static_cast<double>(frame_) / (2.0 * kDroneSwell * static_cast<double>(rate_));
+      drone_swell = 0.6f + 0.4f * Sine(static_cast<float>(turns16 - std::floor(turns16)));
+    }
+    const float k = canal ? k_water : shop ? k_street : sanctum ? k_breath : k_air;
     for (int ch = 0; ch < 2; ++ch) {
       noise_[ch] = noise_[ch] * 1664525u + 1013904223u;
       const float n = static_cast<float>(noise_[ch] >> 8) / 8388608.0f - 1.0f;
       low_[ch] += k * band_[ch];
-      band_[ch] += k * (n - low_[ch] - (shop || canal ? 0.9f : 1.2f) * band_[ch]);
+      band_[ch] += k * (n - low_[ch] - (shop || canal ? 0.9f : sanctum ? 0.6f : 1.2f) * band_[ch]);
       if (canal) {
         // The water laps in two uneven slow rhythms (different on each side), a trickle riding the slaps.
         const double t = static_cast<double>(frame_) / static_cast<double>(rate_);
@@ -219,10 +264,34 @@ void Ambience::Render(float* stereo, uint32_t frames) {
         brush_band_[ch] += k_brush * (n - brush_low_[ch] - 0.7f * brush_band_[ch]);
         out[ch] += kWaterGain * lap * band_[ch] + kTrickleGain * lap * lap * trickle_band_[ch] +
                    kBrushGain * swirl * brush_band_[ch] + (ch == 0 ? 1.0f : 0.8f) * canal_mono;
+      } else if (sanctum) {
+        // The pedal: C2 and G2, the right a hair sharp (the pad's phases are free in this bed).
+        float drone = 0.0f;
+        for (int j = 0; j < 2; ++j) {
+          float& phase = phase_[static_cast<size_t>(2 * j + ch)];
+          phase = Wrap(phase + kDroneNotes[j] * (ch ? 1.0015f : 1.0f) / rate);
+          float v = 0.0f;
+          for (int h = 0; h < 4; ++h) v += kDroneHarm[h] * Sine(Wrap(static_cast<float>(h + 1) * phase));
+          drone += kDroneAmp[j] * v;
+        }
+        // The candles: now and then a crackle, dying in ~2 ms, through a band at 2 kHz.
+        crackle_noise_ = crackle_noise_ * 1664525u + 1013904223u;
+        const float u = static_cast<float>(crackle_noise_ >> 8) / 16777216.0f;
+        if (u < kCrackleRate / rate) {
+          crackle_noise_ = crackle_noise_ * 1664525u + 1013904223u;
+          crackle_[ch] = 0.4f + 0.6f * static_cast<float>(crackle_noise_ >> 8) / 16777216.0f;
+        } else {
+          crackle_[ch] *= crackle_fall;
+        }
+        crackle_low_[ch] += k_crackle * crackle_band_[ch];
+        crackle_band_[ch] += k_crackle * (crackle_[ch] * n - crackle_low_[ch] - 0.9f * crackle_band_[ch]);
+        out[ch] += kDroneGain * drone_swell * drone + kCrackleGain * crackle_band_[ch] +
+                   (ch == 0 ? 1.0f : 0.8f) * sanctum_mono + kBreathGain * choir_env * band_[ch] +
+                   Bell(frame_, ch, kLowBell);
       } else if (shop) {
         flutter_[ch] += talk * (n - flutter_[ch]);
         const float voices = std::clamp(0.65f + 35.0f * flutter_[ch], 0.2f, 1.2f);
-        out[ch] += kMurmurGain * swell * voices * band_[ch] + Bell(frame_, ch);
+        out[ch] += kMurmurGain * swell * voices * band_[ch] + Bell(frame_, ch, kShopBell);
       } else {
         out[ch] += kAirGain * swell * band_[ch];
       }

@@ -16,6 +16,8 @@
 // - Canal (World 3): the canals late at night. No pad: water lapping at the quays (low noise in slow,
 //   uneven slaps, a little trickle on top), a soft brush swirling on a snare, a plucked bass playing each
 //   chord's root and its fifth halfway, and a boat's horn far off every 24 s.
+// - Sanctum (World 4): the alchemists' hall by candlelight. No pad: an organ's pedal drone (C2 + G2) breathing in and
+//   out over 16 s, candle crackle (sparse soft clicks), a far choir's breath every 20 s and a low bell every 30 s.
 //
 // Plain C++ (no engine): Render runs on the audio thread, SetTarget and SetBed on the game thread. The
 // gain ramps per sample towards the target, so ducking and fades never click; a new bed fades the old
@@ -24,7 +26,7 @@ namespace threadlock {
 
 class Ambience {
  public:
-  enum class Bed : uint8_t { Lantern, Shop, Canal };
+  enum class Bed : uint8_t { Lantern, Shop, Canal, Sanctum };
 
   explicit Ambience(uint32_t sample_rate);
 
@@ -37,16 +39,27 @@ class Ambience {
   void SetBed(Bed bed) { wanted_.store(bed); }
 
   static constexpr float kChordSeconds = 8.0f;
-  static constexpr float kBellSeconds = 20.0f;                      // the shop's far bell
-  static constexpr float kHornSeconds = 24.0f, kHornFirst = 11.0f;  // the canal's far horn
+  static constexpr float kBellSeconds = 20.0f;                       // the shop's far bell
+  static constexpr float kHornSeconds = 24.0f, kHornFirst = 11.0f;   // the canal's far horn
+  static constexpr float kDroneSwell = 8.0f;                         // the sanctum: 8 s up, 8 s down
+  static constexpr float kChoirSeconds = 20.0f, kChoirFirst = 9.0f;  // its far choir
+  // Its low bell: 16 + 30 n falls at 16 or 46 mod 60, never inside a choir breath (9-15, 29-35, 49-55 mod 60).
+  static constexpr float kLowBellSeconds = 30.0f, kLowBellFirst = 16.0f;
   static constexpr float kSwitchSeconds = 0.4f;
   static constexpr int kVoices = 5;
+  // A far bell: how often and when first, how long one rings, its gain, the right channel's share, its partials'
+  // decay (x the shop bell's), its two notes in turn.
+  struct FarBell {
+    float seconds, first, ring, gain, right, decay_scale;
+    const float* notes;
+  };
 
  private:
   static constexpr int kTable = 2048;
 
   float Sine(float phase) const;  // phase in turns, [0, 1)
-  float Bell(uint64_t frame, int channel) const;
+  float Bell(uint64_t frame, int channel, const FarBell& bell) const;
+  float Choir(uint64_t frame, float& env) const;  // the sanctum's far choir, and how loud its breath is
   float Horn(uint64_t frame) const;
   float Bass(float into, const float* notes) const;
 
@@ -66,6 +79,9 @@ class Ambience {
   float flutter_[2] = {};                             // the murmur's talk: very low-passed noise
   float trickle_low_[2] = {}, trickle_band_[2] = {};  // the canal: the water's high band
   float brush_low_[2] = {}, brush_band_[2] = {};      // the brushes
+  float crackle_[2] = {};                             // the sanctum: the candles' last crackle, dying
+  uint32_t crackle_noise_ = 0x2545F491u;
+  float crackle_low_[2] = {}, crackle_band_[2] = {};
 };
 
 }  // namespace threadlock

@@ -10,6 +10,7 @@
 #include "../src/audio_synth.h"
 #include "../src/barges.h"
 #include "../src/rose_window.h"
+#include "../src/sigil_look.h"
 #include "doctest.h"
 
 using namespace threadlock;
@@ -308,6 +309,124 @@ TEST_SUITE("audio") {
     ambience.SetTarget(1.0f, 0.5f);
     RenderBed(ambience, 4.0f);
     ambience.SetBed(Ambience::Bed::Canal);
+    const Bed bed = RenderBed(ambience, 4.0f);
+    CHECK(bed.finite);
+    CHECK(bed.step < 0.02f);
+    const float handover = Rms(bed.left, Ambience::kSwitchSeconds - 0.01f, Ambience::kSwitchSeconds + 0.01f);
+    CHECK(handover < 0.25f * Rms(bed.left, 2.0f, 3.0f));
+  }
+}
+
+TEST_SUITE("audio") {
+  using synth::Sound;
+  using synth::SoundSet;
+  TEST_CASE("the Sanctum set's voices") {
+    CHECK(synth::NoteFor(SoundSet::Sanctum, Color::Blue) == Sound::HarpNote);
+    CHECK(synth::NoteFor(SoundSet::Sanctum, Color::Amber) == Sound::ChoirNote);
+    CHECK(synth::NoteFor(SoundSet::Sanctum, Color::Green) == Sound::OrganNote);
+    CHECK(synth::NoteFor(SoundSet::Sanctum, Color::Rose) == Sound::BowlNote);
+    CHECK(synth::NoteFor(SoundSet::Sanctum, Color::Pearl) == Sound::PearlNote);
+    CHECK(synth::ChordFor(SoundSet::Sanctum, Color::Blue) == Sound::PhialBlue);
+    CHECK(synth::ChordFor(SoundSet::Sanctum, Color::Amber) == Sound::PhialAmber);
+    CHECK(synth::ChordFor(SoundSet::Sanctum, Color::Green) == Sound::PhialGreen);
+    CHECK(synth::ChordFor(SoundSet::Sanctum, Color::Rose) == Sound::PhialRose);
+    CHECK(synth::ChordFor(SoundSet::Sanctum, Color::Pearl) == Sound::PhialPearl);
+    CHECK(synth::MudFor(SoundSet::Sanctum) == Sound::Clot);
+    CHECK(synth::PourFor(SoundSet::Sanctum) == Sound::FlaskPour);
+    CHECK(synth::SolvedFor(SoundSet::Sanctum, false) == Sound::Amen);
+    CHECK(synth::SolvedFor(SoundSet::Sanctum, true) == Sound::GreatWork);
+    CHECK(synth::JamFor(SoundSet::Sanctum) == Sound::SealCrack);
+    CHECK(synth::SpillFor(SoundSet::Sanctum) == Sound::PhialSpill);
+    CHECK(synth::ShortFor(SoundSet::Sanctum) == Sound::HollowPhial);
+    CHECK(synth::TurnFor(SoundSet::Sanctum) == Sound::Click);
+    CHECK(synth::MillFor(SoundSet::Sanctum) == Sound::Click);
+    CHECK(synth::GateFor(SoundSet::Sanctum) == Sound::Click);
+    auto mix = [](SoundSet set, Color made, Sound sound, float pitch) {
+      const synth::MixVoice voice = synth::MixFor(set, made);
+      CHECK(voice.sound == sound);
+      CHECK(voice.pitch == doctest::Approx(pitch));
+    };
+    mix(SoundSet::Sanctum, Color::Green, Sound::MixSwell, 1.0f);
+    mix(SoundSet::Sanctum, Color::Pearl, Sound::MixSwell, 1.5f);
+    mix(SoundSet::Sanctum, Color::Mud, Sound::Clot, 1.0f);
+    mix(SoundSet::Sanctum, Color::Blue, Sound::MixSwell, 1.0f);
+    // Elsewhere every mix is the set's green note at 0.75, as before.
+    mix(SoundSet::Canal, Color::Green, Sound::RhodesNote, 0.75f);
+    mix(SoundSet::Workshop, Color::Mud, Sound::NoteGreen, 0.75f);
+    mix(SoundSet::Shop, Color::Pearl, Sound::NoteGreen, 0.75f);
+    mix(SoundSet::Lantern, Color::Green, Sound::NoteGreen, 0.75f);
+    CHECK(synth::JamFor(SoundSet::Canal) == Sound::Gridlock);
+    CHECK(synth::MudFor(SoundSet::Canal) == Sound::Murk);
+    CHECK(synth::SolvedFor(SoundSet::Canal, true) == Sound::RushHour);
+  }
+
+  TEST_CASE("a phial full: the glass rings at once, the choir swells with the ignite, quiet once it's lit") {
+    for (Sound sound : {Sound::PhialBlue, Sound::PhialAmber, Sound::PhialGreen, Sound::PhialRose, Sound::PhialPearl}) {
+      const std::string name = synth::SoundName(sound);
+      CAPTURE(name);
+      const std::vector<float> phial = synth::Make(sound, kRate);
+      CHECK(Rms(phial, 0.0f, 0.05f) > 0.05f);
+      CHECK(Rms(phial, 1.0f, 1.5f) > 0.1f * Rms(phial, 0.0f, 0.5f));
+      CHECK(Rms(phial, sigil::kIgniteStart + 1.85f, 99.0f) < 0.1f * Rms(phial, 0.1f, 1.0f));
+      CHECK(synth::Make(sound, kRate) == phial);
+    }
+  }
+
+  TEST_CASE("the sanctum's solved runs: the amen as the sigil ignites, the Great Work's chord when both are lit") {
+    const std::vector<float> amen = synth::Make(Sound::Amen, kRate);
+    const long ignite = static_cast<long>(sigil::kIgniteStart * kRate);
+    CHECK(Peak(std::vector<float>(amen.begin(), amen.begin() + ignite)) == 0.0f);
+    const float m = synth::kAmenFinal;
+    CHECK(Rms(amen, m + 0.15f, m + 0.5f) > 1.3f * Rms(amen, m - 0.12f, m - 0.02f));  // the "-men" after the breath
+    CHECK(Rms(amen, sigil::kSolvedLength + 0.7f, 99.0f) < 0.1f * Rms(amen, m, m + 0.8f));
+    const std::vector<float> great = synth::Make(Sound::GreatWork, kRate);
+    CHECK(Peak(std::vector<float>(great.begin(), great.begin() + ignite)) == 0.0f);
+    const float full = sigil::kGrandLength;
+    CHECK(Rms(great, full + 0.01f, full + 0.2f) > 1.5f * Rms(great, full - 0.3f, full - 0.05f));
+    CHECK(Rms(great, 0.8f, 1.6f) > 0.01f);  // the pedal swelling
+    CHECK(great.size() > amen.size());
+  }
+
+  TEST_CASE("the sanctum's moments") {
+    const std::vector<float> bell = synth::Make(Sound::SealBell, kRate);
+    CHECK(Rms(bell, 0.0f, 0.03f) > 0.05f);  // on the release tick, no delay
+    CHECK(Rms(bell, 1.0f, 1.5f) > 0.03f * Rms(bell, 0.0f, 0.3f));
+    const std::vector<float> clot = synth::Make(Sound::Clot, kRate);
+    CHECK(Rms(clot, 1.5f, 99.0f) < 0.1f * Rms(clot, 0.0f, 0.6f));
+    const std::vector<float> crack = synth::Make(Sound::SealCrack, kRate);
+    CHECK(Rms(crack, 0.0f, 0.03f) > 0.05f);
+    CHECK(Rms(crack, 1.0f, 1.5f) > 0.1f * Rms(crack, 0.0f, 0.5f));
+    const std::vector<float> hollow = synth::Make(Sound::HollowPhial, kRate);
+    CHECK(Rms(hollow, 0.422f, 0.46f) > 1.3f * Rms(hollow, 0.38f, 0.415f));
+    for (Sound sound : {Sound::Clot, Sound::BowlNote, Sound::MixSwell, Sound::ChoirNote, Sound::GreatWork})
+      CHECK(synth::Make(sound, kRate) == synth::Make(sound, kRate));
+  }
+
+  TEST_CASE("the sanctum's ambience: quiet, finite, click-free, a far choir and a low bell") {
+    Ambience ambience(kRate);
+    ambience.SetBed(Ambience::Bed::Sanctum);
+    ambience.SetTarget(1.0f, 2.0f);
+    const Bed bed = RenderBed(ambience, 50.0f);
+    CHECK(bed.finite);
+    CHECK(bed.peak > 0.02f);
+    CHECK(bed.peak <= 0.3f);
+    CHECK(bed.step < 0.02f);
+    for (float at : {Ambience::kChoirFirst, Ambience::kChoirFirst + Ambience::kChoirSeconds}) {
+      CAPTURE(at);
+      CHECK(Rms(bed.left, at + 2.0f, at + 3.0f) > 1.3f * Rms(bed.left, at - 0.8f, at - 0.05f));
+    }
+    for (float at : {Ambience::kLowBellFirst, Ambience::kLowBellFirst + Ambience::kLowBellSeconds}) {
+      CAPTURE(at);
+      CHECK(Rms(bed.left, at + 0.01f, at + 0.3f) > 1.3f * Rms(bed.left, at - 0.6f, at - 0.05f));
+    }
+  }
+
+  TEST_CASE("switching to the sanctum's bed fades through, without a click") {
+    Ambience ambience(kRate);
+    ambience.SetBed(Ambience::Bed::Canal);
+    ambience.SetTarget(1.0f, 0.5f);
+    RenderBed(ambience, 4.0f);
+    ambience.SetBed(Ambience::Bed::Sanctum);
     const Bed bed = RenderBed(ambience, 4.0f);
     CHECK(bed.finite);
     CHECK(bed.step < 0.02f);

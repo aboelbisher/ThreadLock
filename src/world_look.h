@@ -62,7 +62,7 @@ inline constexpr WorldLook kWorldLooks[] = {
     // World 4, The Mixing Hall: the alchemists' sanctum.
     {ArtKind::Sanctum, "The Sanctum", Hex(0x100C17), Hex(0x1A1426, 0.9f), Hex(0xDCC8FF, 0.18f), Hex(0xF2EEFF),
      Hex(0xB4A6D6), Hex(0xE6CC88), Hex(0xDCC8FF), Hex(0x9A6CF2), Hex(0x5A3AA8), Hex(0x1A0E33),
-     synth::SoundSet::Workshop, "Sludge!", "The sigil wakes"},
+     synth::SoundSet::Sanctum, "Sludge!", "The sigil wakes"},
 };
 
 // `world` counts from 1; anything else (the daily, the Lab) gets the workshop look.

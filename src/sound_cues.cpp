@@ -30,7 +30,7 @@ float ListenerGain(const Listener& listener, float y) {
 Cues CuesFor(const std::vector<Event>& events, const Level& level, const Board& board, SoundSet set,
              const Listener& listener) {
   Cues cues;
-  const bool lantern = set == SoundSet::Lantern, canal = set == SoundSet::Canal;
+  const bool lantern = set == SoundSet::Lantern, canal = set == SoundSet::Canal, sanctum = set == SoundSet::Sanctum;
   auto node_at = [&](int node) { return level.nodes[static_cast<size_t>(node)].at; };
   // A sound at a node: panned by its x, softer when it's off the view (failures are always heard in full).
   auto play = [&](Sound sound, float volume, float pitch, int node, bool failure = false) {
@@ -121,7 +121,14 @@ Cues CuesFor(const std::vector<Event>& events, const Level& level, const Board& 
         cues.buzzes.push_back({70, 1.0f});
         break;
       case EventType::Pour: play(synth::PourFor(set), 0.22f, 1.0f, e.node); break;
-      case EventType::Mix: play(synth::NoteFor(set, Color::Green), 0.45f, 0.75f, e.node); break;
+      case EventType::Mix: {
+        // A mixer joins a pair. The sanctum sings the colour it made (a choir swell, pearl a fifth up) or clots (a mud
+        // mix, heard in full: it's on its way to fail where it lands). Elsewhere the Workshop's green note, as before.
+        const synth::MixVoice mix = synth::MixFor(set, e.bead.a);
+        const bool clot = sanctum && e.bead.IsMud();
+        play(mix.sound, clot ? 0.9f : sanctum ? 0.5f : 0.45f, mix.pitch, e.node, clot);
+        break;
+      }
       case EventType::Enter: {
         const int piece = board.PieceAt(e.node);
         if (piece < 0 || board.RoleOf(piece) != PieceRole::Acts) break;  // an idle piece stays still and silent
@@ -132,6 +139,23 @@ Cues CuesFor(const std::vector<Event>& events, const Level& level, const Board& 
         break;
       }
       default: break;
+    }
+  }
+  // The sanctum's twin seals: a twin gate on a twin pair lets both halves' drops go on the same tick (no event of its
+  // own: both Leave). One bell for the pair, between its seals, on that tick (sanctum_art opens the leaves round it).
+  if (sanctum) {
+    for (const Event& e : events) {
+      if (e.type != EventType::Leave) continue;
+      const int twin = level.nodes[static_cast<size_t>(e.node)].twin;
+      if (twin < e.node) continue;  // no twin (-1), or the pair is heard from its first half
+      const int piece = board.PieceAt(e.node);
+      if (piece < 0 || board.PieceInfo(piece).piece.type != PieceType::TwinGate) continue;
+      const bool both = std::any_of(events.begin(), events.end(),
+                                    [&](const Event& f) { return f.type == EventType::Leave && f.node == twin; });
+      if (!both) continue;
+      const Vec2 a = node_at(e.node), b = node_at(twin);
+      cues.sounds.push_back(
+          {Sound::SealBell, 0.6f * ListenerGain(listener, 0.5f * (a.y + b.y)), 1.0f, PanAt(0.5f * (a.x + b.x))});
     }
   }
   if (landed) cues.buzzes.push_back({8, 0.25f});

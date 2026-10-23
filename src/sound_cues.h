@@ -13,8 +13,9 @@
 // window that lights rings a chime, climbing round the window as the run goes, and a drop reaching a
 // drip fall's funnel plinks. On World 2 (Shop) the lazy susan clacks a notch each turn, a spill splashes
 // on the counter and an order short at the end knocks dully (one sound for the run). On World 3 (Canal) a
-// mill clunks and its gates clank a tick later, when their leaves swing; a short harbour's horn sags. On a tall board
-// the listener is the camera: events off the view are softer, failures never.
+// mill clunks and its gates clank a tick later, when their leaves swing; a short harbour's horn sags. On World 4
+// (Sanctum) a mix sings the colour it made (or clots), and twin seals ring one bell as they open together. On a tall
+// board the listener is the camera: events off the view are softer, failures never.
 namespace threadlock {
 
 struct Listener {

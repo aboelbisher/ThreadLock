@@ -28,6 +28,7 @@
 #include "../src/generator.h"
 #include "../src/level_io.h"
 #include "../src/solver.h"
+#include "../src/sound_cues.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -636,8 +637,45 @@ int Sounds(const std::string& dir) {
   play(synth::Sound::HarbourBlue, 10.5f, 0.6f);
   play(synth::Sound::LastOrders, 10.5f, 0.7f);  // the last harbour and the solved run start together
   WriteWav(dir + "/demo_canal_run.wav", run, kRate);
-  std::printf("wrote %s/*.wav (+ Ambience*.wav, demo_lantern_run.wav, demo_shop_run.wav, demo_canal_run.wav)\n",
-              dir.c_str());
+
+  // 30 s of the sanctum's bed (World 4), and the real 4-7 Lean run over it: its cues as the level screen plays them.
+  std::vector<float> sanctum_bed(kBedFrames * 2);
+  Ambience sanctum(kRate);
+  sanctum.SetBed(Ambience::Bed::Sanctum);
+  sanctum.SetTarget(1.0f, 2.0f);
+  const auto t2 = std::chrono::steady_clock::now();
+  for (size_t at = 0; at < kBedFrames; at += 512) {
+    sanctum.Render(sanctum_bed.data() + 2 * at, static_cast<uint32_t>(std::min<size_t>(512, kBedFrames - at)));
+  }
+  const double sanctum_us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t2).count();
+  std::printf("sanctum ambience: %.0f us per second of audio\n", sanctum_us / 30.0);
+  WriteWav(dir + "/AmbienceSanctum.wav", sanctum_bed, kRate);
+  std::vector<World> worlds;
+  const Level* seals = LoadWorlds("assets", worlds, true) ? Find(worlds, "4-7") : nullptr;  // run from the repo root
+  if (seals && seals->pars.Known()) {
+    run.assign(sanctum_bed.begin(), sanctum_bed.begin() + 16 * kRate * 2);
+    for (float& s : run) s *= 0.6f;  // ducked, as while a run plays
+    Board board(*seals);
+    board.SetPlacement(seals->pars.lean);
+    board.Start();
+    CueDelay delay;
+    int tick = 0;
+    while (board.Running()) {
+      const std::vector<Event>& events = board.Tick();
+      const float at = 0.5f + kTick * static_cast<float>(++tick);
+      for (const Cue& cue : delay.Tick(CuesFor(events, *seals, board, synth::SoundSet::Sanctum).sounds))
+        play(cue.sound, at, cue.volume, cue.pitch);
+    }
+    if (board.GetOutcome().solved)  // RunEnded: the amen with the last phial
+      play(synth::SolvedFor(synth::SoundSet::Sanctum, false), 0.5f + kTick * static_cast<float>(tick), 0.7f);
+    WriteWav(dir + "/demo_sanctum_run.wav", run, kRate);
+  } else {
+    std::printf("4-7 not found (run from the repo root): no demo_sanctum_run.wav\n");
+  }
+  std::printf(
+      "wrote %s/*.wav (+ Ambience*.wav, demo_lantern_run.wav, demo_shop_run.wav, demo_canal_run.wav, "
+      "demo_sanctum_run.wav)\n",
+      dir.c_str());
   return 0;
 }
 

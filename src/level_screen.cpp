@@ -419,10 +419,12 @@ void LevelScreen::Update(float dt) {
     if (dev_clock_ >= cv_autoplay.Get()) StartRun();
   }
   // The world's ambience while the level is open (World 1: the tower at dawn, World 2: the street outside the
-  // shop, World 3: the canals at night), ducked while the machine runs (or replays for Show me).
-  const Ambience::Bed bed = look_.sounds == synth::SoundSet::Shop    ? Ambience::Bed::Shop
-                            : look_.sounds == synth::SoundSet::Canal ? Ambience::Bed::Canal
-                                                                     : Ambience::Bed::Lantern;
+  // shop, World 3: the canals at night, World 4: the sanctum by candlelight), ducked while the machine runs (or
+  // replays for Show me).
+  const Ambience::Bed bed = look_.sounds == synth::SoundSet::Shop      ? Ambience::Bed::Shop
+                            : look_.sounds == synth::SoundSet::Canal   ? Ambience::Bed::Canal
+                            : look_.sounds == synth::SoundSet::Sanctum ? Ambience::Bed::Sanctum
+                                                                       : Ambience::Bed::Lantern;
   app_.GetFeedback().SetAmbience(look_.sounds != synth::SoundSet::Workshop,
                                  phase_ == Phase::Run || phase_ == Phase::ShowMe, bed);
   // The player watches a run without touching, and a grand machine's run outlasts a 30 s screen timeout.

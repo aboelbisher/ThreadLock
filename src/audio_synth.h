@@ -25,9 +25,14 @@
 // a brush on a snare; a served harbour is one baked sound timed like its light (barges.h: the horn as the
 // lamps come on, the chord, a brushed cymbal swelling with the district's light), a gate clanks when its
 // leaves swing (a tick after the mill), murk is two hulls bumping, a gridlock horns over the grinding stop.
+// World 4, the Sanctum, is a choir, a harp and an organ: blue = a concert harp, amber = a choir singing "ah", green =
+// an organ's 8' flute, rose = a singing bowl, pearl = a bright harp with a choir shimmer; chords are open fifths + sus2
+// (inside the pentatonic on C or G); a full phial is one baked sound timed like its elixir and ignite; a mix is a
+// choir swell in the colour made; twin seals ring a low bell as they open; THREADLOCKED is the seal cracking over a
+// dissonant organ drone and the grinding stop.
 namespace threadlock::synth {
 
-enum class SoundSet : uint8_t { Workshop, Lantern, Shop, Canal };
+enum class SoundSet : uint8_t { Workshop, Lantern, Shop, Canal, Sanctum };
 
 enum class Sound : uint8_t {
   NoteBlue,
@@ -94,6 +99,27 @@ enum class Sound : uint8_t {
   Gridlock,      // THREADLOCKED: horns honking into each other over the grinding stop
   LastOrders,    // solved: a vibes run, the bass walking, brushes, the 6/9
   RushHour,      // 3-15 solved: horns answer across the city as its light runs, the full chord at kCityLength
+  // The Sanctum set (World 4).
+  HarpNote,     // blue: a concert harp, C4
+  ChoirNote,    // amber: a choir singing "ah", C4 (a short swell)
+  OrganNote,    // green: a pipe organ's 8' flute, C4 (its chiff as the pipe speaks)
+  BowlNote,     // rose: a singing bowl, C5 (its partials beating)
+  PearlNote,    // pearl: a bright harp and a celesta, a choir shimmer over them, C5
+  PhialBlue,    // a phial full: a glass ring + the harp's chord as the elixir rises, a choir swell with the ignite
+  PhialAmber,   // the same sung (G)
+  PhialGreen,   // the same on the organ (C)
+  PhialRose,    // the same on bowls (G)
+  PhialPearl,   // the same on harp + celesta (C, an octave up)
+  MixSwell,     // a mixer joins a pair: a choir "ah" swelling (pitched by the colour made)
+  SealBell,     // twin seals open together: a low bell, the brass leaves' shimmer
+  FlaskPour,    // a flask's beat: a soft glass tick and a trickle
+  Clot,         // sludge: a thick low smear, bubbles popping (the stain's 1.4 s)
+  SealCrack,    // THREADLOCKED: a seal cracking, a dissonant organ drone over the grinding stop
+  PhialSpill,   // a phial runs over: a splash at the glass brim, drips on the table
+  HollowPhial,  // a phial short at the end: a hollow glass knock, two falling harp notes
+  Amen,         // solved: the organ's plagal cadence (IV-I) and the choir's "a-men" as the sigil ignites
+  GreatWork,    // 4-15 solved: organ swell, the choir joining, a harp glissando, the full chord at sigil::kGrandLength
+  Kindle,       // the map: a candle catching (a soft whoosh)
   Count,
 };
 
@@ -115,6 +141,14 @@ Sound ShortFor(SoundSet set);               // a cup short at the end of a run; 
 Sound TurnFor(SoundSet set);                // a rack turns a notch
 Sound MillFor(SoundSet set);                // a mill's drop leaves (the wheel turns)
 Sound GateFor(SoundSet set);                // a gate flips
+// What a mixer joining a pair plays. The Sanctum sings the colour it made (MixSwell: green 1.0, pearl a fifth up, a
+// colour mixed with itself 1.0) or clots (a mud mix: Clot). Every other set plays the Workshop's green note at 0.75 for
+// every mix, as before.
+struct MixVoice {
+  Sound sound;
+  float pitch;
+};
+MixVoice MixFor(SoundSet set, Color made);
 inline Sound NoteFor(Color color) { return NoteFor(SoundSet::Workshop, color); }
 inline Sound ChordFor(Color color) { return ChordFor(SoundSet::Workshop, color); }
 float ClimbPitch(int step);
@@ -122,5 +156,9 @@ float ClimbPitch(int step);
 // When the j-th of the heart's 12 panes starts to light (seconds after the first): LanternArt eases
 // each pane at 3.5/s and starts pane j when the first reaches j/12. Heart and RoseWindow chime then.
 float HeartOnset(int j);
+
+// Amen's "-men" (the I chord), in seconds after the last phial filled. Its 1.3 s end as the whole sigil is lit
+// (sigil::kSolvedLength = 3.3).
+inline constexpr float kAmenFinal = 2.0f;
 
 }  // namespace threadlock::synth
