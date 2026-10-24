@@ -53,6 +53,7 @@ class LevelScreen : public wlw::app::Screen {
   void Next();
   void LeaveToMap();
   bool SamePlacement(const Placement& a, const Placement& b) const;
+  bool HintLeft() const;  // the board doesn't match the solution yet: a hint has something to do
   void ApplyHint();
   void ShowSolution();
 

@@ -119,7 +119,8 @@ void MenuScreen::Achievements(UIContext& ui) {
   wlw::ui::Canvas& canvas = ui.canvas;
   const wlw::ui::Font& font = app_.GetFont();
   const Progress& progress = app_.GetProgress();
-  const float height = 70.0f + static_cast<float>(std::size(kAchievements)) * 64.0f;
+  // The title and padding take ~100 of the card: every row fits under it.
+  const float height = 100.0f + static_cast<float>(std::size(kAchievements)) * 64.0f;
   const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, "Achievements", {330.0f, height}, true);
   if (dialog.close) {
     Close();
@@ -138,16 +139,18 @@ void MenuScreen::Achievements(UIContext& ui) {
                       done ? ui_color::kStar : ui_color::kFaint);
     canvas.Text(font, achievement.name, {rect.min.x + 48.0f, rect.min.y + 17.0f}, 17.0f, Align::Left,
                 Outlined(done ? ui_color::kInk : ui_color::kMuted));
-    canvas.Text(font, achievement.text, {rect.min.x + 48.0f, rect.min.y + 38.0f}, 12.0f, Align::Left,
-                Outlined(ui_color::kMuted));
+    const float text_width = rect.max.x - 10.0f - (rect.min.x + 48.0f);
+    canvas.Text(font, achievement.text, {rect.min.x + 48.0f, rect.min.y + 39.0f},
+                wlw::ui::FitTextSize(font, achievement.text, 12.0f, text_width), Align::Left, Outlined(ui_color::kMuted));
     if (achievement.goal > 1 && !done) {
       const float w = 60.0f;
-      const glm::vec2 bar{rect.max.x - w - 10.0f, rect.min.y + 14.0f};
-      canvas.FillRect({bar, bar + glm::vec2(w, 6.0f)}, ui.theme.track, 3.0f);
-      canvas.FillRect({bar, bar + glm::vec2(w * static_cast<float>(have) / static_cast<float>(achievement.goal), 6.0f)},
-                      ui_color::kGood, 3.0f);
+      // The count on the name's line, its bar under it (clear of the text below).
+      const glm::vec2 bar{rect.max.x - w - 10.0f, rect.min.y + 25.0f};
+      canvas.FillRect({bar, bar + glm::vec2(w, 5.0f)}, ui.theme.track, 2.5f);
+      canvas.FillRect({bar, bar + glm::vec2(w * static_cast<float>(have) / static_cast<float>(achievement.goal), 5.0f)},
+                      ui_color::kGood, 2.5f);
       canvas.Text(font, std::to_string(have) + "/" + std::to_string(achievement.goal),
-                  {rect.max.x - 10.0f, rect.min.y + 32.0f}, 12.0f, Align::Right, Outlined(ui_color::kMuted));
+                  {rect.max.x - 10.0f, rect.min.y + 15.0f}, 12.0f, Align::Right, Outlined(ui_color::kMuted));
     }
   }
 }
@@ -156,7 +159,7 @@ void MenuScreen::Lab(UIContext& ui) {
   wlw::ui::Canvas& canvas = ui.canvas;
   const wlw::ui::Font& font = app_.GetFont();
   Progress& progress = app_.GetProgress();
-  const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, "The Lab", {330.0f, 330.0f}, true);
+  const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, "The Lab", {330.0f, 318.0f}, true);
   if (dialog.close) {
     Close();
     return;
@@ -180,7 +183,7 @@ void MenuScreen::Lab(UIContext& ui) {
               {r.Center().x, r.min.y + 116.0f}, 15.0f, Align::Center, Outlined(ui_color::kMuted));
   canvas.Text(font, "Hints here come from ads.", {r.Center().x, r.min.y + 138.0f}, 13.0f, Align::Center,
               Outlined(ui_color::kMuted));
-  if (wlw::ui::Button(ui, "Brew a puzzle", {{r.min.x + 10.0f, r.max.y - 70.0f}, {r.max.x - 10.0f, r.max.y - 20.0f}},
+  if (wlw::ui::Button(ui, "Brew a puzzle", {{r.min.x + 10.0f, r.min.y + 160.0f}, {r.max.x - 10.0f, r.min.y + 210.0f}},
                       Variant::Primary, Icon::Play)) {
     app_.GetFeedback().Play(synth::Sound::Tap);
     Stack().Pop();

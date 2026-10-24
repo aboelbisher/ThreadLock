@@ -501,8 +501,14 @@ void LevelScreen::LeaveToMap() {
 
 // ---- Hints ----
 
+bool LevelScreen::HintLeft() const {
+  if (!level_->pars.Known()) return false;
+  const HintMove move = NextHint(*level_, board_.GetPlacement(), level_->pars.lean);
+  return move.piece >= 0 || move.flap_node >= 0;
+}
+
 void LevelScreen::ApplyHint() {
-  if (!level_->pars.Known()) return;
+  if (!HintLeft()) return;
   const HintMove move = NextHint(*level_, board_.GetPlacement(), level_->pars.lean);
   if (move.piece >= 0 && move.node >= 0) {
     board_.Place(move.piece, move.node);
@@ -600,7 +606,8 @@ glm::vec2 LevelScreen::TraySlot(int slot) const {
   int count = 0;
   for (const TrayPiece& piece : level_->tray) count += piece.locked ? 0 : 1;
   const float x =
-      (safe_.min.x + safe_.max.x) * 0.5f + (static_cast<float>(slot) - static_cast<float>(count - 1) * 0.5f) * 64.0f;
+      (safe_.min.x + safe_.max.x) * 0.5f + (static_cast<float>(slot) - static_cast<float>(count - 1) * 0.5f) *
+          std::min(64.0f, (safe_.Size().x - 40.0f) / static_cast<float>(std::max(count, 1)));
   return {x, bottom_ - 114.0f};
 }
 
@@ -946,7 +953,7 @@ void LevelScreen::DrawTopBar(UIContext& ui) {
   // The three star targets: Solve, Lean (pieces), Swift (time).
   const int bits = source_.kind == LevelSource::Main ? app_.GetProgress().Bits(level_->id) : 0;
   const char* labels[3] = {"solve", nullptr, nullptr};
-  std::string lean = level_->pars.Known() ? std::to_string(level_->pars.pieces) + " pcs" : "-";
+  std::string lean = level_->pars.Known() ? std::to_string(level_->pars.pieces) + (level_->pars.pieces == 1 ? " piece" : " pieces") : "-";
   std::string swift = level_->pars.Known() ? TimeText(level_->pars.ticks) : "-";
   labels[1] = lean.c_str();
   labels[2] = swift.c_str();
@@ -1031,8 +1038,11 @@ void LevelScreen::DrawBottom(UIContext& ui) {
     PieceLook look;
     look.setting = board_.Setting(i);
     look.alpha = editing ? 1.0f : 0.4f;
+    // A tank is tall and wears its size above it: down a little, so the label clears the tray's edge.
+    const PieceType type = board_.PieceInfo(i).piece.type;
+    const bool tank = type == PieceType::TankShort || type == PieceType::TankTall;
     look.accent = look_.accent;
-    DrawPiece(canvas, board_.PieceInfo(i).piece, slot, 0.78f, look, palette, nullptr, nullptr, &font);
+    DrawPiece(canvas, board_.PieceInfo(i).piece, slot + glm::vec2(0.0f, tank ? 6.0f : 0.0f), 0.78f, look, palette, nullptr, nullptr, &font);
   }
   if (!any) {
     canvas.Text(font, "No pieces: just watch", tray.Center() + glm::vec2(0.0f, 1.0f), 16.0f, Align::Center,
@@ -1042,7 +1052,7 @@ void LevelScreen::DrawBottom(UIContext& ui) {
   // Controls: hint, restart, speed, and the big play button.
   const float y = bottom_ - 40.0f;
   const bool can_click = dialog_ == Dialog::None;
-  const Rect hint{{left + 12.0f, y - 24.0f}, {left + 60.0f, y + 24.0f}};
+  const Rect hint{{left + 12.0f, y - 25.0f}, {left + 62.0f, y + 25.0f}};
   if (HudButton(ui, hint, Icon::Hint) && can_click) {
     app_.GetFeedback().Play(synth::Sound::Tap);
     dialog_ = Dialog::Hints;
@@ -1054,18 +1064,18 @@ void LevelScreen::DrawBottom(UIContext& ui) {
     canvas.Text(font, std::to_string(hints), badge + glm::vec2(0.0f, 0.5f), 13.0f, Align::Center,
                 {.color = Hex(0x2A1A00)});
   }
-  if (HudButton(ui, {{left + 70.0f, y - 24.0f}, {left + 118.0f, y + 24.0f}}, Icon::Restart) && can_click) {
+  if (HudButton(ui, {{left + 72.0f, y - 25.0f}, {left + 122.0f, y + 25.0f}}, Icon::Restart) && can_click) {
     app_.GetFeedback().Play(synth::Sound::Tap);
     if (phase_ != Phase::Edit) StopRun();
     board_.ClearPieces();
   }
   const std::string speed = std::to_string(speed_) + "x";
-  if (HudButton(ui, {{left + 128.0f, y - 24.0f}, {left + 184.0f, y + 24.0f}}, Icon::None, speed) && can_click) {
+  if (HudButton(ui, {{left + 132.0f, y - 25.0f}, {left + 182.0f, y + 25.0f}}, Icon::None, speed) && can_click) {
     speed_ = speed_ == 4 ? 1 : speed_ * 2;
     app_.GetFeedback().Play(synth::Sound::Tap);
   }
 
-  const Rect play{{left + 194.0f, y - 26.0f}, {right - 12.0f, y + 28.0f}};
+  const Rect play{{left + 194.0f, y - 27.0f}, {right - 12.0f, y + 27.0f}};
   const char* label = "PLAY";
   Icon icon = Icon::Play;
   if (phase_ == Phase::Run) label = "STOP", icon = Icon::Pause;
@@ -1108,7 +1118,7 @@ void LevelScreen::DrawResult(UIContext& ui) {
     constexpr float kCardWidth = 310.0f;
     const std::vector<std::string> lines =
         Wrap(font, FailureText(*level_, board_, result_), 17.0f, kCardWidth - 40.0f - 20.0f);
-    const float height = 250.0f + 22.0f * static_cast<float>(std::max(0, static_cast<int>(lines.size()) - 2));
+    const float height = 290.0f + 22.0f * static_cast<float>(std::max(0, static_cast<int>(lines.size()) - 2));
     const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, FailureTitle(result_, look_), {kCardWidth, height}, true);
     ui.theme.primary = primary;
     const Rect& r = dialog.content;
@@ -1117,18 +1127,19 @@ void LevelScreen::DrawResult(UIContext& ui) {
       canvas.Text(font, line, {r.Center().x, y}, 17.0f, Align::Center, Outlined(ui_color::kInk));
       y += 22.0f;
     }
-    const float by = r.max.y - 34.0f;
-    if (wlw::ui::Button(ui, "Show me", {{r.min.x + 10.0f, by - 50.0f}, {r.max.x - 10.0f, by - 6.0f}}, Variant::Primary,
+    const float by = r.max.y - 8.0f;  // the buttons' bottom
+    if (wlw::ui::Button(ui, "Show me", {{r.min.x + 10.0f, by - 98.0f}, {r.max.x - 10.0f, by - 52.0f}}, Variant::Primary,
                         Icon::Play)) {
       StartShowMe();
     }
-    if (wlw::ui::Button(ui, "Edit", {{r.min.x + 10.0f, by}, {r.max.x - 10.0f, by + 30.0f}}, Variant::Ghost) ||
+    if (wlw::ui::Button(ui, "Edit", {{r.min.x + 10.0f, by - 42.0f}, {r.max.x - 10.0f, by}}, Variant::Secondary,
+                        Icon::Undo) ||
         dialog.close) {
       StopRun();
     }
     return;
   }
-  const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, "Solved!", {320.0f, 330.0f}, false);
+  const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, "Solved!", {320.0f, 360.0f}, false);
   const Rect& r = dialog.content;
   const int before = source_.kind == LevelSource::Main ? app_.GetProgress().Bits(level_->id) & ~earned_.fresh : 0;
   const int masks[3] = {kSolveStar, kLeanStar, kSwiftStar};
@@ -1162,7 +1173,7 @@ void LevelScreen::DrawResult(UIContext& ui) {
   if (ghosts_ && !(earned_.bits & kLeanStar)) note = "Lean and Swift need a machine of your own.";
   canvas.Text(font, note, {r.Center().x, r.min.y + 128.0f}, 14.0f, Align::Center, Outlined(ui_color::kMuted));
 
-  const float by = r.max.y - 58.0f;
+  const float by = r.min.y + 206.0f;  // under the notes: Next above, Replay + Edit below
   const char* next_label = source_.kind == LevelSource::Lab ? "Next puzzle" : "Next";
   if (wlw::ui::Button(ui, next_label, {{r.min.x + 10.0f, by - 52.0f}, {r.max.x - 10.0f, by - 6.0f}}, Variant::Primary,
                       Icon::Next)) {
@@ -1187,7 +1198,12 @@ void LevelScreen::DrawHints(UIContext& ui) {
   const wlw::ui::Font& font = app_.GetFont();
   Progress& progress = app_.GetProgress();
   const bool lab = source_.kind == LevelSource::Lab;
-  const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, "Hints", {310.0f, 400.0f}, true);
+  const bool known = level_->pars.Known();
+  const bool ad_ready = app_.GetAds().RewardedReady();
+  // The card fits its rows: three (two in the Lab), and one more when an ad can show the solution.
+  const int rows = (lab ? 1 : 3) + (!ghosts_ && known && ad_ready ? 1 : 0);
+  const wlw::ui::DialogResult dialog =
+      wlw::ui::Dialog(ui, "Hints", {310.0f, 172.0f + 56.0f * static_cast<float>(rows)}, true);
   if (dialog.close) {
     dialog_ = Dialog::None;
     return;
@@ -1200,23 +1216,22 @@ void LevelScreen::DrawHints(UIContext& ui) {
   canvas.Text(font, "\"Show me\" after a failed run is always free.", {r.Center().x, r.min.y + 38.0f}, 13.0f,
               Align::Center, Outlined(ui_color::kMuted));
   float y = r.min.y + 62.0f;
-  const bool known = level_->pars.Known();
+  const bool left = HintLeft();  // nothing to place: a hint would do nothing, so it costs nothing
   auto row = [&](const std::string& label, Variant variant, Icon icon) {
     const bool clicked = wlw::ui::Button(ui, label, {{r.min.x + 8.0f, y}, {r.max.x - 8.0f, y + 46.0f}}, variant, icon);
     y += 56.0f;
     return clicked;
   };
-  wlw::kit::Ads& ads = app_.GetAds();
-  const bool ad_ready = ads.RewardedReady();
   if (!lab) {
-    if (row("Place one piece  (1 hint)", hints >= 1 && known ? Variant::Primary : Variant::Ghost, Icon::Hint) &&
-        hints >= 1 && known) {
+    if (row(left || !known ? "Place a piece  (1 hint)" : "All placed: tap play", hints >= 1 && left ? Variant::Primary : Variant::Ghost,
+            Icon::Hint) &&
+        hints >= 1 && left) {
       progress.SpendHints(1);
       ApplyHint();
       dialog_ = Dialog::None;
       return;
     }
-    if (row("Show the solution  (2 hints)", hints >= 2 && known && !ghosts_ ? Variant::Secondary : Variant::Ghost,
+    if (row("Show solution  (2 hints)", hints >= 2 && known && !ghosts_ ? Variant::Secondary : Variant::Ghost,
             Icon::Help) &&
         hints >= 2 && known && !ghosts_) {
       progress.SpendHints(2);
@@ -1236,22 +1251,22 @@ void LevelScreen::DrawHints(UIContext& ui) {
         app.Toast("+1 hint");
       });
     }
-    if (!ghosts_ && known && ad_ready && row("Watch an ad: show the solution", Variant::Ghost, Icon::Play)) {
+    if (!ghosts_ && known && ad_ready && row("Watch an ad: solution", Variant::Secondary, Icon::Play)) {
       ThreadlockApp& app = app_;
       LevelScreen* self = this;
       app.OfferRewarded([self] { self->ShowSolution(); });
       dialog_ = Dialog::None;
     }
   } else {
-    if (row(ad_ready ? "Watch an ad: place one piece" : "No ad right now",
-            ad_ready && known ? Variant::Primary : Variant::Ghost, Icon::Play) &&
-        ad_ready && known) {
+    if (row(ad_ready ? "Watch an ad: a piece" : "No ad right now",
+            ad_ready && left ? Variant::Primary : Variant::Ghost, Icon::Play) &&
+        ad_ready && left) {
       LevelScreen* self = this;
       app_.OfferRewarded([self] { self->ApplyHint(); });
       dialog_ = Dialog::None;
       return;
     }
-    if (!ghosts_ && known && ad_ready && row("Watch an ad: show the solution", Variant::Secondary, Icon::Help)) {
+    if (!ghosts_ && known && ad_ready && row("Watch an ad: solution", Variant::Secondary, Icon::Help)) {
       LevelScreen* self = this;
       app_.OfferRewarded([self] { self->ShowSolution(); });
       dialog_ = Dialog::None;
