@@ -59,9 +59,14 @@ class LanternArt : public BoardArt {
     glm::vec2 coil_at{0.0f};       // the coil's run along whole
     glm::vec2 drip{0.0f};          // the drip fall along whole (y <= x: none)
     bool collar_start = false, collar_end = false;
+    // Through a pipe socket (one way in, one out) the glass runs on unbroken: the joint round the socket
+    // belongs to the tube coming in; the tubes it joins stop short of it.
+    art::Path joint;
+    bool joined_start = false, joined_end = false;
   };
 
-  void DrawGlass(wlw::ui::Canvas& canvas, const art::Path& path, float radius, bool in_front, float scale) const;
+  void DrawGlass(wlw::ui::Canvas& canvas, const art::Path& path, float radius, bool in_front, float scale,
+                 bool shine_start = true, bool shine_end = true) const;
   // What a slot of the tile pool needs to draw its piece of the still picture (still coordinates =
   // canvas coordinates at scroll 0). The pool's keys: base = what it shows apart from the window's
   // light, key = and with it.

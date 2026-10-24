@@ -190,6 +190,28 @@ std::vector<LanternArt::Tube> LanternArt::MakeTubes(const Level& level, const La
     tube.collar_end = Collared(to);
     tubes.push_back(std::move(tube));
   }
+  // Joints: a pipe socket's two tubes would meet end to end at its centre (a seam, a wedge at an angle).
+  // Each stops a little short and one rounded piece of glass runs through the socket instead.
+  for (size_t n = 0; n < level.nodes.size(); ++n) {
+    const Node& node = level.nodes[n];
+    if ((node.kind != NodeKind::Pass && node.kind != NodeKind::Gate) || node.ins.size() != 1 || node.outs.size() != 1)
+      continue;
+    Tube& in = tubes[static_cast<size_t>(node.ins[0])];
+    Tube& out = tubes[static_cast<size_t>(node.outs[0])];
+    if (in.glass.empty() || out.glass.empty()) continue;
+    glm::vec2& last = in.glass.back();
+    glm::vec2& first = out.glass.front();
+    const float in_length = in.whole.Length();
+    if (last.y < in_length - 0.5f || first.x > 0.5f) continue;  // a coil or a drip reaches the socket
+    const float j = std::min({16.0f * s, (last.y - last.x) * 0.5f, (first.y - first.x) * 0.5f});
+    if (j < 2.0f * s) continue;
+    last.y = in_length - j;
+    first.x = j;
+    in.joint = art::MakePath(
+        art::RoundCorners({in.whole.PointAt(in_length - j), layout.ToCanvas(node.at), out.whole.PointAt(j)}, j, 1.5f * s));
+    in.joined_end = true;
+    out.joined_start = true;
+  }
   return tubes;
 }
 
@@ -417,7 +439,8 @@ void LanternArt::DrawStill(int slot, int k, const ArtFrame& whole, glm::vec2 scr
   }
 }
 
-void LanternArt::DrawGlass(Canvas& canvas, const art::Path& path, float radius, bool in_front, float s) const {
+void LanternArt::DrawGlass(Canvas& canvas, const art::Path& path, float radius, bool in_front, float s,
+                           bool shine_start, bool shine_end) const {
   if (path.Empty()) return;
   // A soft shadow on the wall behind it.
   if (in_front) {
@@ -435,7 +458,8 @@ void LanternArt::DrawGlass(Canvas& canvas, const art::Path& path, float radius, 
   if (in_front && path.Length() > 8.0f * s) {
     art::Path shine = path;
     for (glm::vec2& point : shine.points) point += glm::vec2(-2.8f, -2.4f) * s * (radius / kTubeRadius);
-    art::Stroke(canvas, shine.Part(3.0f * s, shine.Length() - 3.0f * s), 0.0f, 1.3f * s, kGlassShine);
+    art::Stroke(canvas, shine.Part(shine_start ? 3.0f * s : 0.0f, shine.Length() - (shine_end ? 3.0f * s : 0.0f)),
+                0.0f, 1.3f * s, kGlassShine);
   }
 }
 
@@ -459,7 +483,12 @@ void LanternArt::DrawCoil(Canvas& canvas, const Tube& tube, float s) const {
 
 void LanternArt::DrawTube(Canvas& canvas, const ArtFrame& frame, const Tube& tube, int p) const {
   const float s = frame.Scale();
-  for (const glm::vec2 run : tube.glass) DrawGlass(canvas, tube.whole.Part(run.x, run.y), kTubeRadius, true, s);
+  for (size_t k = 0; k < tube.glass.size(); ++k) {
+    const glm::vec2 run = tube.glass[k];
+    DrawGlass(canvas, tube.whole.Part(run.x, run.y), kTubeRadius, true, s, !(k == 0 && tube.joined_start),
+              !(k + 1 == tube.glass.size() && tube.joined_end));
+  }
+  if (!tube.joint.Empty()) DrawGlass(canvas, tube.joint, kTubeRadius, true, s, false, false);
   if (!tube.coil.empty()) DrawCoil(canvas, tube, s);
   // Etched graduations, one per cell (every fifth longer): the timing, like a measuring tube's.
   const Pipe& pipe = frame.level->pipes[static_cast<size_t>(p)];
