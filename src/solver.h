@@ -8,7 +8,7 @@
 // The solver: tries every placement of the tray's pieces (every socket where each piece acts, every
 // setting, every tappable flap that still decides something) and runs each one. Runs are
 // deterministic, so one run per placement says all there is to know. It gives the pars for the
-// stars (Lean = fewest pieces, Swift = fastest run), the solutions for hints, and numbers for
+// stars (Lean = fewest pieces, Swift = the fastest run of those), the solutions for hints, and numbers for
 // judging a level (how many solutions, traps).
 //
 // Sockets are open, but a piece sitting idle changes nothing and a trap can only fail, so neither
@@ -27,7 +27,7 @@ struct SolveReport {
   int placements = 0;  // tried
   int solutions = 0;
   Pars pars;
-  bool two_answers = false;    // no single solution is both Lean and Swift
+  bool two_answers = false;    // a machine with more pieces runs faster than the Lean one (it also earns Swift)
   std::vector<Solution> kept;  // every solution, if asked for (SolveOptions::keep)
 };
 

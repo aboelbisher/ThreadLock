@@ -15,84 +15,87 @@
       "tray": ["flipper"]
     },
     {
-      "id": "2-2", "name": "The Odd Drop", "intro": "Five drops, two orders. Which side gets the first?", "shelves": [90, 226, 362],
+      "id": "2-2", "name": "The Odd Drop", "intro": "Seven drops, two orders. Which side gets the first?", "shelves": [90, 226, 362],
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*5", "beat": 4},
+        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*7", "beat": 4},
         {"id": "f", "kind": "fork", "at": [250, 170], "socket": true},
-        {"id": "a", "kind": "cup", "at": [140, 425], "want": "B", "count": 2, "order": "Mrs Hale"},
-        {"id": "b", "kind": "cup", "at": [300, 425], "want": "B", "count": 3, "order": "Dr Moss"}
+        {"id": "a", "kind": "cup", "at": [140, 425], "want": "B", "count": 3, "order": "Mrs Hale"},
+        {"id": "b", "kind": "cup", "at": [300, 425], "want": "B", "count": 4, "order": "Dr Moss"}
       ],
       "pipes": [["s", "f", [[250, 80]]], ["f", "a", [[140, 170]]], ["f", "b", [[300, 170]]]],
       "tray": ["flipper"]
     },
     {
-      "id": "2-3", "name": "Inventory", "intro": "Dr Moss wants three. The rest go down the sink.", "shelves": [90, 226, 362],
+      "id": "2-3", "name": "Inventory", "intro": "Dr Moss wants three. An overflow counts them; the rest go down the sink.", "shelves": [90, 226, 362],
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*7", "beat": 3},
+        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*8", "beat": 3},
         {"id": "f", "kind": "fork", "at": [200, 170], "socket": true},
         {"id": "m", "kind": "cup", "at": [110, 425], "want": "B", "count": 3, "order": "Dr Moss"},
         {"id": "d", "kind": "drain", "at": [300, 472]}
       ],
       "pipes": [["s", "f", [[200, 80]]], ["f", "m", [[110, 170]]], ["f", "d", [[300, 170]]]],
-      "tray": [{"type": "overflow", "n": 3}]
+      "tray": [{"type": "overflow", "n": 3}, {"type": "overflow", "n": 5}]
     },
     {
-      "id": "2-4", "name": "Three Sisters", "intro": "Three orders. Halving can't make thirds.", "shelves": [90, 226, 362],
+      "id": "2-4", "name": "Three Sisters", "intro": "Three orders. Count one off, then share the rest.", "shelves": [90, 226, 362],
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*6", "beat": 3},
-        {"id": "f1", "kind": "fork", "at": [180, 170], "socket": true},
-        {"id": "p", "kind": "pass", "at": [250, 236]},
-        {"id": "f2", "kind": "fork", "at": [250, 306], "socket": true},
+        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*9", "beat": 3},
+        {"id": "f1", "kind": "fork", "at": [180, 150], "socket": true},
+        {"id": "p", "kind": "pass", "at": [280, 216]},
+        {"id": "f2", "kind": "fork", "at": [280, 290], "socket": true},
         {"id": "a", "kind": "cup", "at": [60, 425], "want": "B", "count": 2, "order": "Mrs Hale"},
-        {"id": "b", "kind": "cup", "at": [190, 425], "want": "B", "count": 2, "order": "Baker"},
-        {"id": "c", "kind": "cup", "at": [310, 425], "want": "B", "count": 2, "order": "Dr Moss"}
+        {"id": "b", "kind": "cup", "at": [190, 425], "want": "B", "count": 3, "order": "Baker"},
+        {"id": "c", "kind": "cup", "at": [320, 425], "want": "B", "count": 4, "order": "Dr Moss"}
       ],
-      "pipes": [["s", "f1", [[180, 80]]], ["f1", "a", [[60, 170]]], ["f1", "p", [[250, 170]]], ["p", "f2"], ["f2", "b", [[190, 306]]], ["f2", "c", [[310, 306]]]],
-      "tray": [{"type": "overflow", "n": 2}, "flipper", "flipper"]
+      "pipes": [["s", "f1", [[180, 80]]], ["f1", "a", [[60, 150]]], ["f1", "p", [[280, 150]]], ["p", "f2"], ["f2", "b", [[190, 290]]], ["f2", "c", [[320, 290]]]],
+      "tray": [{"type": "overflow", "n": 2}, {"type": "overflow", "n": 5}, "flipper", "flipper"]
     },
     {
-      "id": "2-5", "name": "The Back Room", "intro": "Two jars, two orders. Where the lines cross, they mustn't meet.", "shelves": [90, 226, 362],
+      "id": "2-5", "name": "The Back Room", "intro": "Amber crosses the blue line. Where they cross, they mustn't meet.", "shelves": [90, 226, 362],
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [80, 80], "beads": "B*3", "beat": 4},
-        {"id": "sa", "kind": "spout", "at": [80, 216], "beads": "A*3", "beat": 4, "start": 8},
+        {"id": "sb", "kind": "spout", "at": [80, 80], "beads": "B*5", "beat": 4},
+        {"id": "sa", "kind": "spout", "at": [80, 216], "beads": "A*3", "beat": 4, "start": 10},
         {"id": "pb", "kind": "pass", "at": [230, 150]},
         {"id": "pa", "kind": "pass", "at": [160, 216]},
         {"id": "x", "kind": "cross", "at": [230, 216], "socket": true},
+        {"id": "f", "kind": "fork", "at": [230, 300], "socket": true},
         {"id": "b", "kind": "cup", "at": [150, 425], "want": "B", "count": 3, "order": "Baker"},
-        {"id": "a", "kind": "cup", "at": [310, 425], "want": "A", "count": 3, "order": "Mrs Hale"}
+        {"id": "m", "kind": "cup", "at": [260, 425], "want": "B", "count": 2, "order": "Dr Moss"},
+        {"id": "a", "kind": "cup", "at": [330, 425], "want": "A", "count": 3, "order": "Mrs Hale"}
       ],
-      "pipes": [["sb", "pb", [[230, 80]]], ["pb", "x"], ["sa", "pa"], ["pa", "x"], ["x", "b", [[230, 320], [150, 320]]], ["x", "a", [[310, 216]]]],
-      "tray": ["tank4", "turnstile"]
+      "pipes": [["sb", "pb", [[230, 80]]], ["pb", "x"], ["sa", "pa"], ["pa", "x"], ["x", "f"], ["x", "a", [[330, 216]]], ["f", "b", [[150, 300]]], ["f", "m", [[260, 300]]]],
+      "tray": ["tank4", "tank8", "flipper", {"type": "overflow", "n": 2}]
     },
     {
       "id": "2-6", "name": "The Handle", "intro": "A flap with a handle turns when you tap it. It costs nothing.", "shelves": [90, 226, 362],
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*6", "beat": 3},
-        {"id": "f1", "kind": "fork", "at": [180, 170], "socket": true},
-        {"id": "f2", "kind": "fork", "at": [290, 300], "flap": 1, "tap": true},
-        {"id": "a", "kind": "cup", "at": [60, 425], "want": "B", "count": 3, "order": "Baker"},
-        {"id": "m", "kind": "cup", "at": [200, 425], "want": "B", "count": 3, "order": "Dr Moss"},
-        {"id": "d", "kind": "drain", "at": [320, 472]}
-      ],
-      "pipes": [["s", "f1", [[180, 80]]], ["f1", "a", [[60, 170]]], ["f1", "f2", [[290, 170]]], ["f2", "m", [[200, 300]]], ["f2", "d", [[320, 300]]]],
-      "tray": ["flipper"]
-    },
-    {
-      "id": "2-7", "name": "Morning Orders", "intro": "Three orders, one tap. The rack turns every 4 ticks.", "shelves": [90, 226, 362],
-      "nodes": [
-        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*11", "beat": 2, "start": 2},
-        {"id": "f", "kind": "fork", "at": [300, 170], "socket": true, "flap": 1},
-        {"id": "p1", "kind": "pass", "at": [200, 170]},
-        {"id": "p2", "kind": "pass", "at": [104, 214]},
-        {"id": "p3", "kind": "pass", "at": [300, 320]},
-        {"id": "r", "kind": "rack", "at": [180, 388], "period": 4, "first": 1, "slots": [{"want": "B", "count": 4, "order": "Mrs Hale"}, {"want": "B", "count": 2, "order": "Baker"}, {"want": "B", "count": 2, "order": "Dr Moss"}]},
+        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*9", "beat": 3},
+        {"id": "f1", "kind": "fork", "at": [180, 150], "socket": true},
+        {"id": "f2", "kind": "fork", "at": [290, 150], "socket": true, "flap": 1, "tap": true},
+        {"id": "f3", "kind": "fork", "at": [290, 290], "socket": true},
+        {"id": "a", "kind": "cup", "at": [50, 425], "want": "B", "count": 3, "order": "Mrs Hale"},
+        {"id": "b", "kind": "cup", "at": [170, 425], "want": "B", "count": 4, "order": "Baker"},
+        {"id": "c", "kind": "cup", "at": [270, 425], "want": "B", "count": 2, "order": "Dr Moss"},
         {"id": "d", "kind": "drain", "at": [330, 472]}
       ],
-      "pipes": [["s", "f", [[300, 80]]], ["f", "p3"], ["p3", "d", [[300, 436], [330, 436]]], ["f", "p1"], ["p1", "p2", [[104, 170]]], ["p2", "r", [[104, 306], [180, 306]]]],
-      "tray": [{"type": "overflow", "n": 8}]
+      "pipes": [["s", "f1", [[180, 80]]], ["f1", "a", [[50, 150]]], ["f1", "f2"], ["f2", "f3"], ["f2", "d", [[330, 150]]], ["f3", "b", [[170, 290]]], ["f3", "c", [[270, 290]]]],
+      "tray": [{"type": "overflow", "n": 3}, {"type": "overflow", "n": 4}, "flipper"]
     },
     {
-      "id": "2-8", "name": "The Bottling Line", "type": "spectacle", "intro": "Twelve drops, four orders. Sit back and watch it share.", "shelves": [90, 226, 362],
+      "id": "2-7", "name": "Morning Orders", "intro": "Eight for the rack, the rest down the sink. Which bottle is under the tap first?", "shelves": [90, 226, 362],
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*11", "beat": 2, "start": 2},
+        {"id": "p0", "kind": "pass", "at": [300, 120]},
+        {"id": "f", "kind": "fork", "at": [300, 170], "socket": true, "flap": 1},
+        {"id": "p1", "kind": "pass", "at": [200, 170]},
+        {"id": "r", "kind": "rack", "at": [180, 388], "period": 4, "first": 1, "slots": [{"want": "B", "count": 3, "order": "Mrs Hale"}, {"want": "B", "count": 3, "order": "Baker"}, {"want": "B", "count": 2, "order": "Dr Moss"}]},
+        {"id": "d", "kind": "drain", "at": [330, 472]}
+      ],
+      "pipes": [["s", "p0", [[300, 80]]], ["p0", "f"], ["f", "d", [[300, 436], [330, 436]]], ["f", "p1"], ["p1", "r", [[104, 170], [104, 306], [180, 306]]]],
+      "tray": [{"type": "overflow", "n": 8}, {"type": "overflow", "n": 6}, "tank4", "tank8", "flipper"]
+    },
+    {
+      "id": "2-8", "name": "The Bottling Line", "type": "spectacle", "intro": "Twelve drops, four orders. Count the split at the top.", "shelves": [90, 226, 362],
       "nodes": [
         {"id": "s", "kind": "spout", "at": [80, 80], "beads": "A*12", "beat": 3},
         {"id": "p", "kind": "pass", "at": [300, 120]},
@@ -100,145 +103,166 @@
         {"id": "f2", "kind": "fork", "at": [100, 300], "socket": true},
         {"id": "f3", "kind": "fork", "at": [260, 300], "socket": true},
         {"id": "c1", "kind": "cup", "at": [45, 425], "want": "A", "count": 3, "order": "Mrs Hale"},
-        {"id": "c2", "kind": "cup", "at": [150, 425], "want": "A", "count": 3, "order": "Baker"},
+        {"id": "c2", "kind": "cup", "at": [150, 425], "want": "A", "count": 2, "order": "Baker"},
         {"id": "c3", "kind": "cup", "at": [215, 425], "want": "A", "count": 3, "order": "Dr Moss"},
-        {"id": "c4", "kind": "cup", "at": [315, 425], "want": "A", "count": 3, "order": "Miss Lark"}
+        {"id": "c4", "kind": "cup", "at": [315, 425], "want": "A", "count": 4, "order": "Miss Lark"}
       ],
       "pipes": [["s", "p", [[300, 80]]], ["p", "f1", [[300, 160]]], ["f1", "f2", [[100, 160]]], ["f1", "f3", [[180, 230], [260, 230]]], ["f2", "c1", [[45, 300]]], ["f2", "c2", [[150, 300]]], ["f3", "c3", [[215, 300]]], ["f3", "c4", [[315, 300]]]],
-      "tray": ["flipper"],
-      "placed": [{"piece": "flipper", "at": "f2", "locked": true}, {"piece": "flipper", "at": "f3", "locked": true}]
+      "tray": [{"type": "overflow", "n": 5}, {"type": "overflow", "n": 3}, "flipper"],
+      "placed": [{"piece": "flipper", "at": "f2", "locked": true}]
     },
     {
-      "id": "2-9", "name": "The Lazy Susan", "intro": "One tap, three bottles. The rack turns every 4 ticks.", "shelves": [90, 226, 362],
+      "id": "2-9", "name": "The Lazy Susan", "intro": "The rack turns every 4 ticks. Give it one drop a turn.", "shelves": [90, 226, 362],
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*8", "beat": 2},
-        {"id": "f", "kind": "fork", "at": [180, 150], "socket": true},
+        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*9", "beat": 2},
+        {"id": "pa", "kind": "pass", "at": [160, 80]},
+        {"id": "f", "kind": "fork", "at": [180, 160], "socket": true},
         {"id": "p", "kind": "pass", "at": [180, 260]},
-        {"id": "r", "kind": "rack", "at": [180, 388], "period": 4, "slots": [{"want": "B", "count": 2, "order": "Mrs Hale"}, {"want": "B", "count": 1, "order": "Baker"}, {"want": "B", "count": 1, "order": "Dr Moss"}]},
+        {"id": "a", "kind": "cup", "at": [50, 425], "want": "B", "count": 5, "order": "Mrs Hale"},
+        {"id": "r", "kind": "rack", "at": [180, 388], "period": 4, "slots": [{"want": "B", "count": 2, "order": "Baker"}, {"want": "B", "count": 1, "order": "Dr Moss"}, {"want": "B", "count": 1, "order": "Miss Lark"}]}
+      ],
+      "pipes": [["s", "pa"], ["pa", "f", [[180, 80]]], ["f", "a", [[50, 160]]], ["f", "p"], ["p", "r"]],
+      "tray": ["flipper", "tank4", "tank8", {"type": "overflow", "n": 5}]
+    },
+    {
+      "id": "2-10", "name": "Every Other", "intro": "Blue, amber, blue, amber. Sort them without a separator, then count.", "shelves": [90, 226, 362],
+      "nodes": [
+        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B A B A B A B A B A", "beat": 3},
+        {"id": "f1", "kind": "fork", "at": [180, 150], "socket": true},
+        {"id": "pb", "kind": "pass", "at": [90, 216]},
+        {"id": "f2", "kind": "fork", "at": [90, 290], "socket": true},
+        {"id": "pa", "kind": "pass", "at": [270, 216]},
+        {"id": "f3", "kind": "fork", "at": [270, 290], "socket": true},
+        {"id": "b1", "kind": "cup", "at": [40, 425], "want": "B", "count": 3, "order": "Baker"},
+        {"id": "b2", "kind": "cup", "at": [140, 425], "want": "B", "count": 2, "order": "Mrs Hale"},
+        {"id": "a1", "kind": "cup", "at": [220, 425], "want": "A", "count": 4, "order": "Dr Moss"},
         {"id": "d", "kind": "drain", "at": [320, 472]}
       ],
-      "pipes": [["s", "f", [[180, 80]]], ["f", "p"], ["p", "r"], ["f", "d", [[320, 150]]]],
-      "tray": ["flipper", "tank4", "tank8"]
+      "pipes": [["s", "f1", [[180, 80]]], ["f1", "pb", [[90, 150]]], ["pb", "f2"], ["f1", "pa", [[270, 150]]], ["pa", "f3"], ["f2", "b1", [[40, 290]]], ["f2", "b2", [[140, 290]]], ["f3", "a1", [[220, 290]]], ["f3", "d", [[320, 290]]]],
+      "tray": ["flipper", "flipper", {"type": "overflow", "n": 3}, {"type": "overflow", "n": 4}]
     },
     {
-      "id": "2-10", "name": "Every Other", "intro": "Blue, amber, blue, amber. Sort them without a separator.", "shelves": [90, 226, 362],
+      "id": "2-11", "name": "The Shop Boy", "type": "repair", "intro": "The shop boy set this up. Nothing is where it should be.", "shelves": [90, 226, 362],
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B A B A B A B A", "beat": 3},
-        {"id": "f1", "kind": "fork", "at": [180, 170], "socket": true},
-        {"id": "p", "kind": "pass", "at": [280, 236]},
-        {"id": "f2", "kind": "fork", "at": [280, 306], "socket": true},
-        {"id": "b", "kind": "cup", "at": [60, 425], "want": "B", "count": 4, "order": "Baker"},
-        {"id": "c", "kind": "cup", "at": [190, 425], "want": "A", "count": 2, "order": "Mrs Hale"},
-        {"id": "e", "kind": "cup", "at": [320, 425], "want": "A", "count": 2, "order": "Dr Moss"}
+        {"id": "sb", "kind": "spout", "at": [80, 80], "beads": "B*6", "beat": 3},
+        {"id": "sa", "kind": "spout", "at": [80, 226], "beads": "A*4", "beat": 3, "start": 8},
+        {"id": "pb", "kind": "pass", "at": [200, 150]},
+        {"id": "pa", "kind": "pass", "at": [140, 226]},
+        {"id": "x", "kind": "cross", "at": [200, 226], "socket": true},
+        {"id": "f", "kind": "fork", "at": [150, 300], "socket": true},
+        {"id": "g", "kind": "fork", "at": [300, 300], "socket": true},
+        {"id": "b", "kind": "cup", "at": [50, 425], "want": "B", "count": 4, "order": "Baker"},
+        {"id": "m", "kind": "cup", "at": [150, 425], "want": "B", "count": 2, "order": "Dr Moss"},
+        {"id": "h", "kind": "cup", "at": [250, 425], "want": "A", "count": 3, "order": "Mrs Hale"},
+        {"id": "d", "kind": "drain", "at": [330, 472]}
       ],
-      "pipes": [["s", "f1", [[180, 80]]], ["f1", "b", [[60, 170]]], ["f1", "p", [[280, 170]]], ["p", "f2"], ["f2", "c", [[190, 306]]], ["f2", "e", [[320, 306]]]],
-      "tray": ["flipper", "flipper", {"type": "overflow", "n": 3}]
-    },
-    {
-      "id": "2-11", "name": "The Shop Boy", "type": "repair", "intro": "The shop boy set this up. One piece is wrong.", "shelves": [90, 226, 362],
-      "nodes": [
-        {"id": "s", "kind": "spout", "at": [290, 212], "beads": "B*7", "beat": 3},
-        {"id": "f1", "kind": "fork", "at": [170, 212], "socket": true},
-        {"id": "p", "kind": "pass", "at": [170, 280]},
-        {"id": "f2", "kind": "fork", "at": [170, 340], "socket": true},
-        {"id": "a", "kind": "cup", "at": [50, 425], "want": "B", "count": 3, "order": "Mrs Hale"},
-        {"id": "b", "kind": "cup", "at": [120, 425], "want": "B", "count": 2, "order": "Baker"},
-        {"id": "c", "kind": "cup", "at": [250, 425], "want": "B", "count": 2, "order": "Dr Moss"}
-      ],
-      "pipes": [["s", "f1"], ["f1", "a", [[50, 212]]], ["f1", "p"], ["p", "f2"], ["f2", "b", [[120, 340]]], ["f2", "c", [[250, 340]]]],
-      "tray": [],
-      "placed": [{"piece": {"type": "overflow", "n": 3}, "at": "f1"}, {"piece": "flipper", "at": "p"}]
+      "pipes": [["sb", "pb", [[200, 80]]], ["pb", "x"], ["sa", "pa"], ["pa", "x"], ["x", "f", [[200, 300]]], ["x", "g", [[300, 226]]], ["f", "b", [[50, 300]]], ["f", "m"], ["g", "h", [[250, 300]]], ["g", "d", [[330, 300]]]],
+      "tray": ["flipper"],
+      "placed": [{"piece": {"type": "overflow", "n": 3}, "at": "f"}, {"piece": {"type": "overflow", "n": 4}, "at": "g"}, {"piece": "turnstile", "at": "pb"}]
     },
     {
       "id": "2-12", "name": "Crossed Lines", "intro": "Two jars, one crossing. Share both lines at once.", "shelves": [90, 226, 362],
       "nodes": [
-        {"id": "s1", "kind": "spout", "at": [80, 80], "beads": "B*4", "beat": 4},
-        {"id": "s2", "kind": "spout", "at": [288, 216], "beads": "B*2", "beat": 4},
+        {"id": "s1", "kind": "spout", "at": [80, 80], "beads": "B*8", "beat": 4},
+        {"id": "s2", "kind": "spout", "at": [288, 216], "beads": "B*5", "beat": 4},
         {"id": "p1", "kind": "pass", "at": [200, 150]},
         {"id": "p2", "kind": "pass", "at": [250, 216]},
         {"id": "x", "kind": "cross", "at": [200, 216], "socket": true},
-        {"id": "a", "kind": "cup", "at": [100, 425], "want": "B", "count": 3, "order": "Mrs Hale"},
-        {"id": "b", "kind": "cup", "at": [260, 425], "want": "B", "count": 3, "order": "Baker"}
+        {"id": "g", "kind": "fork", "at": [100, 216], "socket": true},
+        {"id": "f", "kind": "fork", "at": [200, 300], "socket": true},
+        {"id": "a", "kind": "cup", "at": [170, 425], "want": "B", "count": 2, "order": "Baker"},
+        {"id": "b", "kind": "cup", "at": [270, 425], "want": "B", "count": 5, "order": "Dr Moss"},
+        {"id": "c", "kind": "cup", "at": [100, 425], "want": "B", "count": 4, "order": "Mrs Hale"},
+        {"id": "d", "kind": "drain", "at": [40, 472]}
       ],
-      "pipes": [["s1", "p1", [[200, 80]]], ["p1", "x"], ["s2", "p2"], ["p2", "x"], ["x", "b", [[200, 320], [260, 320]]], ["x", "a", [[100, 216]]]],
-      "tray": ["flipper"]
+      "pipes": [["s1", "p1", [[200, 80]]], ["p1", "x"], ["s2", "p2"], ["p2", "x"], ["x", "f"], ["x", "g"], ["g", "c"], ["g", "d", [[40, 216]]], ["f", "a", [[170, 300]]], ["f", "b", [[270, 300]]]],
+      "tray": ["flipper", "flipper", {"type": "overflow", "n": 2}, {"type": "overflow", "n": 3}, {"type": "overflow", "n": 4}]
     },
     {
-      "id": "2-13", "name": "Rush Order", "intro": "Blue for Mrs Hale, amber for the Baker. One tap, and the rack won't wait.", "shelves": [90, 226, 362],
+      "id": "2-13", "name": "Rush Order", "intro": "Blue and amber share the rack. Each must land in its own bottle.", "shelves": [90, 226, 362],
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [80, 80], "beads": "B*3", "beat": 8},
-        {"id": "sa", "kind": "spout", "at": [290, 212], "beads": "A*3", "beat": 8},
-        {"id": "pb", "kind": "pass", "at": [140, 200]},
+        {"id": "sb", "kind": "spout", "at": [80, 80], "beads": "B*6", "beat": 2},
+        {"id": "sa", "kind": "spout", "at": [290, 212], "beads": "A*2", "beat": 4, "start": 7},
+        {"id": "fb", "kind": "fork", "at": [140, 150], "socket": true},
+        {"id": "pb", "kind": "pass", "at": [140, 250]},
         {"id": "pa", "kind": "pass", "at": [220, 250]},
         {"id": "m", "kind": "merge", "at": [180, 300], "socket": true},
-        {"id": "r", "kind": "rack", "at": [180, 388], "period": 4, "slots": [{"want": "B", "count": 3, "order": "Mrs Hale"}, {"want": "A", "count": 3, "order": "Baker"}]}
+        {"id": "r", "kind": "rack", "at": [180, 388], "period": 4, "slots": [{"want": "B", "count": 1, "order": "Mrs Hale"}, {"want": "A", "count": 2, "order": "Baker"}, {"want": "B", "count": 2, "order": "Dr Moss"}]},
+        {"id": "d", "kind": "drain", "at": [40, 472]}
       ],
-      "pipes": [["sb", "pb", [[140, 80]]], ["pb", "m", [[140, 300]]], ["sa", "pa", [[220, 212]]], ["pa", "m", [[220, 300]]], ["m", "r"]],
-      "tray": ["tank4", "tank8", "turnstile"]
+      "pipes": [["sb", "fb", [[140, 80]]], ["fb", "pb"], ["fb", "d", [[40, 150]]], ["pb", "m", [[140, 300]]], ["sa", "pa", [[220, 212]]], ["pa", "m", [[220, 300]]], ["m", "r"]],
+      "tray": ["tank4", "tank8", "turnstile", {"type": "overflow", "n": 3}, "flipper", {"type": "overflow", "n": 2}]
     },
     {
-      "id": "2-14", "name": "Doctor's Orders", "intro": "A blend jar. Part the colours, then share them out.", "shelves": [90, 226, 362],
+      "id": "2-14", "name": "Doctor's Orders", "intro": "A blend jar, and no socket on its fork. Part the colours, then share them out.", "shelves": [90, 226, 362],
       "nodes": [
         {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B+A*6", "beat": 4},
-        {"id": "f", "kind": "fork", "at": [180, 150], "socket": true},
-        {"id": "p", "kind": "pass", "at": [90, 220]},
-        {"id": "gb", "kind": "fork", "at": [90, 300], "socket": true},
-        {"id": "ga", "kind": "fork", "at": [270, 300], "socket": true},
-        {"id": "b1", "kind": "cup", "at": [40, 425], "want": "B", "count": 3, "order": "Mrs Hale"},
-        {"id": "b2", "kind": "cup", "at": [140, 425], "want": "B", "count": 3, "order": "Baker"},
-        {"id": "a1", "kind": "cup", "at": [220, 425], "want": "A", "count": 2, "order": "Dr Moss"},
-        {"id": "a2", "kind": "cup", "at": [320, 425], "want": "A", "count": 4, "order": "Miss Lark"}
+        {"id": "f", "kind": "fork", "at": [180, 150], "tap": true},
+        {"id": "p", "kind": "pass", "at": [90, 190]},
+        {"id": "x", "kind": "cross", "at": [180, 226], "socket": true},
+        {"id": "ga", "kind": "fork", "at": [180, 300], "socket": true},
+        {"id": "gb", "kind": "fork", "at": [290, 300], "socket": true},
+        {"id": "a1", "kind": "cup", "at": [60, 425], "want": "A", "count": 2, "order": "Dr Moss"},
+        {"id": "a2", "kind": "cup", "at": [180, 425], "want": "A", "count": 4, "order": "Miss Lark"},
+        {"id": "b1", "kind": "cup", "at": [250, 425], "want": "B", "count": 1, "order": "Mrs Hale"},
+        {"id": "b2", "kind": "cup", "at": [330, 425], "want": "B", "count": 5, "order": "Baker"}
       ],
-      "pipes": [["s", "f", [[180, 80]]], ["f", "p", [[90, 150]]], ["p", "gb"], ["f", "ga", [[270, 150]]], ["gb", "b1", [[40, 300]]], ["gb", "b2", [[140, 300]]], ["ga", "a1", [[220, 300]]], ["ga", "a2", [[320, 300]]]],
-      "tray": ["separator", "flipper", {"type": "overflow", "n": 2}, "tank4"]
+      "pipes": [["s", "f", [[180, 80]]], ["f", "p", [[90, 150]]], ["p", "x", [[90, 226]]], ["f", "x"], ["x", "gb", [[290, 226]]], ["x", "ga"], ["ga", "a1", [[60, 300]]], ["ga", "a2"], ["gb", "b1", [[250, 300]]], ["gb", "b2", [[330, 300]]]],
+      "tray": ["separator", "turnstile", {"type": "overflow", "n": 1}, {"type": "overflow", "n": 2}, {"type": "overflow", "n": 3}]
     },
     {
       "id": "2-15", "name": "Market Day", "intro": "Market day: every jar, every order, the whole shop.", "height": 1200, "payoff": [180, 900], "shelves": [90, 226, 362, 498, 790, 926],
       "nodes": [
         {"id": "sb", "kind": "spout", "at": [80, 80], "beads": "B*2", "beat": 4},
         {"id": "sa", "kind": "spout", "at": [290, 212], "beads": "A*3", "beat": 4, "start": 7},
-        {"id": "sm", "kind": "spout", "at": [290, 484], "beads": "B+A*3", "beat": 4},
-        {"id": "x1", "kind": "cross", "at": [230, 212], "socket": true},
+        {"id": "sm", "kind": "spout", "at": [290, 484], "beads": "B+A*4", "beat": 4},
+        {"id": "x1", "kind": "cross", "at": [230, 212]},
         {"id": "pb", "kind": "pass", "at": [230, 320]},
         {"id": "pa", "kind": "pass", "at": [120, 320]},
         {"id": "m", "kind": "merge", "at": [120, 420], "socket": true},
         {"id": "x2", "kind": "cross", "at": [120, 484], "socket": true},
         {"id": "pr", "kind": "pass", "at": [250, 800]},
-        {"id": "fs", "kind": "fork", "at": [40, 760], "socket": true},
+        {"id": "fs", "kind": "fork", "at": [20, 760], "socket": true},
         {"id": "r", "kind": "rack", "at": [250, 988], "period": 4, "slots": [{"want": "B", "count": 1, "order": "Mrs Hale"}, {"want": "A", "count": 3, "order": "Baker"}, {"want": "B", "count": 1, "order": "Dr Moss"}]},
-        {"id": "c1", "kind": "cup", "at": [40, 1025], "want": "B", "count": 3, "order": "Miss Lark"},
-        {"id": "d", "kind": "drain", "at": [110, 1072]}
+        {"id": "fd", "kind": "fork", "at": [70, 860], "socket": true},
+        {"id": "c1", "kind": "cup", "at": [20, 1025], "want": "B", "count": 4, "order": "Miss Lark"},
+        {"id": "c2", "kind": "cup", "at": [70, 1025], "want": "A", "count": 1, "order": "Mr Pike"},
+        {"id": "d", "kind": "drain", "at": [125, 1072]}
       ],
-      "pipes": [["sb", "x1", [[230, 80]]], ["x1", "pb"], ["pb", "m", [[230, 420]]], ["sa", "x1"], ["x1", "pa", [[120, 212]]], ["pa", "m"], ["m", "x2"], ["x2", "pr", [[120, 700], [250, 700]]], ["pr", "r"], ["sm", "x2"], ["x2", "fs", [[40, 484]]], ["fs", "c1"], ["fs", "d", [[110, 760]]]],
-      "tray": ["separator", "turnstile", "tank4", "tank8", "flipper"]
+      "pipes": [["sb", "x1", [[230, 80]]], ["x1", "pb"], ["pb", "m", [[230, 420]]], ["sa", "x1"], ["x1", "pa", [[120, 212]]], ["pa", "m"], ["m", "x2"], ["x2", "pr", [[120, 700], [250, 700]]], ["pr", "r"], ["sm", "x2"], ["x2", "fs", [[20, 484]]], ["fs", "c1"], ["fs", "fd", [[70, 760]]], ["fd", "c2"], ["fd", "d", [[125, 860]]]],
+      "tray": ["separator", "turnstile", "tank4", "tank8", {"type": "overflow", "n": 1}, "flipper"]
     },
     {
       "id": "2-C1", "name": "Exact Change", "type": "challenge", "intro": "Overflows only. Every count matters.", "shelves": [90, 226, 362],
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*11", "beat": 3},
-        {"id": "f1", "kind": "fork", "at": [180, 150], "socket": true},
-        {"id": "f2", "kind": "fork", "at": [100, 280], "socket": true},
-        {"id": "f3", "kind": "fork", "at": [260, 280], "socket": true},
-        {"id": "c1", "kind": "cup", "at": [45, 425], "want": "B", "count": 1, "order": "Mrs Hale"},
-        {"id": "c2", "kind": "cup", "at": [140, 425], "want": "B", "count": 3, "order": "Baker"},
-        {"id": "c3", "kind": "cup", "at": [220, 425], "want": "B", "count": 4, "order": "Dr Moss"},
-        {"id": "d", "kind": "drain", "at": [318, 472]}
+        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*13", "beat": 3},
+        {"id": "f1", "kind": "fork", "at": [180, 140], "socket": true},
+        {"id": "f2", "kind": "fork", "at": [70, 250], "socket": true},
+        {"id": "f3", "kind": "fork", "at": [250, 250], "socket": true},
+        {"id": "f4", "kind": "fork", "at": [290, 320], "socket": true},
+        {"id": "c1", "kind": "cup", "at": [30, 425], "want": "B", "count": 3, "order": "Mrs Hale"},
+        {"id": "c2", "kind": "cup", "at": [110, 425], "want": "B", "count": 2, "order": "Baker"},
+        {"id": "c3", "kind": "cup", "at": [190, 425], "want": "B", "count": 1, "order": "Dr Moss"},
+        {"id": "c4", "kind": "cup", "at": [250, 425], "want": "B", "count": 5, "order": "Miss Lark"},
+        {"id": "d", "kind": "drain", "at": [330, 472]}
       ],
-      "pipes": [["s", "f1", [[180, 80]]], ["f1", "f2", [[100, 150]]], ["f1", "f3", [[260, 150]]], ["f2", "c1", [[45, 280]]], ["f2", "c2", [[140, 280]]], ["f3", "c3", [[220, 280]]], ["f3", "d", [[318, 280]]]],
-      "tray": [{"type": "overflow", "n": 1}, {"type": "overflow", "n": 3}, {"type": "overflow", "n": 4}]
+      "pipes": [["s", "f1", [[180, 80]]], ["f1", "f2", [[70, 140]]], ["f1", "f3", [[250, 140]]], ["f2", "c1", [[30, 250]]], ["f2", "c2", [[110, 250]]], ["f3", "c3", [[190, 250]]], ["f3", "f4", [[290, 250]]], ["f4", "c4", [[250, 320]]], ["f4", "d", [[330, 320]]]],
+      "tray": [{"type": "overflow", "n": 1}, {"type": "overflow", "n": 2}, {"type": "overflow", "n": 3}, {"type": "overflow", "n": 4}, {"type": "overflow", "n": 5}, {"type": "overflow", "n": 6}]
     },
     {
       "id": "2-C2", "name": "Closing Time", "type": "challenge", "intro": "Four orders on the rack. It turns every 3 ticks. Tanks only.", "shelves": [90, 226, 362],
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*8", "beat": 2},
-        {"id": "f", "kind": "fork", "at": [180, 140], "socket": true},
-        {"id": "pl", "kind": "pass", "at": [100, 220]},
-        {"id": "pr", "kind": "pass", "at": [260, 220]},
+        {"id": "s", "kind": "spout", "at": [80, 80], "beads": "B*11", "beat": 2},
+        {"id": "p0", "kind": "pass", "at": [180, 110]},
+        {"id": "f", "kind": "fork", "at": [180, 160], "socket": true},
+        {"id": "pl", "kind": "pass", "at": [100, 230]},
+        {"id": "pr", "kind": "pass", "at": [260, 230]},
         {"id": "m", "kind": "merge", "at": [180, 300], "socket": true},
-        {"id": "r", "kind": "rack", "at": [180, 388], "period": 3, "slots": [{"want": "B", "count": 1, "order": "Mrs Hale"}, {"want": "B", "count": 3, "order": "Baker"}, {"want": "B", "count": 2, "order": "Dr Moss"}, {"want": "B", "count": 2, "order": "Miss Lark"}]}
+        {"id": "pm", "kind": "pass", "at": [180, 344]},
+        {"id": "r", "kind": "rack", "at": [180, 388], "period": 3, "slots": [{"want": "B", "count": 2, "order": "Mrs Hale"}, {"want": "B", "count": 2, "order": "Baker"}, {"want": "B", "count": 3, "order": "Dr Moss"}, {"want": "B", "count": 4, "order": "Miss Lark"}]}
       ],
-      "pipes": [["s", "f", [[180, 80]]], ["f", "pl", [[100, 140]]], ["pl", "m", [[100, 300]]], ["f", "pr", [[260, 140]]], ["pr", "m", [[260, 300]]], ["m", "r"]],
-      "tray": ["tank4", "tank4", "tank8"],
+      "pipes": [["s", "p0", [[180, 80]]], ["p0", "f"], ["f", "pl", [[100, 160]]], ["pl", "m", [[100, 300]]], ["f", "pr", [[260, 160]]], ["pr", "m", [[260, 300]]], ["m", "pm"], ["pm", "r"]],
+      "tray": ["tank4", "tank4", "tank8", "tank8", "turnstile", "tank8"],
       "placed": [{"piece": "flipper", "at": "f", "locked": true}]
     },
     {
@@ -256,7 +280,7 @@
         {"id": "d", "kind": "cup", "at": [310, 425], "want": "B", "count": 4, "order": "Miss Lark"}
       ],
       "pipes": [["sa", "x1", [[130, 80]]], ["sb", "x1"], ["x1", "x2"], ["x1", "f", [[60, 212]]], ["f", "x2"], ["f", "c"], ["x2", "a"], ["x2", "g"], ["g", "b", [[265, 360], [220, 360]]], ["g", "d", [[310, 300]]]],
-      "tray": ["flipper", "flipper", {"type": "overflow", "n": 2}, {"type": "overflow", "n": 3}]
+      "tray": ["flipper", "flipper", {"type": "overflow", "n": 2}, {"type": "overflow", "n": 3}, "turnstile", "separator"]
     }
   ]
 }

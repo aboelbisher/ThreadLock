@@ -155,7 +155,9 @@ and a finale's height.
 **One city that runs on liquid light.** Each world is one of its trades: its own place, its own way of
 building a machine, its own goal, its own new parts and its own payoff. Each world has 15 levels on the
 main path (intro, explorations, a breather around 8, a repair, a hard stretch; the finale is the last
-one) plus 3 optional challenges. Every level is a named machine with its own silhouette and its own
+one) plus 3 optional challenges. (23 October, after the owner's playtest, every world's levels were reworked
+to be harder and less alike: decoy pieces in the tray, more sockets, few solutions; the level lists
+below are the earlier ones, the world files are the truth.) Every level is a named machine with its own silhouette and its own
 small idea; worlds and levels must not look the same or share one base idea.
 
 **The same everywhere:** the tray's pieces (one brass toolkit, the same emblem in every world), the liquid
@@ -415,8 +417,9 @@ watching), challenge (optional, hard, unlocks cosmetics), Lab.
 - **Swift**: within the par time.
 
 Stars stick once earned, from any run; Lean and Swift in one run add a gold frame. Pars come from the
-solver (fewest pieces; fastest run). Locks are safe but slow, timing is fast but fragile, so a level
-often has two good answers. World gates: the next world opens at about 45% of the stars before it
+solver: Lean = the fewest pieces, Swift = the fastest run of a Lean machine (since 23 October, after the
+playtest: every level has one machine that earns all three stars; a faster machine with more pieces earns
+Swift too, not Lean). World gates: the next world opens at about 45% of the stars before it
 (World 2 at 20, World 3 at 40, World 4 at 60).
 
 ## 7. Why players stay

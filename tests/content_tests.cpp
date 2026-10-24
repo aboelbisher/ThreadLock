@@ -819,11 +819,13 @@ TEST_SUITE("content") {
       CHECK(run.outcome.failure == Failure::Jam);
       CHECK(board.Jam().lonely == NodeOf(level, "m"));
     }
-    // 4-5: a mixer on the crossing sends each mixed pair on its own lane: green lands in both phials.
+    // 4-5: a mixer on the crossing sends each mixed pair on its own lane: green lands in both phials (a bridge
+    // keeps the right lane's green apart from the rose it crosses further down).
     {
       const Level level = Shipped("4-5");
       Board board(level);
       REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), NodeOf(level, "x")));
+      REQUIRE(board.Place(PieceOf(board, PieceType::Bridge), NodeOf(level, "xr")));
       const Run run = RunBoard(board);
       CHECK(run.outcome.solved);
       CHECK(run.Ticks(EventType::Land, NodeOf(level, "cl")).size() > 0);
@@ -1064,16 +1066,16 @@ TEST_SUITE("content") {
   TEST_CASE("a shipped canal map's city stays where it was (the map's canal quarter shares its rooftops)") {
     // Pinned from MakeCity before its rooftop pass became canal::Rooftops.
     const canal::City city = canal::MakeCity(Shipped("3-6"));
-    REQUIRE(city.roofs.size() == 472);
+    REQUIRE(city.roofs.size() == 484);  // re-pinned 23 Oct: 3-6's harbours moved up
     size_t windows = 0;
     for (const canal::Roof& roof : city.roofs) windows += roof.windows.size();
-    CHECK(windows == 329);
-    CHECK(city.lamps.size() == 20);
+    CHECK(windows == 346);
+    CHECK(city.lamps.size() == 18);
     CHECK(city.roofs[17].box.min.x == doctest::Approx(288.8289f));
     CHECK(city.roofs[17].box.min.y == doctest::Approx(-184.2526f));
-    CHECK(city.roofs.back().box.max.x == doctest::Approx(432.2731f));
-    CHECK(city.roofs.back().box.max.y == doctest::Approx(854.0090f));
-    CHECK(city.roofs.back().tone == 1);
+    CHECK(city.roofs.back().box.max.x == doctest::Approx(435.2550f));
+    CHECK(city.roofs.back().box.max.y == doctest::Approx(853.8830f));
+    CHECK(city.roofs.back().tone == 4);
     CHECK(city.park.min.x == doctest::Approx(173.0f));
     CHECK(city.park.min.y == doctest::Approx(481.0f));
     CHECK(city.trees[3].r == doctest::Approx(10.9681f));
@@ -1107,20 +1109,30 @@ TEST_SUITE("content") {
 
   TEST_CASE("Two Mills (3-9): a fast blue shuts amber's gate for good; a tall tank on blue lets them take turns") {
     const Level level = Shipped("3-9");
-    const int ga = NodeOf(level, "ga"), pb = NodeOf(level, "pb");
+    const int ga = NodeOf(level, "ga"), pb = NodeOf(level, "pb"), x = NodeOf(level, "x");
     {
+      // Their canals cross on the way to the harbours: nothing placed, they meet there.
       Board board(level);
+      const Run run = RunBoard(board);
+      CHECK(run.outcome.failure == Failure::Mud);
+      CHECK(run.outcome.fail_node == x);
+    }
+    {
+      // A lock on the crossing alone: the fast blue shuts amber's gate for good.
+      Board board(level);
+      REQUIRE(board.Place(PieceOf(board, PieceType::Turnstile), x));
       const Run run = RunBoard(board);
       CHECK(run.outcome.jammed);
       CHECK(run.outcome.fail_node == ga);
-      CHECK(run.outcome.fail_tick == 67);
+      CHECK(run.outcome.fail_tick == 86);
     }
     {
       Board board(level);
       REQUIRE(board.Place(PieceOf(board, PieceType::TankTall), pb));
+      REQUIRE(board.Place(PieceOf(board, PieceType::Turnstile), x));
       const Run run = RunBoard(board);
       CHECK(run.outcome.solved);
-      CHECK(run.outcome.ticks == 100);
+      CHECK(run.outcome.ticks == 105);
       CHECK(run.Count(EventType::Flip) == 12);
     }
   }
@@ -1149,7 +1161,7 @@ TEST_SUITE("content") {
       // The bridge at the mill gate's crossing, the lock at the Old Bridge: the city's one Lean answer.
       const Run lean = run(x2, x1);
       CHECK(lean.outcome.solved);
-      CHECK(lean.outcome.ticks == 192);
+      CHECK(lean.outcome.ticks == 190);
       CHECK(level.pars.pieces == 4);
     }
     {

@@ -36,37 +36,40 @@
       "tray": ["separator"]
     },
     {
-      "id": "1-4", "name": "The Hourglass", "intro": "Two colours in one globe at once make mud.",
+      "id": "1-4", "name": "The Hourglass", "intro": "Two colours in one globe at once make mud. Hold one back.",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [90, 58], "beads": "B*5", "beat": 12},
-        {"id": "sa", "kind": "spout", "at": [270, 58], "beads": "A*5", "beat": 12},
+        {"id": "sb", "kind": "spout", "at": [90, 58], "beads": "B*6", "beat": 11},
+        {"id": "sa", "kind": "spout", "at": [270, 58], "beads": "A*6", "beat": 12, "start": 7},
         {"id": "pb", "kind": "pass", "at": [90, 150]},
         {"id": "pa", "kind": "pass", "at": [270, 150]},
         {"id": "x", "kind": "cross", "at": [180, 290], "socket": true},
-        {"id": "ca", "kind": "cup", "at": [90, 470], "want": "A", "count": 5},
-        {"id": "cb", "kind": "cup", "at": [270, 470], "want": "B", "count": 5}
+        {"id": "ca", "kind": "cup", "at": [90, 470], "want": "A", "count": 6},
+        {"id": "cb", "kind": "cup", "at": [270, 470], "want": "B", "count": 6}
       ],
       "pipes": [["sb", "pb"], ["sa", "pa"], ["pb", "x", [[90, 200]]], ["pa", "x", [[270, 200]]], ["x", "ca", [[90, 380]]], ["x", "cb", [[270, 380]]]],
-      "tray": ["tank4"]
+      "tray": ["tank4", "tank4", "tank8"]
     },
     {
       "id": "1-5", "name": "The Bell Jar", "intro": "A turnstile lets one drop into a globe at a time.",
       "nodes": [
         {"id": "sb", "kind": "spout", "at": [80, 58], "beads": "B*8", "beat": 6},
-        {"id": "sa", "kind": "spout", "at": [280, 58], "beads": "A*5", "beat": 10},
-        {"id": "pb", "kind": "pass", "at": [80, 170]},
-        {"id": "pa", "kind": "pass", "at": [280, 170]},
-        {"id": "x", "kind": "cross", "at": [180, 300], "socket": true},
-        {"id": "ca", "kind": "cup", "at": [80, 470], "want": "A", "count": 5},
-        {"id": "cb", "kind": "cup", "at": [280, 470], "want": "B", "count": 8}
+        {"id": "sa", "kind": "spout", "at": [280, 58], "beads": "A*5", "beat": 12, "start": 3},
+        {"id": "pb", "kind": "pass", "at": [80, 140]},
+        {"id": "pa", "kind": "pass", "at": [280, 140]},
+        {"id": "x1", "kind": "cross", "at": [180, 220], "socket": true},
+        {"id": "ql", "kind": "pass", "at": [60, 300]},
+        {"id": "qr", "kind": "pass", "at": [300, 300]},
+        {"id": "x2", "kind": "cross", "at": [180, 430]},
+        {"id": "cb", "kind": "cup", "at": [80, 480], "want": "B", "count": 8},
+        {"id": "ca", "kind": "cup", "at": [280, 480], "want": "A", "count": 5}
       ],
-      "pipes": [["sb", "pb"], ["sa", "pa"], ["pb", "x", [[80, 230]]], ["pa", "x", [[280, 230]]], ["x", "ca", [[80, 380]]], ["x", "cb", [[280, 380]]]],
-      "tray": ["turnstile", "tank4"]
+      "pipes": [["sb", "pb"], ["sa", "pa"], ["pb", "x1", [[80, 180]]], ["pa", "x1", [[280, 180]]], ["x1", "ql", [[60, 260]]], ["x1", "qr", [[300, 260]]], ["ql", "x2", [[60, 400]], {"coil": [1, 1]}], ["qr", "x2", [[300, 400]]], ["x2", "cb", [[80, 450]]], ["x2", "ca", [[280, 450]]]],
+      "tray": ["turnstile", "tank4", "tank8"]
     },
     {
       "id": "1-6", "name": "The Chandelier", "intro": "Light both lanterns. The globe is shared.",
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [180, 58], "beads": "B+A*6", "beat": 12},
+        {"id": "s", "kind": "spout", "at": [180, 58], "beads": "B+A*6", "beat": 9},
         {"id": "f", "kind": "fork", "at": [180, 140], "socket": true},
         {"id": "pl", "kind": "pass", "at": [64, 226]},
         {"id": "pr", "kind": "pass", "at": [296, 312]},
@@ -74,24 +77,26 @@
         {"id": "ca", "kind": "cup", "at": [90, 470], "want": "A", "count": 6},
         {"id": "cb", "kind": "cup", "at": [270, 470], "want": "B", "count": 6}
       ],
-      "pipes": [["s", "f"], ["f", "pl", [[64, 156]]], ["pl", "x", [[64, 290]]], ["f", "pr", [[296, 156], [296, 270]], {"coil": [1, 4]}], ["pr", "x"], ["x", "ca", [[90, 410]]], ["x", "cb", [[270, 410]]]],
-      "tray": ["separator", "tank4", "tank8"]
+      "pipes": [["s", "f"], ["f", "pl", [[64, 156]]], ["pl", "x", [[64, 290]]], ["f", "pr", [[296, 156], [296, 270]], {"coil": [1, 1]}], ["pr", "x"], ["x", "ca", [[90, 410]]], ["x", "cb", [[270, 410]]]],
+      "tray": ["separator", "tank4", "tank8", "tank8", "tank4"]
     },
     {
-      "id": "1-7", "name": "The Pendulum", "intro": "Short tank or tall? Count the turns.",
+      "id": "1-7", "name": "The Pendulum", "intro": "A tall tank slows a fast stream to its own beat.",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [100, 58], "beads": "B*6", "beat": 10},
-        {"id": "sa", "kind": "spout", "at": [260, 58], "beads": "A*6", "beat": 10},
-        {"id": "pb", "kind": "pass", "at": [100, 196]},
-        {"id": "pa", "kind": "pass", "at": [260, 196]},
-        {"id": "x1", "kind": "cross", "at": [180, 260]},
-        {"id": "pm", "kind": "pass", "at": [300, 335]},
-        {"id": "x2", "kind": "cross", "at": [180, 410]},
-        {"id": "cb", "kind": "cup", "at": [90, 480], "want": "B", "count": 6},
-        {"id": "ca", "kind": "cup", "at": [270, 480], "want": "A", "count": 6}
+        {"id": "sb", "kind": "spout", "at": [50, 58], "beads": "B*8", "beat": 5},
+        {"id": "sl", "kind": "spout", "at": [210, 58], "beads": "A*5", "beat": 9},
+        {"id": "sr", "kind": "spout", "at": [320, 58], "beads": "A*5", "beat": 9, "start": 5},
+        {"id": "pb", "kind": "pass", "at": [50, 140]},
+        {"id": "pl", "kind": "pass", "at": [210, 130]},
+        {"id": "pr", "kind": "pass", "at": [320, 190]},
+        {"id": "gl", "kind": "cross", "at": [130, 230], "socket": true},
+        {"id": "gr", "kind": "cross", "at": [230, 370], "socket": true},
+        {"id": "ca", "kind": "cup", "at": [60, 480], "want": "A", "count": 5},
+        {"id": "cb", "kind": "cup", "at": [300, 480], "want": "B", "count": 8},
+        {"id": "cc", "kind": "cup", "at": [180, 480], "want": "A", "count": 5}
       ],
-      "pipes": [["sb", "pb", [], {"coil": [0, 1]}], ["sa", "pa", [], {"coil": [0, 3]}], ["pb", "x1"], ["pa", "x1"], ["x1", "pm"], ["pm", "x2"], ["x1", "x2", [[40, 335]]], ["x2", "cb", [[90, 450]]], ["x2", "ca", [[270, 450]]]],
-      "tray": ["tank4", "tank8"]
+      "pipes": [["sb", "pb"], ["sl", "pl"], ["sr", "pr"], ["pb", "gl", [[50, 170]]], ["pl", "gl", [[210, 170]]], ["gl", "gr", [[220, 290]]], ["gl", "ca", [[60, 300]]], ["pr", "gr", [[320, 300]], {"coil": [0, 1]}], ["gr", "cb", [[300, 440]]], ["gr", "cc", [[180, 440]]]],
+      "tray": ["tank4", "tank8", "tank4"]
     },
     {
       "id": "1-8", "name": "The Fountain", "type": "spectacle", "intro": "Same colours may share a globe.",
@@ -107,111 +112,123 @@
         {"id": "c4", "kind": "cup", "at": [324, 480], "want": "B", "count": 4}
       ],
       "pipes": [["s1", "f1"], ["s2", "f2"], ["f1", "c1", [[36, 200], [36, 420]]], ["f1", "x", [[140, 210]]], ["f2", "x", [[220, 210]]], ["f2", "c4", [[324, 200], [324, 420]]], ["x", "c2", [[132, 380]]], ["x", "c3", [[228, 380]]]],
-      "tray": ["separator", "separator"]
+      "tray": ["separator", "separator", "tank4"]
     },
     {
       "id": "1-9", "name": "The Prism", "intro": "A separator in a globe sorts both tubes.",
       "nodes": [
-        {"id": "s1", "kind": "spout", "at": [50, 58], "beads": "B A*2 B*2 A", "beat": 12},
-        {"id": "s2", "kind": "spout", "at": [310, 58], "beads": "A B*2 A*2 B", "beat": 12},
+        {"id": "s1", "kind": "spout", "at": [50, 58], "beads": "B A B*2 A*2 B", "beat": 5},
+        {"id": "s2", "kind": "spout", "at": [310, 58], "beads": "A*2 B A B*2 A", "beat": 5},
         {"id": "p1", "kind": "pass", "at": [50, 170]},
         {"id": "p2", "kind": "pass", "at": [310, 170]},
         {"id": "x", "kind": "cross", "at": [180, 300], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [100, 480], "want": "B", "count": 6},
-        {"id": "ca", "kind": "cup", "at": [260, 480], "want": "A", "count": 6}
+        {"id": "cb", "kind": "cup", "at": [100, 480], "want": "B", "count": 7},
+        {"id": "ca", "kind": "cup", "at": [260, 480], "want": "A", "count": 7}
       ],
       "pipes": [["s1", "p1"], ["s2", "p2"], ["p1", "x", [[50, 260]]], ["p2", "x", [[310, 260]]], ["x", "cb", [[100, 390]]], ["x", "ca", [[260, 390]]]],
-      "tray": ["separator", "tank4", "turnstile"]
+      "tray": ["separator", "turnstile", "tank4", "tank8"]
     },
     {
       "id": "1-10", "name": "The Gatekeeper", "intro": "Tap the turnstile to turn its arrow. Who goes first?",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [90, 58], "beads": "B*5", "beat": 12},
-        {"id": "sa", "kind": "spout", "at": [270, 58], "beads": "A*5", "beat": 12},
-        {"id": "pb", "kind": "pass", "at": [90, 130]},
-        {"id": "pa", "kind": "pass", "at": [270, 130]},
-        {"id": "x1", "kind": "cross", "at": [180, 210], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [180, 390]},
-        {"id": "cb", "kind": "cup", "at": [90, 480], "want": "B", "count": 5},
-        {"id": "ca", "kind": "cup", "at": [270, 480], "want": "A", "count": 5}
+        {"id": "sb", "kind": "spout", "at": [60, 58], "beads": "B*8", "beat": 4},
+        {"id": "sa", "kind": "spout", "at": [200, 58], "beads": "A*8", "beat": 4},
+        {"id": "pb", "kind": "pass", "at": [60, 120]},
+        {"id": "pa", "kind": "pass", "at": [200, 120]},
+        {"id": "x1", "kind": "cross", "at": [130, 190], "socket": true},
+        {"id": "ql", "kind": "pass", "at": [40, 300]},
+        {"id": "qr", "kind": "pass", "at": [300, 250]},
+        {"id": "x2", "kind": "cross", "at": [200, 440], "socket": true},
+        {"id": "cb", "kind": "cup", "at": [80, 480], "want": "B", "count": 8},
+        {"id": "ca", "kind": "cup", "at": [310, 480], "want": "A", "count": 8}
       ],
-      "pipes": [["sb", "pb"], ["sa", "pa"], ["pb", "x1"], ["pa", "x1"], ["x1", "x2", [[300, 300]]], ["x1", "x2", [[84, 300]]], ["x2", "cb", [[90, 440]]], ["x2", "ca", [[270, 440]]]],
-      "tray": ["turnstile"]
+      "pipes": [["sb", "pb"], ["sa", "pa"], ["pb", "x1", [[60, 150]]], ["pa", "x1", [[200, 150]]], ["x1", "ql", [[40, 240]]], ["x1", "qr", [[300, 190]]], ["ql", "x2", [[40, 390]], {"coil": [0, 2]}], ["qr", "x2", [[300, 390]], {"coil": [0, 3]}], ["x2", "cb", [[80, 450]]], ["x2", "ca", [[310, 450]]]],
+      "tray": ["turnstile", "tank4", "tank8"]
     },
     {
-      "id": "1-11", "name": "The Apprentice", "type": "repair", "intro": "The apprentice set this up. One piece does nothing: move it.",
+      "id": "1-11", "name": "The Apprentice", "type": "repair", "intro": "The apprentice set this up. Every piece is in the wrong place.",
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [60, 58], "beads": "B+A*5", "beat": 12},
-        {"id": "p", "kind": "pass", "at": [200, 110]},
-        {"id": "f", "kind": "fork", "at": [300, 180], "socket": true},
-        {"id": "pl", "kind": "pass", "at": [120, 250]},
-        {"id": "x", "kind": "cross", "at": [180, 360]},
-        {"id": "ca", "kind": "cup", "at": [90, 480], "want": "A", "count": 5},
-        {"id": "cb", "kind": "cup", "at": [270, 480], "want": "B", "count": 5}
+        {"id": "sl", "kind": "spout", "at": [50, 58], "beads": "A*6", "beat": 8, "start": 4},
+        {"id": "sc", "kind": "spout", "at": [180, 58], "beads": "B+A*6", "beat": 8},
+        {"id": "sr", "kind": "spout", "at": [310, 58], "beads": "B*6", "beat": 6},
+        {"id": "f", "kind": "fork", "at": [180, 140], "socket": true},
+        {"id": "pl", "kind": "pass", "at": [50, 170]},
+        {"id": "pb", "kind": "pass", "at": [230, 210]},
+        {"id": "pr", "kind": "pass", "at": [310, 150]},
+        {"id": "gl", "kind": "cross", "at": [90, 320], "socket": true},
+        {"id": "gr", "kind": "cross", "at": [270, 320], "socket": true},
+        {"id": "c1", "kind": "cup", "at": [40, 480], "want": "B", "count": 6},
+        {"id": "c2", "kind": "cup", "at": [140, 480], "want": "A", "count": 6},
+        {"id": "c3", "kind": "cup", "at": [220, 480], "want": "B", "count": 6},
+        {"id": "c4", "kind": "cup", "at": [320, 480], "want": "A", "count": 6}
       ],
-      "pipes": [["s", "p", [[60, 110]]], ["p", "f", [[300, 110]]], ["f", "pl", [[120, 180]]], ["pl", "x", [[120, 300]]], ["f", "x", [[300, 300]]], ["x", "ca", [[90, 420]]], ["x", "cb", [[270, 420]]]],
+      "pipes": [["sl", "pl"], ["sc", "f"], ["f", "gl", [[130, 160], [130, 270]]], ["f", "pb", [[230, 160]]], ["pl", "gl", [[50, 270]]], ["pb", "gr", [[230, 270]]], ["sr", "pr"], ["pr", "gr", [[310, 270]]], ["gl", "c1", [[40, 390]]], ["gl", "c2", [[140, 390]]], ["gr", "c3", [[220, 390]]], ["gr", "c4", [[320, 390]]]],
       "tray": [],
-      "placed": [{"piece": "separator", "at": "p"}, {"piece": "tank4", "at": "pl"}]
+      "placed": [{"piece": "separator", "at": "pl"}, {"piece": "turnstile", "at": "f"}, {"piece": "tank8", "at": "gl"}, {"piece": "tank4", "at": "pr"}]
     },
     {
       "id": "1-12", "name": "The Knot", "intro": "A stream can race itself.",
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [180, 58], "beads": "B A B A B A", "beat": 14},
-        {"id": "x", "kind": "cross", "at": [180, 150], "socket": true},
-        {"id": "p", "kind": "pass", "at": [70, 200]},
-        {"id": "q", "kind": "pass", "at": [290, 230]},
-        {"id": "f", "kind": "fork", "at": [180, 340], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [90, 480], "want": "B", "count": 3},
-        {"id": "ca", "kind": "cup", "at": [270, 480], "want": "A", "count": 3}
+        {"id": "s", "kind": "spout", "at": [150, 58], "beads": "B A*2 B*2 A*2 B*2 A*2 B", "beat": 6},
+        {"id": "s2", "kind": "spout", "at": [320, 58], "beads": "B*9", "beat": 8, "start": 7},
+        {"id": "x", "kind": "cross", "at": [150, 150], "socket": true},
+        {"id": "p", "kind": "pass", "at": [50, 200]},
+        {"id": "pr", "kind": "pass", "at": [320, 200]},
+        {"id": "f", "kind": "fork", "at": [150, 330], "socket": true},
+        {"id": "g", "kind": "cross", "at": [250, 420], "socket": true},
+        {"id": "cb", "kind": "cup", "at": [60, 480], "want": "B", "count": 6},
+        {"id": "ca", "kind": "cup", "at": [320, 480], "want": "A", "count": 6},
+        {"id": "cc", "kind": "cup", "at": [180, 480], "want": "B", "count": 9}
       ],
-      "pipes": [["s", "x"], ["x", "p", [[180, 250], [70, 250]]], ["p", "x", [[70, 150]]], ["x", "q", [[290, 150]]], ["q", "f", [[290, 300]]], ["f", "cb", [[90, 400]]], ["f", "ca", [[270, 400]]]],
-      "tray": ["turnstile", "tank4"],
+      "pipes": [["s", "x"], ["x", "p", [[150, 240], [50, 240]]], ["p", "x", [[50, 150]]], ["x", "f", [[240, 150], [240, 290]]], ["f", "cb", [[60, 400]]], ["f", "g", [[200, 370]]], ["s2", "pr"], ["pr", "g", [[320, 370]]], ["g", "ca", [[320, 450]]], ["g", "cc", [[180, 450]]]],
+      "tray": ["turnstile", "tank4", "tank8", "tank4", "tank8"],
       "placed": [{"piece": "separator", "at": "f", "locked": true}]
     },
     {
       "id": "1-13", "name": "The Braid", "intro": "Three strands, three globes, one order.",
       "nodes": [
-        {"id": "s1", "kind": "spout", "at": [90, 58], "beads": "A*6", "beat": 12},
-        {"id": "s2", "kind": "spout", "at": [180, 58], "beads": "B*6", "beat": 12},
-        {"id": "s3", "kind": "spout", "at": [270, 58], "beads": "A*6", "beat": 12, "start": 3},
+        {"id": "s1", "kind": "spout", "at": [90, 58], "beads": "A*6", "beat": 6},
+        {"id": "s2", "kind": "spout", "at": [180, 58], "beads": "B*6", "beat": 5, "start": 2},
+        {"id": "s3", "kind": "spout", "at": [270, 58], "beads": "A*8", "beat": 5, "start": 4},
         {"id": "p1", "kind": "pass", "at": [90, 110]},
         {"id": "p2", "kind": "pass", "at": [180, 110]},
         {"id": "p3", "kind": "pass", "at": [270, 160]},
         {"id": "g1", "kind": "cross", "at": [135, 170], "socket": true},
         {"id": "g2", "kind": "cross", "at": [225, 260], "socket": true},
         {"id": "g3", "kind": "cross", "at": [135, 350], "socket": true},
-        {"id": "cl", "kind": "cup", "at": [90, 480], "want": "A", "count": 6},
+        {"id": "cl", "kind": "cup", "at": [90, 480], "want": "A", "count": 8},
         {"id": "cc", "kind": "cup", "at": [180, 480], "want": "B", "count": 6},
         {"id": "cr", "kind": "cup", "at": [270, 480], "want": "A", "count": 6}
       ],
       "pipes": [["s1", "p1"], ["s2", "p2"], ["s3", "p3"], ["p1", "g1"], ["p2", "g1"], ["p3", "g2", [[270, 215]]], ["g1", "g2"], ["g1", "g3", [[90, 215], [90, 305]]], ["g2", "cr", [[270, 305], [270, 420]]], ["g2", "g3", [[180, 305]]], ["g3", "cc", [[180, 395], [180, 420]]], ["g3", "cl", [[90, 395], [90, 420]]]],
-      "tray": ["turnstile", "tank4", "tank8"]
+      "tray": ["turnstile", "tank4", "tank8", "tank4"]
     },
     {
-      "id": "1-14", "name": "The Candelabra", "intro": "One of these pieces isn't needed.",
+      "id": "1-14", "name": "The Spindle", "intro": "Two colours may share one tube, one drop at a time.",
       "nodes": [
-        {"id": "sl", "kind": "spout", "at": [50, 58], "beads": "A*6", "beat": 8, "start": 5},
-        {"id": "sc", "kind": "spout", "at": [180, 58], "beads": "B+A*6", "beat": 8},
-        {"id": "sr", "kind": "spout", "at": [310, 58], "beads": "B*8", "beat": 6},
-        {"id": "f", "kind": "fork", "at": [180, 140], "socket": true},
-        {"id": "pl", "kind": "pass", "at": [50, 170]},
-        {"id": "pb", "kind": "pass", "at": [230, 210]},
-        {"id": "gl", "kind": "cross", "at": [90, 320], "socket": true},
-        {"id": "gr", "kind": "cross", "at": [270, 320], "socket": true},
-        {"id": "c1", "kind": "cup", "at": [40, 480], "want": "B", "count": 6},
-        {"id": "c2", "kind": "cup", "at": [140, 480], "want": "A", "count": 6},
-        {"id": "c3", "kind": "cup", "at": [220, 480], "want": "B", "count": 8},
-        {"id": "c4", "kind": "cup", "at": [320, 480], "want": "A", "count": 6}
+        {"id": "sl", "kind": "spout", "at": [50, 58], "beads": "B*5", "beat": 4, "start": 2},
+        {"id": "sr", "kind": "spout", "at": [210, 58], "beads": "A*6", "beat": 5, "start": 2},
+        {"id": "s3", "kind": "spout", "at": [320, 58], "beads": "B*7", "beat": 7, "start": 10},
+        {"id": "pl", "kind": "pass", "at": [50, 140]},
+        {"id": "pr", "kind": "pass", "at": [210, 140]},
+        {"id": "p3", "kind": "pass", "at": [320, 200]},
+        {"id": "m", "kind": "merge", "at": [130, 220], "socket": true},
+        {"id": "ps", "kind": "pass", "at": [130, 290]},
+        {"id": "f", "kind": "fork", "at": [130, 360], "socket": true},
+        {"id": "g", "kind": "cross", "at": [240, 430], "socket": true},
+        {"id": "cb", "kind": "cup", "at": [50, 480], "want": "B", "count": 5},
+        {"id": "cc", "kind": "cup", "at": [180, 480], "want": "B", "count": 7},
+        {"id": "ca", "kind": "cup", "at": [320, 480], "want": "A", "count": 6}
       ],
-      "pipes": [["sl", "pl"], ["sc", "f"], ["f", "gl", [[130, 160], [130, 270]]], ["f", "pb", [[230, 160]]], ["pl", "gl", [[50, 270]]], ["pb", "gr", [[230, 270]]], ["sr", "gr", [[310, 270]]], ["gl", "c1", [[40, 390]]], ["gl", "c2", [[140, 390]]], ["gr", "c3", [[220, 390]]], ["gr", "c4", [[320, 390]]]],
-      "tray": ["separator", "turnstile", "tank4", "tank8"]
+      "pipes": [["sl", "pl"], ["sr", "pr"], ["s3", "p3"], ["pl", "m", [[50, 180]]], ["pr", "m", [[210, 180]]], ["m", "ps"], ["ps", "f"], ["f", "cb", [[50, 420]]], ["f", "g", [[190, 390]]], ["p3", "g", [[320, 380]]], ["g", "ca", [[320, 450]]], ["g", "cc", [[180, 450]]]],
+      "tray": ["separator", "turnstile", "tank4", "tank8", "tank4"]
     },
     {
       "id": "1-15", "name": "The Rose Window", "intro": "The whole tower pours into the window.", "height": 1200, "payoff": [180, 870],
       "nodes": [
-        {"id": "sl", "kind": "spout", "at": [40, 58], "beads": "B*6", "beat": 12, "start": 9},
-        {"id": "sc", "kind": "spout", "at": [130, 58], "beads": "B+A*6", "beat": 12},
-        {"id": "sr", "kind": "spout", "at": [280, 58], "beads": "B A B A B A", "beat": 12},
+        {"id": "sl", "kind": "spout", "at": [40, 58], "beads": "B*8", "beat": 9, "start": 9},
+        {"id": "sc", "kind": "spout", "at": [130, 58], "beads": "B+A*9", "beat": 9, "start": 3},
+        {"id": "sr", "kind": "spout", "at": [280, 58], "beads": "B A B A B A B A B A", "beat": 8, "start": 7},
         {"id": "xk", "kind": "cross", "at": [280, 150], "socket": true},
         {"id": "pk", "kind": "pass", "at": [190, 200]},
         {"id": "pc", "kind": "pass", "at": [130, 200]},
@@ -219,65 +236,70 @@
         {"id": "gp", "kind": "cross", "at": [230, 360], "socket": true},
         {"id": "gb", "kind": "cross", "at": [100, 560], "socket": true},
         {"id": "ga", "kind": "cross", "at": [240, 720], "socket": true},
-        {"id": "lb", "kind": "cup", "at": [50, 1060], "want": "B", "count": 9},
-        {"id": "la", "kind": "cup", "at": [170, 1060], "want": "A", "count": 9},
-        {"id": "ll", "kind": "cup", "at": [300, 1060], "want": "B", "count": 6}
+        {"id": "lb", "kind": "cup", "at": [50, 1060], "want": "B", "count": 13},
+        {"id": "la", "kind": "cup", "at": [170, 1060], "want": "A", "count": 14},
+        {"id": "ll", "kind": "cup", "at": [300, 1060], "want": "B", "count": 9}
       ],
       "pipes": [["sr", "xk"], ["xk", "pk", [[280, 250], [190, 250]]], ["pk", "xk", [[190, 150]]], ["xk", "gp", [[335, 150], [335, 290]]], ["sc", "pc"], ["pc", "gp", [[130, 290]]], ["sl", "pl"], ["gp", "gb", [[150, 430]]], ["gp", "ga", [[310, 430], [310, 620]]], ["pl", "gb", [[40, 480]]], ["gb", "lb", [[50, 640], [50, 980]], {"coil": [1, 3], "drip": 2}], ["gb", "ga", [[160, 640]], {"coil": [0, 1]}], ["ga", "la", [[170, 800], [170, 980]], {"coil": [1, 2], "drip": 2}], ["ga", "ll", [[300, 800], [300, 980]], {"coil": [1, 1], "drip": 2}]],
-      "tray": ["separator", "turnstile", "tank4", "tank8"]
+      "tray": ["separator", "separator", "turnstile", "tank4", "tank8"]
     },
     {
       "id": "1-C1", "name": "The Needle", "type": "challenge", "intro": "A window one tick wide.",
       "nodes": [
-        {"id": "sb1", "kind": "spout", "at": [40, 58], "beads": "B*12", "beat": 6},
-        {"id": "sa", "kind": "spout", "at": [180, 58], "beads": "A*6", "beat": 12},
-        {"id": "sb2", "kind": "spout", "at": [320, 58], "beads": "B*12", "beat": 6, "start": 3},
+        {"id": "sb1", "kind": "spout", "at": [40, 58], "beads": "B*6", "beat": 6, "start": 3},
+        {"id": "sa", "kind": "spout", "at": [180, 58], "beads": "A*4", "beat": 10, "start": 3},
+        {"id": "sb2", "kind": "spout", "at": [290, 58], "beads": "B*8", "beat": 5, "start": 7},
         {"id": "p1", "kind": "pass", "at": [180, 120]},
         {"id": "q1", "kind": "pass", "at": [40, 130]},
-        {"id": "q2", "kind": "pass", "at": [320, 200]},
-        {"id": "g1", "kind": "cross", "at": [180, 200]},
+        {"id": "q2", "kind": "pass", "at": [290, 200]},
+        {"id": "g1", "kind": "cross", "at": [180, 200], "socket": true},
         {"id": "p2", "kind": "pass", "at": [180, 270]},
-        {"id": "g2", "kind": "cross", "at": [180, 340]},
-        {"id": "cl", "kind": "cup", "at": [60, 480], "want": "B", "count": 12},
-        {"id": "ca", "kind": "cup", "at": [180, 480], "want": "A", "count": 6},
-        {"id": "cr", "kind": "cup", "at": [300, 480], "want": "B", "count": 12}
+        {"id": "g2", "kind": "cross", "at": [180, 340], "socket": true},
+        {"id": "cl", "kind": "cup", "at": [60, 480], "want": "B", "count": 8},
+        {"id": "ca", "kind": "cup", "at": [180, 480], "want": "A", "count": 4},
+        {"id": "cr", "kind": "cup", "at": [320, 480], "want": "B", "count": 6}
       ],
-      "pipes": [["sb1", "q1"], ["sa", "p1"], ["sb2", "q2"], ["q1", "g1", [[40, 160]]], ["p1", "g1"], ["g1", "cr", [[300, 240], [300, 420]]], ["g1", "p2"], ["q2", "g2", [[320, 300]]], ["p2", "g2"], ["g2", "cl", [[60, 380], [60, 420]]], ["g2", "ca", [[180, 420]]]],
-      "tray": ["tank4", "tank8"]
+      "pipes": [["sb1", "q1"], ["sa", "p1"], ["sb2", "q2"], ["q1", "g1", [[40, 160]]], ["p1", "g1"], ["g1", "cr", [[335, 250], [335, 420]]], ["g1", "p2"], ["q2", "g2", [[290, 310]]], ["p2", "g2"], ["g2", "cl", [[60, 380], [60, 420]]], ["g2", "ca", [[180, 420]]]],
+      "tray": ["tank4", "tank8", "tank8", "tank4", "tank4", "tank8"]
     },
     {
       "id": "1-C2", "name": "The Spiral Stair", "type": "challenge", "intro": "Two loops. How few pieces can fix both?",
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [180, 58], "beads": "B A B A B A B A", "beat": 6},
-        {"id": "p0", "kind": "pass", "at": [180, 104]},
+        {"id": "s", "kind": "spout", "at": [180, 58], "beads": "B A B A B A B A B A B A", "beat": 6},
         {"id": "g1", "kind": "cross", "at": [180, 150], "socket": true},
         {"id": "p1", "kind": "pass", "at": [100, 185]},
         {"id": "g2", "kind": "cross", "at": [180, 300], "socket": true},
         {"id": "p2", "kind": "pass", "at": [260, 335]},
         {"id": "f", "kind": "fork", "at": [100, 390], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [50, 480], "want": "B", "count": 4},
-        {"id": "ca", "kind": "cup", "at": [150, 480], "want": "A", "count": 4}
+        {"id": "cb", "kind": "cup", "at": [50, 480], "want": "B", "count": 6},
+        {"id": "ca", "kind": "cup", "at": [150, 480], "want": "A", "count": 6}
       ],
-      "pipes": [["s", "p0"], ["p0", "g1"], ["g1", "p1", [[180, 220], [100, 220]]], ["p1", "g1", [[100, 150]]], ["g1", "g2", [[260, 150], [260, 240], [180, 240]]], ["g2", "p2", [[180, 370], [260, 370]]], ["p2", "g2", [[260, 300]]], ["g2", "f", [[100, 300]]], ["f", "cb", [[50, 430]]], ["f", "ca", [[150, 430]]]],
-      "tray": ["tank4", "tank8"],
+      "pipes": [["s", "g1"], ["g1", "p1", [[180, 220], [100, 220]]], ["p1", "g1", [[100, 150]]], ["g1", "g2", [[260, 150], [260, 240], [180, 240]]], ["g2", "p2", [[180, 370], [260, 370]]], ["p2", "g2", [[260, 300]]], ["g2", "f", [[100, 300]]], ["f", "cb", [[50, 430]]], ["f", "ca", [[150, 430]]]],
+      "tray": ["tank4", "tank8", "tank4", "tank8", "tank8"],
       "placed": [{"piece": "separator", "at": "f", "locked": true}]
     },
     {
       "id": "1-C3", "name": "No Locks", "type": "challenge", "intro": "No turnstile this time. Only timing.",
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [60, 58], "beads": "B*6", "beat": 16},
-        {"id": "sa", "kind": "spout", "at": [200, 58], "beads": "A*6", "beat": 16, "start": 9},
-        {"id": "sc", "kind": "spout", "at": [310, 58], "beads": "A*6", "beat": 16, "start": 5},
-        {"id": "pa", "kind": "pass", "at": [200, 112]},
-        {"id": "g1", "kind": "cross", "at": [130, 190], "socket": true},
-        {"id": "pd", "kind": "pass", "at": [60, 330]},
-        {"id": "g2", "kind": "cross", "at": [240, 330], "socket": true},
-        {"id": "c1", "kind": "cup", "at": [60, 480], "want": "A", "count": 6},
-        {"id": "c2", "kind": "cup", "at": [180, 480], "want": "A", "count": 6},
-        {"id": "c3", "kind": "cup", "at": [310, 480], "want": "B", "count": 6}
+        {"id": "s1", "kind": "spout", "at": [40, 58], "beads": "B*8", "beat": 7, "start": 3},
+        {"id": "s2", "kind": "spout", "at": [130, 58], "beads": "B*6", "beat": 7, "start": 8},
+        {"id": "s3", "kind": "spout", "at": [230, 58], "beads": "A*8", "beat": 9, "start": 2},
+        {"id": "s4", "kind": "spout", "at": [320, 58], "beads": "A*6", "beat": 9, "start": 8},
+        {"id": "p1", "kind": "pass", "at": [40, 150]},
+        {"id": "p2", "kind": "pass", "at": [130, 120]},
+        {"id": "p3", "kind": "pass", "at": [230, 120]},
+        {"id": "p4", "kind": "pass", "at": [320, 150]},
+        {"id": "g1", "kind": "cross", "at": [180, 190], "socket": true},
+        {"id": "g2", "kind": "cross", "at": [100, 300], "socket": true},
+        {"id": "g3", "kind": "cross", "at": [260, 300], "socket": true},
+        {"id": "g4", "kind": "cross", "at": [180, 410], "socket": true},
+        {"id": "c1", "kind": "cup", "at": [40, 480], "want": "A", "count": 8},
+        {"id": "c2", "kind": "cup", "at": [130, 480], "want": "A", "count": 6},
+        {"id": "c3", "kind": "cup", "at": [230, 480], "want": "B", "count": 8},
+        {"id": "c4", "kind": "cup", "at": [320, 480], "want": "B", "count": 6}
       ],
-      "pipes": [["sb", "g1", [[60, 130]]], ["sa", "pa"], ["pa", "g1", [[200, 130]]], ["g1", "pd", [[60, 250]]], ["pd", "c1"], ["g1", "g2", [[190, 260]]], ["sc", "g2", [[310, 270]]], ["g2", "c2", [[180, 400]]], ["g2", "c3", [[310, 400]]]],
-      "tray": ["tank4", "tank8"]
+      "pipes": [["s1", "p1"], ["s2", "p2"], ["s3", "p3"], ["s4", "p4"], ["p2", "g1"], ["p3", "g1"], ["g1", "g2"], ["g1", "g3"], ["p1", "g2", [[40, 240]]], ["p4", "g3", [[320, 240]]], ["g2", "c1", [[40, 380]]], ["g2", "g4"], ["g3", "g4"], ["g3", "c4", [[320, 380]]], ["g4", "c2", [[130, 450]]], ["g4", "c3", [[230, 450]]]],
+      "tray": ["tank4", "tank8", "tank4", "tank8", "tank4", "tank8"]
     }
   ]
 }

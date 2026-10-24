@@ -252,7 +252,7 @@ struct Pars {
   int pieces = -1;  // Lean: solved with no more than this many pieces
   int ticks = -1;   // Swift: solved within this many ticks
   Placement lean;   // a solution with `pieces` pieces (the fastest of those)
-  Placement swift;  // a solution within `ticks` ticks (the fewest pieces of those)
+  Placement swift;  // a solution within `ticks` ticks: the Lean one (Swift is timed on the Lean machines)
   int solutions = 0;
   bool Known() const { return pieces >= 0; }
 };

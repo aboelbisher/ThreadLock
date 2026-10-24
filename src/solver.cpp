@@ -163,10 +163,12 @@ SolveReport Solve(const Level& level, const SolveOptions& options) {
   report.pars.solutions = report.solutions;
   if (any) {
     report.pars.pieces = lean.pieces;
-    report.pars.ticks = swift.ticks;
+    // Swift is timed on the Lean machines (the fastest of the fewest pieces), so one machine always earns
+    // all three stars; a faster machine with more pieces only beats the time.
+    report.pars.ticks = lean.ticks;
     report.pars.lean = lean.placement;
-    report.pars.swift = swift.placement;
-    report.two_answers = !(lean.ticks == swift.ticks && lean.pieces == swift.pieces);
+    report.pars.swift = lean.placement;
+    report.two_answers = swift.ticks < lean.ticks;
   }
   return report;
 }

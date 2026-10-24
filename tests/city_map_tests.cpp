@@ -484,8 +484,8 @@ TEST_SUITE("city map") {
     std::vector<std::string> errors;
     REQUIRE(ParseWorld(ReadText(std::string(THREADLOCK_ASSETS) + "/levels/world1.json"), world, errors));
     // As the approved mock (A = amber, B = blue).
-    const char* expected[kLanterns] = {"A",  "BA", "AB", "AB",  "AB",   "AB",  "BA",  "BAAB", "BA",
-                                       "BA", "AB", "BA", "ABA", "BABA", "BAB", "BAB", "BA",   "AAB"};
+    const char* expected[kLanterns] = {"A",  "BA", "AB", "AB",  "BA",   "AB",  "AAB", "BAAB", "BA",
+                                       "BA", "BABA", "BBA", "ABA", "BBA", "BAB", "BAB", "BA",   "AABB"};
     REQUIRE(world.levels.size() == kLanterns);
     for (int i = 0; i < kLanterns; ++i) {
       CAPTURE(world.levels[i].id);
