@@ -17,7 +17,10 @@ condition); every piece is a concurrency idea (separator = branching, turnstile 
 flipper = round-robin, overflow = counting semaphore, bridge = don't share, mixer = join, twin gate =
 barrier), every failure a real bug (mud, spill, dry, THREADLOCKED). Stars: Solve / Lean (≤ par pieces) /
 Swift (≤ par time). Launch scope: worlds 1–4 (60 levels + 12 challenges) and the Lab (the daily puzzle was removed 23 October).
-Each world is a trade of one city that runs on liquid light, with its own look and board grammar.
+Each world is a trade of one city that runs on liquid light, with its own look and board grammar, and (v4, round 4)
+its own law and its own tray: W1 {separator, turnstile, tanks} unchanged; W2 {flipper, overflow, tipping bucket}:
+prescriptions measured in doses, no crossings or merges; W3 {signal, passing place, bridge}: two-way canals one barge
+wide, basins, no mud; W4 {mixer, twin seal, candle}: recipe phials (layers in order). The Lab keeps the mixed kit.
 
 Competition (researched before the pitch): Auditorium (PC, old) is the closest; mobile pipe puzzles are
 static. Zachtronics games (SpaceChem, Opus Magnum) are the model for "integer sim + animated view".
@@ -33,6 +36,9 @@ static. Zachtronics games (SpaceChem, Opus Magnum) are the model for "integer si
 - 2026-10-16: owner feedback ("make it harder"; boards "flat and not artistic"; worlds must not share one
   base idea) led to v3, designed on a claude.ai canvas in three rounds and approved: open sockets, machine
   parts (turning rack, mills + gates), four worlds with their own looks. Built step by step (DESIGN.md §11).
+- 2026-11-01: round 4 approved (pitch page "Threadlock round 4" on claude.ai): the worlds felt alike (one shared
+  tray; W3's Lean machines used W1's tank/turnstile in 17/18 levels), so each world gets its own law and tray
+  (DESIGN.md v4, decisions 12-17, §14). Order: docs, mocks, W4, W2, W3.
 
 ## Layout
 ```
@@ -148,6 +154,12 @@ external/WLWengine/           the engine (v0.2.0 + KeepScreenOn + TextStyle::rot
   the same puzzle everywhere): pipe cells use doubles + plain `sqrt` (never `std::hypot` / float sums), and the
   generator makes one random draw per statement (C++ leaves argument order unspecified: MSVC and clang differ).
   The test "generated levels are the same on every device" pins fingerprints; run the tests on a phone too.
+- **Round 4 (v4, planned, not built yet; DESIGN.md §3-§5):** new pieces Bucket (n 2-4; W2), Signal and
+  PassingPlace (W3), Candle (n 1-4; W4); failures HalfFull ("Never tipped") and Muddled; events Tip, Open, Standoff,
+  Muddle. Cups take prescriptions (`"want": {"B": 2, "A": 1}`, W2) or recipes (`"recipe": "G G R"`, W4). W3 levels
+  are `"traffic": "two-way"` (barges with a heading, routed to their harbour, `Basin` nodes with `"berths"`, a spout's
+  `"to"`, stretches; no mud) and everything two-way runs only when that flag is set, so W1, W2, W4 and the Lab keep
+  their runs and pars. A kit check (`KitProblems` in `LookProblems`) keeps each world's tray to its own pieces.
 
 ## The level tool (PC)
 ```
@@ -238,4 +250,6 @@ open everything, hints, wipe, ads).
 ## Next steps
 DESIGN.md §11 is the build order. All four launch worlds are done (World 4, The Mixing Hall, 23 October), each with
 its district on the map. The Lab draws its boards in the Lantern Works' art without the rose window, tinted mint
-(world_look.h kLabLook). Next: DESIGN §11 step 4 (playtest World 1 with 5-10 people) and step 5 (launch).
+(world_look.h kLabLook). Next: round 4 (DESIGN §11 "Round 4"): step 1, the mocks (nine playable boards on a
+claude.ai page, three per world, with a JS solver), then World 4, World 2, World 3 rebuilt on their own laws and
+trays. The World 1 playtest (step 4) can run any time; then launch (step 5).

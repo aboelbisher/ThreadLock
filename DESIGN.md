@@ -1,9 +1,12 @@
 # Threadlock: game design
 
-Draft 2 of 17 October 2026: **v3**, approved by the owner on 16 October. v3 makes the puzzles harder
-(any piece in any socket) and gives every world its own look and its own idea. The illustrated version is
-the claude.ai canvas "Threadlock v3: open sockets + art" (round 1: open sockets; round 2: machine parts;
-round 3: four worlds, one city). Draft 1 (v2, 16 October) is in git history; §13 lists what moved.
+Draft 3 of 1 November 2026: **v4**, approved by the owner on 1 November (round 4: the pitch page
+"Threadlock round 4" on claude.ai, with playable sample boards). v4 gives every world **its own law and its
+own tray**: World 1 stays as it is; World 2 measures prescriptions in doses (the tipping bucket); World 3's
+canals run both ways, one barge wide; World 4's phials take recipes in order (the candle). Built world by
+world (§11); until a world is rebuilt, its section below says what changes and the code is still v3.
+Draft 2 (v3, 17 October: open sockets, machine parts, four looks) and draft 1 (v2) are in git history;
+§13 and §14 list what moved.
 
 Glowing liquid pours through a machine. You drop a few pieces into sockets, tap play, and watch it run.
 If two colours share a junction at the same moment, they turn to mud. Every piece is an idea from
@@ -12,7 +15,15 @@ pieces and machines. Portrait, one hand, runs of 20–60 s.
 
 ## 1. The core
 
-**The one rule: different colours must never share a junction at the same moment.**
+**The one rule: different colours must never share a junction at the same moment.** It is World 1's law
+and holds wherever junctions are shared. Each later world adds a law of its own (v4):
+
+| World | Its law | Teaches |
+|---|---|---|
+| 1 · The Lantern Works | different colours never share a junction at once | race condition, mutex, sleep |
+| 2 · The Apothecary | every order is a prescription, measured out in doses | batching, round robin, time slicing |
+| 3 · The Canal City | a canal is one barge wide, and barges go both ways | single-lane bridge, deadlock, starvation |
+| 4 · The Sanctum | a recipe goes in order, and every element waits for its partner | join, barrier, happens-before |
 
 The play loop: **look** (spouts show every drop they will pour, cups what they want), **place** (drag
 pieces from the tray into sockets, tap a piece to set it), **play** (one tap; from here on you never
@@ -22,10 +33,11 @@ to the moment it went wrong), **pure** (every cup full and pure: stars, then the
 | Player sees | What happened | The real bug | First met |
 |---|---|---|---|
 | **Mud**: two colours touch, turn brown and lose their glow | different colours inside one junction at once | race condition | World 1 |
-| **Spill**: a cup overflows | more drops than the cup takes | overflow | World 2 |
+| **Spill**: a cup overflows | more drops than the cup takes (W2: more of one colour than its prescription) | overflow | World 2 |
 | **Dry**: a cup ends short | its drops went elsewhere or never came | starvation | World 2 |
-| **THREADLOCKED**: everything stops, padlocks, a ring of arrows | pieces wait for each other in a circle, or for a partner or a signal that never comes | deadlock | World 3 |
-| **Muddled**: a layered glass gets its layers out of order | drops arrived out of order | ordering bug | later worlds |
+| **Never tipped**: a half-full bucket, everything else still | the last batch never filled, so it never flushed | unflushed buffer | World 2 |
+| **THREADLOCKED**: everything stops, padlocks, a ring of arrows | pieces wait for each other in a circle, or for a partner or a signal that never comes | deadlock | World 3 (W3: **gridlock**, incl. two barges nose to nose; W4: a candle that never burns down) |
+| **Muddled**: a layered phial gets its layers out of order | drops arrived out of order | ordering bug | World 4 |
 | **Ink**: a cup turns black | a bad drop reached a cup | unhandled error | later worlds |
 
 Pillars: what you see is the timing (one speed everywhere, deterministic runs); place, then watch;
@@ -47,6 +59,11 @@ mud feels bad.
 - **Nothing is created or lost**, except down a drain. A blend is two drops stuck together: a
   separator pulls them apart; a mixer turns one blue and one amber into two green.
 - **Cups** want one colour and an exact number of drops. A turning rack's bottles are cups too (§4).
+  v4 adds two kinds: a **prescription** (W2) wants exact counts of several colours, in any order ("2 blue,
+  1 amber"; a blend counts one of each of its colours); a **recipe** (W4) wants its layers in order, bottom
+  up ("green, green, rose"): a drop out of turn is Muddled.
+- **Two-way canals** (W3 only, v4): a level marked two-way runs its pipes both ways, one barge per cell,
+  barges routing themselves to their harbour; nothing mixes (no mud), barges wait (§4).
 - **A run ends** when every drop has landed (solved if every cup is full and pure), or at once when
   nothing can ever move again (threadlocked).
 - **Sockets are open** (v3): every piece goes in every socket, and sockets all look the same, so the
@@ -60,7 +77,8 @@ enter on the tick it leaves (0 ticks to spare = a near miss, with a sparkle and 
 
 ## 3. The pieces
 
-The tray holds nine pieces (the tank in two sizes), the same brass toolkit in every world.
+**Each world's tray holds only its own pieces** (v4, decision 12). Every piece is still drawn in the one
+brass toolkit, so a piece reads the same wherever it shows up; the Lab keeps v3's mixed kit.
 
 | Piece | World | What it does | Tap | Idea |
 |---|---|---|---|---|
@@ -69,13 +87,21 @@ The tray holds nine pieces (the tank in two sizes), the same brass toolkit in ev
 | Tank | 1 | holds each drop longer: short (+4) and tall (+8), **fixed sizes** (decision 4) | — | buffer, sleep |
 | Flipper | 2 | left, right, left, right, starting on the side it shows | first side | round-robin |
 | Overflow N | 2 | the first N drops go its way, then everything the other way | its way | counting semaphore |
-| Bridge | 3 | lifts one lane over the other: no waiting, no mud. Rare | — | don't share |
+| Tipping bucket N | 2 (v4) | fills with N drops, tips, and pours them on as one train; on a fork the doses alternate sides. N 2-4, fixed in the tray | first side | batching |
+| Signal | 3 (v4) | on a canal socket: barges may enter its stretch only while none heads the other way (convoys follow); the arrow picks the end that wins a tie | turn the arrow | mutex on a lane, priority |
+| Passing place | 3 (v4) | on a canal socket: a bay where two barges heading opposite ways pass | — | a buffer of two |
+| Bridge | 3 | lifts one lane over the other: no waiting, no mud | — | don't share |
 | Mixer | 4 | waits for one drop from each way in and mixes them | — | join, rendezvous |
 | Twin gate | 4 | holds two ways in until both have a drop, then lets both go together (W4's "twin seals") | — | barrier |
+| Candle N | 4 (v4) | on a groove socket that leads to a phial: holds its drop until the phial holds N, then lets go for good. N 1-4, fixed in the tray | — | happens-before, countdown latch |
 
-v2's Collector (W5) and Bell (W6) are no longer pieces: batching comes back as W5's tipping bucket and
-signals as W3's mill and gates, both board parts (§4). Held in reserve for later worlds: the Tint (a
-transform).
+The kits: **W1** separator, turnstile, tank +4, tank +8; **W2** flipper, overflow, bucket; **W3** signal,
+passing place, bridge; **W4** mixer, twin gate, candle. A tray or a placed piece outside its world's kit is
+a level error (`check`, the tests).
+
+v2's Collector (W5) and Bell (W6) are no longer pieces: batching came back as W2's tipping bucket (v4: a
+piece) and signals as W3's mill and gates (board parts, §4) and its signal piece. Held in reserve for later
+worlds: the Tint (a transform).
 
 Colours (every pair stays apart under protanopia and deuteranopia, OKLab ΔE ≥ 10): blue #2F7BFF,
 amber #FFC53D, green #3FE0A0 (= blue + amber), rose #FF4FA3, pearl #F2F6FF (= green + rose), ink, mud
@@ -97,6 +123,13 @@ counts as a piece for Lean); **trap** = it waits forever: THREADLOCKED, with the
 | Mixer | **trap**: one pipe in, its first drop waits forever for a partner | **trap** | **new**: waits for a drop from each lane, mixes them, and each goes on along its own lane | acts: two of the mix go on |
 | Twin gate | **trap** | on a twin pair: acts (holds both pipes until each has a drop, then both go); on a single pipe: **trap** | **new**: holds both lanes until each has a drop, then lets both in together: two colours make mud | **new**: the same; both enter together, so they must be one colour |
 | Tank +4 / +8 | **new**: holds each drop, then the flap sends it on | acts: holds each drop, one at a time | **new**: drops stay 4 or 8 ticks longer inside: a slower crossing, still shared, more time to collide | **new**: the same, on a merge |
+| Bucket N (v4) | acts: each dose of N goes to one side, the next dose the other, starting on its side | acts: doses down its one way out | idle | acts: fills from either way in, doses down the one out |
+| Signal (v4) | idle | acts (two-way canals): guards its stretch | idle | idle |
+| Passing place (v4) | idle | acts (two-way canals): two barges pass, one each way | idle | idle |
+| Candle N (v4) | idle | acts when its way out leads straight to a phial (through sockets, gates, mills, merges); else idle | idle | idle |
+
+v4 worlds don't mix kits, so most cells of the table never meet in a level: W2 has no crossings or merges,
+W3's canals have no forks or merges (basins instead, §4), W4's candles only care about pipe sockets.
 
 - **Mud, exact.** Crossings and merges are shared places: two colours inside at once make mud, unless a
   turnstile or a mixer sits there, or a bridge on a crossing. Any other piece leaves them shared.
@@ -136,8 +169,27 @@ concurrency idea:
   end, so the order of moves inside a tick doesn't matter. A gate sits on a pipe and starts open or shut;
   shut, it admits nothing (a drop already inside still leaves). One drop = one flip (no gear ratios yet).
   Mills and gates are not sockets.
-- **Tipping bucket N** (W5, later, batching): fills with N drops, tips, and pours them out as one train.
-  v2's Collector, built as a machine. Not in the launch build.
+- **Tipping bucket N** (v4: a W2 piece, §3, no longer a board part). Exact: it takes drops while it holds
+  fewer than N and isn't pouring (no dwell); the Nth tips it, and its drops leave in entry order, one a tick,
+  a back-to-back train; empty again, it fills again (on a fork the side flips). Frozen with drops in a bucket
+  that never filled = **Never tipped** (the half-full bucket), not THREADLOCKED.
+- **Prescriptions** (W2, v4): a bottle or a rack's bottle wants counts per colour (`"want": {"B": 2, "A":
+  1}`). A colour it doesn't want = wrong; one too many of a colour = spill (that colour named); short at the
+  end = dry, what's missing listed. The rack still turns on its clock, so a dose lands whole in one bottle
+  only if the rack doesn't turn mid-dose: that's the level's puzzle.
+- **Two-way canals** (W3, v4; a level's `"traffic": "two-way"`): every canal is one barge wide and runs
+  both ways. A barge sails to the harbour that wants its colour (a wharf may name one with `"to"`), by the
+  shortest way (fixed ties, the same on every device); it moves a cell when the cell ahead is free, so two
+  barges facing one free cell from both sides, or nose to nose, are a **standoff** (gridlock). **Basins**
+  (`"berths": 2`) join canals and hold that many barges; any barge whose way is free leaves (that's where
+  barges pass). A crossing is a basin of one (a bridge makes it two lanes); a canal socket holds one barge.
+  A **stretch** = the canals between two basins (or a wharf / harbour), joined through sockets, locks and
+  gates: what a signal guards. No forks, no merges, no mud: barges wait instead. Mills and gates work as
+  before, for barges either way (block signals).
+- **Recipes** (W4, v4; a phial's `"recipe": "G G R"`): layers land in order, bottom up. A drop out of turn,
+  or a blend (two layers at once), = **Muddled**; too many = spill; short = dry. A candle (§3) makes a
+  later layer wait for the earlier ones; never burning down (the phial never reaches N) = THREADLOCKED with
+  the candle shown as the lonely piece.
 - **Grand machines** (finales): each world's finale is two screens tall (`"height": 1200` in its level).
   The screen shows one normal board's worth (600 units) at the usual scale, so pieces keep their size; the
   rest scrolls. Building: drag the empty board (it flings), or hold a dragged piece near the view's top or
@@ -160,10 +212,12 @@ to be harder and less alike: decoy pieces in the tray, more sockets, few solutio
 below are the earlier ones, the world files are the truth.) Every level is a named machine with its own silhouette and its own
 small idea; worlds and levels must not look the same or share one base idea.
 
-**The same everywhere:** the tray's pieces (one brass toolkit, the same emblem in every world), the liquid
-colours and their shapes, the rules, the HUD buttons and the result cards (tinted per world, same layout:
-back, title + "n-m · world", three stars with their pars, hint / restart / speed / the big EDIT button). A
-piece learnt in World 1 reads the same in World 4.
+**The same everywhere:** the way pieces are drawn (one brass toolkit), the liquid colours and their shapes,
+the tick and the core rules, the HUD buttons and the result cards (tinted per world, same layout: back,
+title + "n-m · world", three stars with their pars, hint / restart / speed / the big EDIT button).
+**Different per world (v4):** the tray (each world its own kit, §3) and the law (§1). v3 shared one tray
+everywhere, and the owner found the worlds felt alike (W3's Lean machines used a W1 tank or turnstile in 17
+of 18 levels; W4's own twin seal was in 4; every goal was "N drops of one colour").
 
 **The map is the city:** one illustrated map with four districts (the tower, the market square, the canal
 quarter, the sanctum). Solving a level lights its corner of its district, so progress shows as the city
@@ -254,6 +308,7 @@ ambience plays.
   (two streams squeeze through one waist); The Chandelier (out along the arms and back to one hub; drawn
   as 1-6, "Light both lanterns. The globe is shared.", ≤ 2 pieces, ≤ 0:18); The Braid (three strands,
   three crossings, one order).
+- **v4:** unchanged (levels, art, sounds, pars). Its tray already held only its own kit.
 
 ### World 2 · Fair Shares · The Apothecary
 - **Place:** an apothecary on market day.
@@ -291,6 +346,26 @@ ambience plays.
   top of screen 2. One solution, Lean 4. Challenges: 2-C1 Exact Change (overflows only: 1, 3, 4 and the
   sink), 2-C2 Closing Time (a 4-bottle rack every 3 ticks, tanks only), 2-C3 The Ledger (two jars cross
   twice, routers on the crossings, orders 1/2/3/4).
+- **v4 (round 4): "Every order is a prescription, measured out in doses."** Pure counting: no crossings, no
+  merges (a shop-level check), so no mud and no tanks. Tray: flipper, overflow, tipping bucket. Orders become
+  prescriptions (§4); the slips write a row per colour, ticked when exact; bottles fill in bands bottom up,
+  a tick mark per wanted drop. The bucket is a brass seesaw with a glass measure (N marks) that fills and
+  tips. New failure: **Never tipped** (the bucket's glass rings red, its drops pulse); a spill names the
+  colour ("Mrs Hale's prescription takes 1 amber: the second amber spilled."), a short bottle lists what's
+  missing. Sounds: a marimba tick rising with the bucket's fill, the tip (a wooden clack + a pizzicato run),
+  a dull knock for never tipped.
+  **v4 levels** (ids kept; prescriptions from 2-4): 2-1 Opening Time (flipper, 3 + 3); 2-2 The Odd Drop (5 =
+  3 + 2); 2-3 Inventory (overflow, the rest down the sink); 2-4 First Dose (the pitch's board: B A B A B A
+  into 2B+1A / 1B+2A, a bucket of 3; a flipper and a bucket of 2 as decoys); 2-5 Three Sisters (overflow then
+  flipper); 2-6 The Handle (a handled fork + a bucket); 2-7 Morning Orders (a rack of three: a bucket aims one
+  whole dose per bottle); 2-8 The Bottling Line (three forks along the shelf, four prescriptions); 2-9 The
+  Lazy Susan (a flipper halves the rate for the rack); 2-10 The Half-Full Bucket (seven drops, buckets of 2
+  and 3: sizes so nothing's stranded); 2-11 The Shop Boy (repair: a bucket of 2 where a 3 belongs, a flipper
+  set wrong); 2-12 Doses of Doses (a bucket feeding a bucket); 2-13 Rush Order (a 4-bottle rack every 3
+  ticks, aimed with doses); 2-14 Doctor's Orders (a blend jar: a blend counts one of each); 2-15 Market Day
+  (two screens: the stock room's buckets and flippers, the counter's rack and sink; Lean 4). Challenges:
+  2-C1 Exact Change (overflows only), 2-C2 Closing Time (a rack every 3 ticks, buckets only), 2-C3 The Ledger
+  (one jar of twelve interleaved drops into four prescriptions).
 
 ### World 3 · Rush Hour · The Canal City
 - **Place:** the city's canals at night, seen from above.
@@ -338,6 +413,25 @@ ambience plays.
   the city). Challenges: 3-C1 Gridlock (four crossings round one block, no bridges; one solution), 3-C2
   Zipper (a fast lane and a slow one share a lock: blue, amber, blue...), 3-C3 Clockwork (amber starts the
   clock, each mill opens the next gate round). Every placement of every level is tested to end.
+- **v4 (round 4): "A canal is one barge wide, and barges go both ways."** Every W3 level is two-way (§4):
+  barges steer themselves home, basins join the canals, nothing mixes, so murk is retired and every failure
+  is waiting: a **standoff** (two bows touching, a red ring, both horns), a **full basin** (red berths), a
+  circle of waiting (traced as now), all titled GRIDLOCK. Tray: signal, passing place, bridge; mills and gates
+  stay as block signals. The signal is a lamp post with lamps at both ends of its stretch, green or red; a
+  passing place widens its canal into a bay; the flow dashes go (they'd lie on a two-way canal); basins are
+  wide water with berths and bollards. Sounds: the signal's clack when its lamps change, a standoff's two
+  horns a tritone apart, a mooring creak in basins.
+  **v4 levels** (ids kept; all two-way canal maps): 3-1 The Narrows (the pitch's board: one narrow both ways;
+  a signal; a passing place as decoy); 3-2 Convoy (the arrow decides who waits; Swift needs the right side
+  first); 3-3 The Passing Place (barges meet exactly at the bay; a signal works too, slower); 3-4 Two Narrows
+  (a two-berth basin between two narrows: a signal on each); 3-5 Old Bridge (a one-at-a-time crossing backs
+  queues into a narrow: a bridge); 3-6 The Mill Gate (a mill shuts the far gate: a block signal; signal the
+  other stretch); 3-7 Every Other Barge; 3-8 The Roundabout (three basins in a ring); 3-9 Two Mills; 3-10 The
+  Long Queue (four barges, a basin of three); 3-11 The Harbourmaster (repair: signals with wrong arrows);
+  3-12 Interchange (three canals, crossings, one bridge); 3-13 Ring Road (four basins round a block: circular
+  wait); 3-14 Signal Box (two signals, a passing place, mills); 3-15 Rush Hour (two screens). Challenges: 3-C1
+  Gridlock (four one-berth basins, no bridges), 3-C2 Zipper (alternating convoys through one narrow), 3-C3
+  Night Ferry (a long narrow with two bays).
 
 ### World 4 · The Mixing Hall · The Sanctum
 - **Place:** the alchemists' sanctum, an obsidian table lit by candles.
@@ -401,11 +495,30 @@ ambience plays.
   the second, where rose joins it at the heart for pearl (Lean 4, 0:20). Challenges: 4-C1 Hold and Wait II,
   4-C2 Barrier (the seals and a third stream out of step: a tank), 4-C3 Leftover Rose. Every placement of
   every level is tested to end.
+- **v4 (round 4): "A recipe goes in order, and every element waits for its partner."** Tray: mixer, twin
+  seal, candle; no tanks, so partners must wait for each other. Phials take recipes (§4): bands land bottom
+  up, the wanted layers ghosted on the glass, the pill shows the glyphs bottom to top with the next one lit.
+  The candle is brass with wax ringed N times and a thread and stopper across its groove; it burns a ring per
+  layer landed in its phial, and at N the thread snaps and the stopper drops (a flare). New failures:
+  **Muddled** (the wrong band swirls, a red ring, "out of turn": "The phial's recipe is green, green, then
+  rose. Rose came second, out of turn.") and the lonely candle (its flame gutters, its phial rings: "The
+  candle waits for the phial to hold 2; it holds 1."). Sounds: a burn pluck per ring, the thread's snap (a
+  dry pluck + a low bell), an organ cluster for Muddled. The mixer's swirl takes the colours it mixes.
+  **v4 levels** (ids kept; every level a sigil): 4-1 First Green (a mixer); 4-2 Partners (one of each; arcs);
+  4-3 Green, then Rose (the pitch's board: recipe G G R, a mixer + a candle of 2; a seal as decoy); 4-4
+  Leftovers (one amber too many: the mixer where the counts pair up, the extra amber to its own phial); 4-5
+  Green Crossing; 4-6 Rose Waits (two phials want rose last: two candles); 4-7 The Twin Seals; 4-8 The Dye
+  Fountain (spectacle); 4-9 Three Layers (recipe B G R: candles of 1 and 2); 4-10 Seal or Candle (both order
+  it: the seal is Lean, the candle Swift); 4-11 The Wrong Globe (repair: move the mixer); 4-12 Hold and Wait
+  (two mixers hold each other's partners; a candle breaks the cycle); 4-13 Pearl (green, then green + rose, in
+  order); 4-14 Hexagram (six points, a four-layer recipe); 4-15 The Great Work (two sigils: green behind twin
+  seals runs down, rose joins at the heart for pearl; recipe G P P; Lean 4). Challenges: 4-C1 Hold and Wait II,
+  4-C2 Barrier (seals + a third stream ordered by a candle), 4-C3 The Long Rite (five layers, three candles).
 
 ### Worlds 5–8
 Live updates after launch, to be re-planned (v2's plan: The Layer Bar, Signal Tower, Clockworks, The
-Grand Works). Signals and time slices have moved into worlds 3 and 2; W5 keeps batching (the tipping
-bucket).
+Grand Works). Signals, time slices and batching have moved into worlds 3 and 2 (v4: the tipping bucket is
+W2's), so W5 needs a new idea.
 
 Level types: build (default), repair (pieces placed, one thing wrong), spectacle (a breather made for
 watching), challenge (optional, hard, unlocks cosmetics), Lab.
@@ -491,9 +604,21 @@ committed after the owner's OK, in small commits:
    challenges + The Great Work (two sigils), its choir / harp / organ sounds and sanctum ambience, the
    sanctum floor district. **All four launch worlds are built.** The daily puzzle was removed (23 October: the owner's call); the Lab
    stays; it draws its boards in the Lantern Works' glass and brass, without the rose window, tinted mint.
-4. Playtest World 1 with 5–10 people; adjust levels with the tool.
+4. Playtest World 1 with 5–10 people; adjust levels with the tool. (Independent of round 4: any time.)
 5. Launch: Threadlock's own AdMob app and units, analytics, store page, closed test. Then worlds 5–8 as
    live updates.
+
+**Round 4 (v4), approved 1 November**, before launch, in this order (decision 17):
+0. This document and CLAUDE.md.
+1. Mocks before any C++: one claude.ai page with nine playable boards (three harder ones per world) on
+   small data-driven JS sims grown from the pitch's, with a brute-force solver (Lean par, solutions, the
+   empty board fails). The owner plays them on the phone; rule changes found there land here first.
+2. World 4 (the smallest change), 3. World 2, 4. World 3 (the biggest). Each world as in step 3 above:
+   rules + tests; the level format + look checks + the mock board as its first level; the art; the levels
+   (15 + 3); the sounds; the map (lantern colours from prescriptions and recipes, the news); these docs.
+   Shared code (the new piece types, events, failures, the kit check) lands with the first world that needs
+   it. Level ids stay; every W2-4 par is re-baked; W1's and the Lab's must not change. Pre-launch, so no
+   save migration (the debug panel wipes W2-4 progress).
 
 The cost the owner accepted: four looks are about four times the drawing work (each world needs its own
 pipes, containers, junctions, background, payoff animation and sounds), and the level files gain
@@ -511,10 +636,20 @@ Taken 16 October 2026 (v2), all as recommended:
 
 Taken 16 October 2026 (v3, round 3 of the canvas), all as recommended:
 7. Any piece in any socket, as in the table of §3.
-8. Mills geared to gates in World 3; the turning rack in World 2; the tipping bucket later (World 5).
+8. Mills geared to gates in World 3; the turning rack in World 2; the tipping bucket later (World 5; v4: World 2, decision 13).
 9. Finales two screens tall.
 10. One city as the map.
 11. Rules first, then a World 1 vertical slice.
+
+Taken 1 November 2026 (v4, round 4), all as recommended:
+12. Each world's tray holds only its own pieces (§3); the Lab keeps the mixed kit.
+13. World 2: prescriptions and the tipping bucket; flipper, overflow, rack and sink stay; no crossings or
+    merges.
+14. World 3: two-way canals one barge wide, barges route themselves, basins, no mud; the signal, the passing
+    place, the bridge; mills and gates stay.
+15. World 4: recipe phials and the candle; the mixer and twin seal stay.
+16. World 1 unchanged.
+17. Order: docs, mocks, World 4, World 2, World 3.
 
 ## 13. What moved from v2
 
@@ -527,3 +662,16 @@ Taken 16 October 2026 (v3, round 3 of the canvas), all as recommended:
 - Looks: one dark-glass look for every world → a look per world, one city as the map.
 - World names stay, and every world still has 15 main-path levels plus 3 challenges; the levels are
   redesigned as named machines when each world is built. Worlds 5–8 need re-planning.
+
+## 14. What moved from v3
+
+- Trays: one brass toolkit in every world → each world its own kit (decision 12); the drawing stays shared.
+- The law: one rule everywhere (no mud) → one law per world on top of it (§1).
+- Batching: W5's tipping bucket (a board part, later) → W2's bucket piece (now).
+- Cups: one colour and a count → also prescriptions (W2: counts per colour) and recipes (W4: layers in order).
+- W2: crossings, merges, tanks and turnstiles in the shop → none: counting only.
+- W3: one-way canals with merges, murk and W1's tanks and turnstiles → two-way canals, basins, self-routing
+  barges, signals and passing places; no mud; every failure is gridlock.
+- W4: tanks timed the partners → candles order them; Muddled moves from "later worlds" to W4.
+- New failures: Never tipped (W2), Muddled (W4), the standoff and the full basin (W3's gridlock).
+- Level ids, World 1 and the Lab stay as they were.
