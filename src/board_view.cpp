@@ -166,6 +166,39 @@ void DrawPiece(Canvas& canvas, const Piece& piece, glm::vec2 c, float s, const P
       canvas.Circle(c, 4.2f * s, liquid(Color::Green));
       break;
     }
+    case PieceType::Bucket: {
+      // A brass seesaw under a glass measure marked in n doses; it fills bottom up and tips toward its side.
+      const int n = std::max(2, piece.n);
+      const float a = look.tilt * 0.45f;
+      const glm::vec2 ax(std::cos(a), std::sin(a)), ay(-std::sin(a), std::cos(a));
+      auto at = [&](float x, float y) { return c + (ax * x + ay * y) * s; };
+      canvas.Line(at(-19.0f, 10.0f), at(19.0f, 10.0f), 4.0f * s, WithAlpha(brass::kMid, alpha));
+      canvas.Circle(c + glm::vec2(0.0f, 12.0f) * s, 3.4f * s, WithAlpha(brass::kDark, alpha));
+      const float h = 24.0f / static_cast<float>(n);
+      for (size_t i = 0; i < look.glass.size() && i < static_cast<size_t>(n); ++i) {
+        const float y0 = 8.0f - h * static_cast<float>(i + 1), y1 = 8.0f - h * static_cast<float>(i);
+        const Rgba col = liquid(look.glass[i]);
+        for (float y = y0; y < y1; y += 1.0f) canvas.Line(at(-7.5f, y + 0.5f), at(7.5f, y + 0.5f), 1.4f * s, col);
+      }
+      const Rgba glass = WithAlpha(Hex(0xE2EDF7), 0.9f * alpha);
+      canvas.Line(at(-9.0f, -17.0f), at(-9.0f, 8.0f), 1.6f * s, glass);
+      canvas.Line(at(9.0f, -17.0f), at(9.0f, 8.0f), 1.6f * s, glass);
+      canvas.Line(at(-9.0f, 8.0f), at(9.0f, 8.0f), 1.6f * s, glass);
+      for (int j = 1; j < n; ++j) {
+        const float y = 8.0f - h * static_cast<float>(j);
+        canvas.Line(at(3.5f, y), at(9.0f, y), 1.0f * s, WithAlpha(glass, 0.7f * alpha));
+      }
+      if (on_board && node->kind == NodeKind::Fork) {
+        const glm::vec2 d = out_dir(look.setting);
+        Arrow(canvas, c + d * (30.0f * s), d, s, accent);
+      }
+      if (font) {
+        canvas.Circle(c + glm::vec2(16.0f, -14.0f) * s, 7.0f * s, WithAlpha(brass::kMid, alpha));
+        canvas.Text(*font, std::to_string(piece.n), c + glm::vec2(16.0f, -14.0f) * s, 11.0f * s, Align::Center,
+                    TextStyle{.color = WithAlpha(brass::kDark, alpha)});
+      }
+      break;
+    }
     case PieceType::Candle: {
       // Brass dish, a wax column ringed once per drop its cup still needs, a flame; a thread across while shut.
       art::Medallion(canvas, c, 22.0f * s, alpha);
@@ -299,6 +332,7 @@ void BoardView::OnEvents(const std::vector<Event>& events, const Board& board) {
         break;
       case EventType::Jammed: add(Marker::Jam, -1); break;
       case EventType::Muddle: add(Marker::WrongCup, e.node); break;  // a layer out of turn: the phial rings red
+      case EventType::Tip: anims_[static_cast<size_t>(e.node)].tick = board.Ticks(); break;
       default: break;
     }
   }
@@ -510,6 +544,15 @@ void BoardView::DrawParts(Canvas& canvas, const Options& options) {
     if (board.Started() && board.RoleOf(i) == PieceRole::Idle) look.alpha = 0.38f;
     if (piece.type == PieceType::Overflow && board.Started())
       look.remaining = std::max(0, piece.n - board.OverflowPassed(node));
+    if (piece.type == PieceType::Bucket && board.Started() && board.BucketActs(node)) {
+      for (const Drop& drop : board.Drops()) {
+        if (drop.alive && drop.loc.kind == Loc::InNode && drop.loc.index == node) look.glass.push_back(drop.bead.a);
+      }
+      look.setting = board.BucketSide(node);
+      const glm::vec2 d = OutDir(*level_, level_->nodes[static_cast<size_t>(node)],
+                                 static_cast<size_t>(level_->nodes[static_cast<size_t>(node)].kind == NodeKind::Fork ? look.setting : 0));
+      look.tilt = board.BucketPouring(node) ? (d.x >= 0.0f ? 1.0f : -1.0f) : 0.0f;
+    }
     if (piece.type == PieceType::Candle && board.Started() && board.CandleActs(node)) {
       look.burnt = board.Cup(level_->nodes[static_cast<size_t>(node)].feeds_cup).count;
       look.open = board.CandleOpen(node);

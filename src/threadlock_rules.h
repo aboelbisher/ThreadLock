@@ -72,12 +72,13 @@ enum class PieceType : uint8_t {
   Mixer,      // waits for one drop from each way in, mixes them
   TwinGate,   // holds two ways in until both have a drop, then both go together
   Candle,     // on a pipe socket that leads to a cup: holds its drop until that cup holds n, then lets go for good
+  Bucket,     // fills with n drops, tips, pours them on as one train; on a fork the doses alternate sides
 };
-inline constexpr int kPieceTypes = 10;
+inline constexpr int kPieceTypes = 11;
 
 struct Piece {
   PieceType type = PieceType::Separator;
-  int n = 0;              // Overflow: how many go its way; Candle: what its cup must hold first (1-4)
+  int n = 0;              // Overflow: how many go its way; Candle: what its cup must hold first (1-4); Bucket: its dose (2-4)
   Color a = Color::Blue;  // Separator: the colours it sorts (a to side 0 unless swapped)
   Color b = Color::Amber;
   bool operator==(const Piece&) const = default;
@@ -123,10 +124,14 @@ struct Vec2 {
   bool operator==(const Vec2&) const = default;
 };
 
+// How many drops of each colour a cup wants (World 2's prescriptions; a one-colour cup has one entry).
+using Wants = std::array<uint8_t, kColorCount>;
+
 // One bottle of a turning rack: a cup of its own.
 struct Slot {
   Color want = Color::Blue;
   int count = 0;
+  Wants wants{};  // per colour (Level::Finalize fills it from want/count when the file gives one colour)
   std::string order;  // the order it fills, e.g. "Mrs Hale" (look only: its slip)
   bool operator==(const Slot&) const = default;
 };
@@ -147,6 +152,7 @@ struct Node {
   Color want = Color::Blue;
   int count = 0;
   std::vector<Color> recipe;  // World 4: the layers it wants in order, bottom up (count = recipe.size(); want = the first)
+  Wants wants{};              // per colour: a prescription (World 2), or want/count (Finalize fills it); count = the sum
   std::string order;     // the order it fills (look only: World 2's bottles, named on a slip)
   std::string district;  // the district it serves (look only: World 3's harbours, e.g. "Lantern Row")
   // Pass: the other half of a twin pair (-1 = none)
@@ -304,6 +310,7 @@ enum class Failure : uint8_t {
   Dry,       // a cup ended short
   Jam,       // nothing can ever move again: THREADLOCKED
   Muddled,   // a recipe cup got a layer out of turn (World 4)
+  HalfFull,  // nothing can move and the drops left sit in a bucket that never filled ("Never tipped", World 2)
 };
 const char* FailureKey(Failure failure);
 
@@ -325,6 +332,7 @@ enum class EventType : uint8_t {
   Jammed,    // nothing can ever move again
   Open,      // the candle on `node` let its first drop go (its cup holds enough): it stays open
   Muddle,    // `drop` (`bead`) landed in recipe cup `node` out of turn (`value` = the layer it landed as, from 0)
+  Tip,       // the bucket on `node` filled and tips: its dose pours out of side `value` (index into outs)
 };
 
 struct Event {
@@ -364,6 +372,7 @@ struct Drop {
 
 struct CupState {
   int count = 0;
+  std::array<int16_t, kColorCount> got{};  // per colour
   bool impure = false;
   bool spilled = false;
   int landed_tick = -1;  // the last landing
@@ -390,6 +399,8 @@ struct JamReport {
   // A node whose drop waits for something that never comes: a mixer's or twin gate's partner (a
   // trap: one way in), the mill turn that would open a shut gate, or a candle whose cup never fills.
   int lonely = -1;
+  // A bucket holding drops it will never tip (every drop left sits in buckets that can't fill): World 2's failure.
+  int half_full = -1;
 };
 
 // ---- Geometry (for drawing) ----
@@ -455,6 +466,9 @@ class Board {
   int OverflowPassed(int node) const { return overflow_passed_[Index(node)]; }
   bool CandleOpen(int node) const { return started_ && candle_open_[Index(node)] != 0; }
   bool CandleActs(int node) const;  // a candle sits on this pipe socket and its way out leads to a cup
+  bool BucketActs(int node) const;  // a bucket sits on this fork, pipe socket or merge
+  bool BucketPouring(int node) const { return started_ && bucket_pouring_[Index(node)] != 0; }
+  int BucketSide(int node) const { return started_ ? bucket_side_[Index(node)] : 0; }  // the side its next dose goes
   int InsideCount(int node) const { return static_cast<int>(inside_[Index(node)].size()); }
   bool Waiting(int pipe) const;  // a drop is stuck at the end of `pipe`
   JamReport Jam() const;
@@ -510,6 +524,7 @@ class Board {
   std::vector<int> flipper_next_, overflow_passed_;
   std::vector<std::array<int, 2>> mixer_slot_;
   std::vector<uint8_t> candle_open_;  // per node
+  std::vector<uint8_t> bucket_pouring_, bucket_side_;  // per node
   std::vector<int> last_exit_tick_;
   std::vector<Bead> last_exit_bead_;
   std::vector<Event> events_;

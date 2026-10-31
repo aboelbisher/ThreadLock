@@ -34,12 +34,13 @@ constexpr PieceInfoRow kPieceRows[] = {
     {PieceType::Flipper, "Flipper", "flipper", true},       {PieceType::Overflow, "Overflow", "overflow", true},
     {PieceType::Bridge, "Bridge", "bridge", false},         {PieceType::Mixer, "Mixer", "mixer", false},
     {PieceType::TwinGate, "Twin gate", "twin", false},       {PieceType::Candle, "Candle", "candle", false},
+    {PieceType::Bucket, "Bucket", "bucket", true},
 };
 
 constexpr const char* kNodeKinds[] = {"spout", "fork",  "pass", "cross", "merge",
                                       "cup",   "drain", "rack", "mill",  "gate"};
 constexpr const char* kLevelTypes[] = {"build", "repair", "spectacle", "challenge", "lab"};
-constexpr const char* kFailures[] = {"none", "mud", "wrong_cup", "spill", "dry", "jam", "muddled"};
+constexpr const char* kFailures[] = {"none", "mud", "wrong_cup", "spill", "dry", "jam", "muddled", "half_full"};
 constexpr const char* kRoles[] = {"acts", "idle", "trap"};
 
 float Distance(Vec2 a, Vec2 b) { return std::hypot(b.x - a.x, b.y - a.y); }
@@ -227,6 +228,8 @@ PieceRole Role(PieceType type, NodeKind kind, bool twin_pair, bool feeds_cup) {
   using enum PieceType;
   // A candle counts what lands in a cup: it works only on a pipe socket whose way out leads to one.
   if (type == Candle) return kind == NodeKind::Pass && feeds_cup ? PieceRole::Acts : PieceRole::Idle;
+  // A bucket fills and tips wherever there's one way out per dose: a fork, a pipe, a merge (not a crossing's lanes).
+  if (type == Bucket) return IsSocketKind(kind) && kind != NodeKind::Cross ? PieceRole::Acts : PieceRole::Idle;
   switch (kind) {
     case NodeKind::Fork:  // 1 in, 2 out: routers and tanks work (the flap sends a tank's drops on)
       if (type == Turnstile || type == Bridge) return PieceRole::Idle;
@@ -260,6 +263,24 @@ bool ParseLevelType(std::string_view text, LevelType& out) {
 }
 
 const char* FailureKey(Failure failure) { return kFailures[static_cast<size_t>(failure)]; }
+
+// A cup's wants per colour: a prescription as given, or one colour's count (then want/count stay as given). With a
+// prescription, count = the sum and want = its first colour.
+static void FillWants(Wants& wants, Color& want, int& count) {
+  int sum = 0;
+  for (uint8_t w : wants) sum += w;
+  if (sum == 0) {
+    if (count > 0 && want != Color::None) wants[static_cast<size_t>(want)] = static_cast<uint8_t>(std::min(count, 255));
+    return;
+  }
+  count = sum;
+  for (size_t c = 0; c < wants.size(); ++c) {
+    if (wants[c] > 0) {
+      want = static_cast<Color>(c);
+      break;
+    }
+  }
+}
 
 // ---- Level ----
 
@@ -354,6 +375,8 @@ std::vector<std::string> Level::Finalize() {
           }
           node.count = static_cast<int>(node.recipe.size());
           node.want = node.recipe.front();
+        } else {
+          FillWants(node.wants, node.want, node.count);
         }
         if (node.count < 1 || node.want == Color::None) problem("cup '" + node.id + "' wants nothing");
         break;
@@ -361,7 +384,8 @@ std::vector<std::string> Level::Finalize() {
       case NodeKind::Rack:
         expect(1, 0);
         if (node.slots.empty()) problem("rack '" + node.id + "' has no bottles");
-        for (const Slot& slot : node.slots) {
+        for (Slot& slot : node.slots) {
+          FillWants(slot.wants, slot.want, slot.count);
           if (slot.count < 1 || slot.want == Color::None) problem("a bottle of rack '" + node.id + "' wants nothing");
         }
         if (node.period < 1) problem("rack '" + node.id + "' needs period >= 1");
@@ -536,6 +560,8 @@ std::vector<std::string> Level::Finalize() {
     if (tray_piece.piece.type == PieceType::Overflow && tray_piece.piece.n < 1) problem("an overflow needs n >= 1");
     if (tray_piece.piece.type == PieceType::Candle && (tray_piece.piece.n < 1 || tray_piece.piece.n > 4))
       problem("a candle needs n 1-4");
+    if (tray_piece.piece.type == PieceType::Bucket && (tray_piece.piece.n < 2 || tray_piece.piece.n > 4))
+      problem("a bucket needs n 2-4");
     if (tray_piece.at < 0) continue;
     if (static_cast<size_t>(tray_piece.at) >= nodes.size()) {
       problem("a placed piece is on a node that doesn't exist");
@@ -765,7 +791,12 @@ void Board::SetSetting(int piece, int setting) {
 bool Board::Routes(int node) const {
   const int type = PieceTypeAt(node);
   return type == static_cast<int>(PieceType::Separator) || type == static_cast<int>(PieceType::Flipper) ||
-         type == static_cast<int>(PieceType::Overflow);
+         type == static_cast<int>(PieceType::Overflow) ||
+         (type == static_cast<int>(PieceType::Bucket) && level_->nodes[Index(node)].kind == NodeKind::Fork);
+}
+
+bool Board::BucketActs(int node) const {
+  return Is(node, PieceType::Bucket) && Role(PieceType::Bucket, level_->nodes[Index(node)]) == PieceRole::Acts;
 }
 
 bool Board::Shared(int node) const {
@@ -898,6 +929,8 @@ void Board::Start() {
   overflow_passed_.assign(node_count, 0);
   mixer_slot_.assign(node_count, {-1, -1});
   candle_open_.assign(node_count, 0);
+  bucket_pouring_.assign(node_count, 0);
+  bucket_side_.assign(node_count, 0);
   last_exit_tick_.assign(node_count, -1000);
   last_exit_bead_.assign(node_count, Bead{});
   for (size_t n = 0; n < node_count; ++n) {
@@ -906,6 +939,8 @@ void Board::Start() {
     const int piece = node_piece_[n];
     if (piece >= 0 && PieceInfo(piece).piece.type == PieceType::Flipper)
       flipper_next_[n] = pieces_[Index(piece)].setting;
+    if (piece >= 0 && PieceInfo(piece).piece.type == PieceType::Bucket && node.kind == NodeKind::Fork)
+      bucket_side_[n] = static_cast<uint8_t>(pieces_[Index(piece)].setting);
   }
   events_.clear();
   outcome_ = {};
@@ -926,6 +961,10 @@ void Board::Stop() {
 bool Board::Admits(int node, int lane) const {
   const Node& n = level_->nodes[Index(node)];
   const std::vector<int>& inside = inside_[Index(node)];
+  if (BucketActs(node)) {
+    // A bucket takes drops until it holds its dose, and nothing while it pours.
+    return !bucket_pouring_[Index(node)] && static_cast<int>(inside.size()) < PieceInfo(node_piece_[Index(node)]).piece.n;
+  }
   switch (n.kind) {
     case NodeKind::Cup:
     case NodeKind::Drain:
@@ -991,19 +1030,20 @@ void Board::Land(int d, int node) {
   Event land{.type = EventType::Land, .node = node, .drop = drop.id, .bead = drop.bead};
   // A cup, or the rack's bottle under the pipe right now.
   CupState* cup = nullptr;
-  Color want = Color::None;
   int count = 0, slot = -1;
+  const Wants* wants = nullptr;
   if (n.kind == NodeKind::Cup) {
     cup = &cups_[Index(node)];
-    want = n.want;
     count = n.count;
+    wants = &n.wants;
   } else if (n.kind == NodeKind::Rack) {
     slot = RackSlot(node);
     cup = &bottles_[Index(bottle_offset_[Index(node)] + slot)];
-    want = n.slots[Index(slot)].want;
     count = n.slots[Index(slot)].count;
+    wants = &n.slots[Index(slot)].wants;
   }
   if (cup) {
+    bool over = false;
     cup->count += drop.bead.Drops();
     cup->landed_tick = tick_;
     land.value = cup->count;
@@ -1028,18 +1068,29 @@ void Board::Land(int d, int node) {
         }
       }
     } else {
-      const bool pure = drop.bead.a == want && (!drop.bead.IsBlend() || drop.bead.b == want);
-      if (!pure && !cup->impure) {
+      // A prescription: so many of each colour (a one-colour cup wants one). A blend counts one of each of its
+      // colours. A colour it doesn't want is wrong; one more of a colour than it wants spills.
+      bool wrong = false;
+      for (Color c : {drop.bead.a, drop.bead.b}) {
+        if (c == Color::None) continue;
+        const size_t k = static_cast<size_t>(c);
+        ++cup->got[k];
+        if ((*wants)[k] == 0)
+          wrong = true;
+        else if (cup->got[k] > (*wants)[k])
+          over = true;
+      }
+      if (wrong && !cup->impure) {
         cup->impure = true;
         Fail(drop.bead.IsMud() ? Failure::Mud : Failure::WrongCup, node, slot);
       }
     }
-    if (cup->count > count && !cup->spilled) {
+    if ((cup->count > count || over) && !cup->spilled) {
       cup->spilled = true;
       events_.push_back({.type = EventType::Spill, .node = node, .slot = slot});
       Fail(Failure::Spill, node, slot);
     }
-    if (cup->count == count && !cup->impure)
+    if (cup->count == count && !cup->impure && !cup->spilled)
       events_.push_back({.type = EventType::CupFull, .node = node, .slot = slot});
   } else {
     events_.push_back(land);
@@ -1076,6 +1127,19 @@ void Board::EnterNode(int d, int node, int lane) {
     if (alone) events_.push_back({.type = EventType::NearMiss, .node = node, .drop = drop.id, .bead = drop.bead});
   }
   inside_[Index(node)].push_back(d);
+  if (BucketActs(node)) {
+    // Into the bucket's glass: it holds every drop until it's full, then tips them all out of one side.
+    drop.dwell = drop.dwell_total = 0;
+    drop.lane_out = -1;
+    std::vector<int>& glass = inside_[Index(node)];
+    if (static_cast<int>(glass.size()) >= PieceInfo(node_piece_[Index(node)]).piece.n) {
+      bucket_pouring_[Index(node)] = 1;
+      const int side = n.kind == NodeKind::Fork ? bucket_side_[Index(node)] : 0;
+      for (int held : glass) drops_[Index(held)].lane_out = side;
+      events_.push_back({.type = EventType::Tip, .node = node, .drop = drop.id, .value = side});
+    }
+    return;
+  }
   if (piece == static_cast<int>(PieceType::Mixer)) {
     // On a fork or a pipe socket the partner's slot never fills: a trap.
     auto& slot = mixer_slot_[Index(node)];
@@ -1108,6 +1172,11 @@ void Board::LeaveOnto(int d, int pipe) {
   moved_any_ = true;
   events_.push_back({.type = EventType::Leave, .node = node, .pipe = pipe, .drop = drop.id, .bead = drop.bead});
   const Node& n = level_->nodes[Index(node)];
+  if (bucket_pouring_[Index(node)] && inside_[Index(node)].empty()) {
+    // The dose is out: the bucket rights itself; on a fork the next dose goes the other way.
+    bucket_pouring_[Index(node)] = 0;
+    if (n.kind == NodeKind::Fork) bucket_side_[Index(node)] ^= 1;
+  }
   if (n.kind == NodeKind::Mill) {
     // The wheel turns a notch; its gears flip their gates at the end of the tick.
     ++mill_turns_[Index(node)];
@@ -1212,9 +1281,13 @@ void Board::Finish(bool jammed) {
     }
   } else {
     const JamReport jam = Jam();
-    int where = jam.lonely >= 0 ? jam.lonely : !jam.cycle.empty() ? jam.cycle.front() : -1;
-    if (where < 0 && !jam.stuck_nodes.empty()) where = jam.stuck_nodes.front();
-    Fail(Failure::Jam, where);
+    if (jam.half_full >= 0 && jam.lonely < 0 && jam.cycle.empty()) {
+      Fail(Failure::HalfFull, jam.half_full);  // the last dose never filled its bucket: never tipped
+    } else {
+      int where = jam.lonely >= 0 ? jam.lonely : !jam.cycle.empty() ? jam.cycle.front() : -1;
+      if (where < 0 && !jam.stuck_nodes.empty()) where = jam.stuck_nodes.front();
+      Fail(Failure::Jam, where);
+    }
   }
   outcome_.over = true;
   outcome_.jammed = jammed;
@@ -1475,6 +1548,14 @@ JamReport Board::Jam() const {
       const int node = drop.loc.index;
       const Node& n = level_->nodes[Index(node)];
       add_stuck(node);
+      if (BucketActs(node) && !bucket_pouring_[Index(node)]) {
+        // A bucket filling: it waits for the next drop that could reach it; none can = it never tips.
+        for (int in : n.ins) {
+          if (waits_for[i] < 0) waits_for[i] = NextArrival(in);
+        }
+        if (waits_for[i] < 0) report.half_full = node;
+        continue;
+      }
       if (drop.lane_out == -1) {
         // A mixer holding a drop: its partner comes by the other lane, if there is one (a trap otherwise).
         partner(i, node, n.ins.size() == 2 ? n.ins[Index(1 - drop.lane_in)] : -1);

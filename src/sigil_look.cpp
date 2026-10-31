@@ -692,6 +692,7 @@ std::string FailureText(const Level& level, const Board& board, const Outcome& o
       }
       return why + " " + PhialCounts(level, board);
     }
+    case Failure::HalfFull: return "A bucket never filled.";
     case Failure::Muddled: {
       // "The recipe is green, green, then rose, bottom up. Rose came second, out of turn."
       std::string recipe;

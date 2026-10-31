@@ -67,6 +67,37 @@ struct Reader {
   }
 };
 
+// A cup's "want": one colour with a "count", or a prescription: {"B": 2, "A": 1} (World 2).
+void ReadWants(Reader& reader, const Json& item, Color& want, int& count, Wants& wants) {
+  if (item.contains("want") && item["want"].is_object()) {
+    if (item.contains("count")) reader.Error("a prescription's counts are in its 'want'");
+    for (const auto& [key, value] : item["want"].items()) {
+      Color c = Color::None;
+      if (!ParseColor(key, c) || !value.is_number_integer() || value.get<int>() < 1 || value.get<int>() > 99) {
+        reader.Error("a prescription needs colours with counts 1-99, like {\"B\": 2}");
+        continue;
+      }
+      wants[static_cast<size_t>(c)] = static_cast<uint8_t>(value.get<int>());
+    }
+    return;
+  }
+  reader.Color(item, "want", want);
+  count = reader.Int(item, "count", 0);
+}
+
+// "{"B": 2, "A": 1}" for a prescription (two or more colours), else empty.
+std::string WantsText(const Wants& wants) {
+  int colours = 0;
+  for (uint8_t w : wants) colours += w > 0;
+  if (colours < 2) return "";
+  std::string out = "{";
+  for (size_t c = 0; c < wants.size(); ++c) {
+    if (!wants[c]) continue;
+    out += std::string(out.size() > 1 ? ", " : "") + "\"" + ColorLetter(static_cast<Color>(c)) + "\": " + std::to_string(wants[c]);
+  }
+  return out + "}";
+}
+
 bool ReadPiece(Reader& reader, const Json& value, Piece& out) {
   std::string type;
   if (value.is_string()) {
@@ -194,8 +225,7 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
           node.recipe.push_back(layer.a);
         }
       }
-      reader.Color(item, "want", node.want);
-      node.count = reader.Int(item, "count", 0);
+      ReadWants(reader, item, node.want, node.count, node.wants);
       node.order = reader.String(item, "order");
       node.district = reader.String(item, "district");
     }
@@ -211,8 +241,7 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
             continue;
           }
           Slot slot;
-          reader.Color(value, "want", slot.want);
-          slot.count = reader.Int(value, "count", 0);
+          ReadWants(reader, value, slot.want, slot.count, slot.wants);
           slot.order = reader.String(value, "order");
           node.slots.push_back(std::move(slot));
         }
@@ -554,6 +583,8 @@ std::string WriteLevel(const Level& level) {
       std::string layers;
       for (Color layer : n.recipe) layers += std::string(layers.empty() ? "" : " ") + ColorLetter(layer);
       out += ", \"recipe\": \"" + layers + "\"";
+    } else if (n.kind == NodeKind::Cup && !WantsText(n.wants).empty()) {
+      out += ", \"want\": " + WantsText(n.wants);
     } else if (n.kind == NodeKind::Cup) {
       out += std::string(", \"want\": \"") + ColorLetter(n.want) + "\", \"count\": " + std::to_string(n.count);
     }
@@ -566,8 +597,10 @@ std::string WriteLevel(const Level& level) {
       if (n.first != 0) out += ", \"first\": " + std::to_string(n.first);
       out += ", \"slots\": [";
       for (size_t s = 0; s < n.slots.size(); ++s) {
-        out += std::string(s ? ", " : "") + "{\"want\": \"" + ColorLetter(n.slots[s].want) +
-               "\", \"count\": " + std::to_string(n.slots[s].count);
+        const std::string wants = WantsText(n.slots[s].wants);
+        out += std::string(s ? ", " : "") + (wants.empty() ? "{\"want\": \"" + std::string(1, ColorLetter(n.slots[s].want)) +
+                                                                 "\", \"count\": " + std::to_string(n.slots[s].count)
+                                                           : "{\"want\": " + wants);
         if (!n.slots[s].order.empty()) out += ", \"order\": " + text(n.slots[s].order);
         out += "}";
       }
@@ -623,7 +656,8 @@ std::string WriteLevel(const Level& level) {
   std::string placed;
   for (const TrayPiece& piece : level.tray) {
     std::string spec = std::string("\"") + PieceKey(piece.piece.type) + "\"";
-    if (piece.piece.type == PieceType::Overflow || piece.piece.type == PieceType::Candle) {
+    if (piece.piece.type == PieceType::Overflow || piece.piece.type == PieceType::Candle ||
+        piece.piece.type == PieceType::Bucket) {
       spec = std::string("{\"type\": \"") + PieceKey(piece.piece.type) + "\", \"n\": " + std::to_string(piece.piece.n) + "}";
     }
     if (piece.piece.type == PieceType::Separator && (piece.piece.a != Color::Blue || piece.piece.b != Color::Amber)) {
@@ -653,7 +687,8 @@ std::string PlacementText(const Level& level, const Placement& placement) {
     if (!text.empty()) text += ", ";
     const PieceType type = level.tray[i].piece.type;
     text += PieceKey(type);
-    if (type == PieceType::Overflow || type == PieceType::Candle) text += std::to_string(level.tray[i].piece.n);
+    if (type == PieceType::Overflow || type == PieceType::Candle || type == PieceType::Bucket)
+      text += std::to_string(level.tray[i].piece.n);
     text += "@" + level.nodes[static_cast<size_t>(placement.at[i])].id;
     if (HasSetting(type) && i < placement.setting.size()) text += "/" + std::to_string(placement.setting[i]);
   }
@@ -789,7 +824,7 @@ bool InKit(int world, PieceType type) {
   using enum PieceType;
   switch (world) {
     case 1: return type == Separator || type == Turnstile || type == TankShort || type == TankTall;
-    case 2: return type == Flipper || type == Overflow;
+    case 2: return type == Flipper || type == Overflow || type == Bucket;
     case 3: return type == Bridge;
     case 4: return type == Mixer || type == TwinGate || type == Candle;
     default: return true;  // the Lab

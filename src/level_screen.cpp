@@ -76,6 +76,9 @@ PieceText TextFor(const Piece& piece) {
               "Nothing"};
     case PieceType::TwinGate:
       return {"Holds two ways in until both have a drop, then lets the pair go together.", "Nothing"};
+    case PieceType::Bucket:
+      return {"Fills with the number of drops on it, then tips them all out as one dose. On a fork the doses take turns.",
+              "Choose the first side"};
     case PieceType::Candle:
       return {"On a groove into a phial: holds its drop until the phial holds the number on it, then lets go for good.",
               "Nothing"};
@@ -153,6 +156,7 @@ const char* FailureTitle(const Outcome& outcome, const WorldLook& look) {
     case Failure::Dry: return "A cup ran dry";
     case Failure::Jam: return "THREADLOCKED";
     case Failure::Muddled: return "Muddled!";
+    case Failure::HalfFull: return "Never tipped";
     case Failure::None: break;
   }
   return "Not quite";
@@ -171,6 +175,17 @@ std::string JamText(const Level& level, const Board& board) {
     return "A " + name + " with one way in waits forever for a partner.";
   }
   return "A drop waits for a partner that never comes.";
+}
+
+// A bucket that never filled: "The bucket of 3 holds 1 and only tips when it's full. That drop never reaches a bottle."
+std::string HalfFullText(const Level& level, const Board& board, const Outcome& outcome) {
+  (void)level;
+  const int piece = outcome.fail_node >= 0 ? board.PieceAt(outcome.fail_node) : -1;
+  const int n = piece >= 0 ? board.PieceInfo(piece).piece.n : 0;
+  const int held = outcome.fail_node >= 0 ? board.InsideCount(outcome.fail_node) : 0;
+  return "The bucket of " + std::to_string(n) + " holds " + std::to_string(held) +
+         " and only tips when it's full. " + (held == 1 ? "That drop never reaches" : "Those drops never reach") +
+         " a bottle.";
 }
 
 // Each harbour's count, "Lantern Row 2/6, Old Quay 0/6."
@@ -223,6 +238,7 @@ std::string FailureText(const Level& level, const Board& board, const Outcome& o
       return canals ? why + " " + HarbourCounts(level, board) : why;
     }
     case Failure::Muddled: return "A layer landed out of turn.";
+    case Failure::HalfFull: return HalfFullText(level, board, outcome);
     case Failure::None: break;
   }
   return "";
@@ -1289,7 +1305,8 @@ void LevelScreen::DrawInfo(UIContext& ui) {
   const wlw::ui::Font& font = app_.GetFont();
   const Piece& piece = board_.PieceInfo(info_piece_).piece;
   std::string title = PieceName(piece.type);
-  if (piece.type == PieceType::Overflow || piece.type == PieceType::Candle) title += " " + std::to_string(piece.n);
+  if (piece.type == PieceType::Overflow || piece.type == PieceType::Candle || piece.type == PieceType::Bucket)
+    title += " " + std::to_string(piece.n);
   const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, title, {310.0f, 336.0f}, true);
   if (dialog.close) {
     dialog_ = Dialog::None;

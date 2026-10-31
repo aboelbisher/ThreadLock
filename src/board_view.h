@@ -28,6 +28,8 @@ struct PieceLook {
   int remaining = -1;           // overflow: how many still go its way (-1 = n)
   int burnt = 0;                // candle: rings burnt so far (what its cup holds, up to n)
   bool open = false;            // candle: it has let go (stays open)
+  std::vector<Color> glass;     // bucket: the drops in its glass, bottom up
+  float tilt = 0.0f;            // bucket: -1..1, tipping toward its side (animated)
   bool locked = false;          // a padlock in its corner
   Rgba accent = Hex(0xF6DA9A);  // arrows: which lane goes first, an overflow's way
 };

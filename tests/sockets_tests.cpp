@@ -23,6 +23,7 @@ TEST_SUITE("sockets") {
         "TTTaa",  // mixer
         "TTaaa",  // twin gate
         "-----",  // candle (acts only on a pipe that leads to a cup: recipe_tests)
+        "aaa-a",  // bucket
     };
     const NodeKind kinds[] = {NodeKind::Fork, NodeKind::Pass, NodeKind::Pass, NodeKind::Cross, NodeKind::Merge};
     for (int type = 0; type < kPieceTypes; ++type) {
