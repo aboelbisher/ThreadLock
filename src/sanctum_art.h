@@ -72,6 +72,7 @@ class SanctumArt : public BoardArt {
   // On the overlay.
   void DrawFlask(wlw::ui::Canvas& canvas, const ArtFrame& frame, int spout) const;
   void DrawPhial(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
+  void DrawRecipe(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup, glm::vec2 c, float r) const;
   void DrawPill(wlw::ui::Canvas& canvas, const ArtFrame& frame, int cup) const;
   void DrawMixer(wlw::ui::Canvas& canvas, const ArtFrame& frame, int node) const;
   // A twin pair with a twin gate: the bar between its seals and the leaves opening as both halves let go.

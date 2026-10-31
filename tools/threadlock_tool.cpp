@@ -7,6 +7,8 @@
 //   threadlock_tool render <id> <out.png> [none|lean|swift] [tick]   the board, and the drops at `tick`
 //   threadlock_tool lab <seed> <easy|medium|hard> <out.png>  generate a Lab puzzle, solve it, render it
 //   threadlock_tool sounds <dir>                        every sound as a WAV + 30 s of ambience + a demo run
+//   threadlock_tool try <level.json> [world]  one level from a file: its problems, every solution, the empty board
+//                                             (one line each, for scripts that search layouts and timings)
 //
 // `assets` defaults to ./assets (run it from the repo's root).
 #include <algorithm>
@@ -687,6 +689,41 @@ int main(int argc, char** argv) {
   }
   const std::string command = argv[1];
   if (command == "sounds" && argc > 2) return Sounds(argv[2]);
+  if (command == "try" && argc > 2) {
+    Level level;
+    std::vector<std::string> errors;
+    const bool parsed = ParseLevel(ReadText(argv[2]), level, errors);
+    level.world = argc > 3 ? std::atoi(argv[3]) : 0;
+    if (parsed) {
+      const std::vector<std::string> look = LookProblems(level);
+      errors.insert(errors.end(), look.begin(), look.end());
+    }
+    for (const std::string& error : errors) std::printf("PROBLEM %s\n", error.c_str());
+    if (!parsed) return 1;
+    for (size_t i = 0; i < level.pipes.size(); ++i) {
+      const Pipe& pipe = level.pipes[i];
+      std::printf("CELLS %s>%s %d\n", level.nodes[static_cast<size_t>(pipe.from)].id.c_str(),
+                  level.nodes[static_cast<size_t>(pipe.to)].id.c_str(), pipe.cells);
+    }
+    const SolveReport report = Solve(level, {.keep = true});
+    std::vector<Solution> kept = report.kept;
+    std::sort(kept.begin(), kept.end(),
+              [](const Solution& a, const Solution& b) { return std::tie(a.pieces, a.ticks) < std::tie(b.pieces, b.ticks); });
+    for (const Solution& solution : kept)
+      std::printf("SOLVES %d %d %s\n", solution.pieces, solution.ticks, PlacementText(level, solution.placement).c_str());
+    int never = 0;
+    ForEachPlacement(level, [&](const Placement& placement) {
+      never += Simulate(level, placement, false).ticks >= 20000;
+      return true;
+    });
+    Board empty(level);
+    const Outcome outcome = Simulate(level, empty.GetPlacement(), true);
+    std::printf("EMPTY %s %s\n", FailureKey(outcome.failure),
+                outcome.solved ? "solved" : outcome.fail_node >= 0 ? level.nodes[static_cast<size_t>(outcome.fail_node)].id.c_str() : "?");
+    std::printf("PARS %d %d %d placements %d never_ends %d\n", report.pars.pieces, report.pars.ticks, report.solutions,
+                report.placements, never);
+    return 0;
+  }
   if (command == "check" || command == "bake") return Check(argc > 2 ? argv[2] : "assets", command == "bake");
   // format [assets]: rewrites every world file in one tidy layout (a node per line).
   if (command == "format") {

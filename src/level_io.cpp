@@ -796,7 +796,7 @@ bool InKit(int world, PieceType type) {
   }
 }
 
-bool KitEnforced(int world) { return world == 1; }
+bool KitEnforced(int world) { return world == 1 || world == 4; }
 
 std::vector<std::string> KitProblems(const Level& level) {
   std::vector<std::string> problems;

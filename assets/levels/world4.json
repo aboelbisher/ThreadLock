@@ -12,7 +12,7 @@
         {"id": "c", "kind": "cup", "at": [180, 515], "want": "G", "count": 8}
       ],
       "pipes": [["sb", "m", [[50.099998, 215]]], ["sa", "m", [[309.899994, 215]]], ["m", "c"]],
-      "tray": ["mixer", "turnstile"]
+      "tray": ["mixer", "twin"]
     },
     {
       "id": "4-2", "name": "Partners", "intro": "A mixer waits for one drop from each way in.", "sigil": {"at": [180, 290], "rings": [150]},
@@ -23,86 +23,80 @@
         {"id": "c", "kind": "cup", "at": [180, 515], "want": "G", "count": 8}
       ],
       "pipes": [["sb", "m", [[50.099998, 215]], {"arc": 1}], ["sa", "m", [[309.899994, 215]], {"arc": 1}], ["m", "c"]],
-      "tray": ["mixer", "turnstile", "tank4"]
+      "tray": ["mixer", "twin"]
     },
     {
-      "id": "4-3", "name": "Leftovers", "intro": "Three blues, eight ambers. Where can the extras go?", "sigil": {"at": [180, 290], "rings": [150]},
+      "id": "4-3", "name": "Green, then Rose", "intro": "A recipe goes in order, bottom up.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [50, 60], "beads": "B*3", "beat": 12},
-        {"id": "sa", "kind": "spout", "at": [310, 60], "beads": "A*8", "beat": 8},
-        {"id": "f", "kind": "fork", "at": [309.899994, 215], "socket": true},
-        {"id": "m", "kind": "merge", "at": [180, 440], "socket": true},
-        {"id": "c", "kind": "cup", "at": [180, 515], "want": "G", "count": 6},
-        {"id": "ca", "kind": "cup", "at": [332, 470], "want": "A", "count": 5}
+        {"id": "sb", "kind": "spout", "at": [50, 60], "beads": "B", "beat": 12},
+        {"id": "sa", "kind": "spout", "at": [310, 60], "beads": "A", "beat": 12},
+        {"id": "sr", "kind": "spout", "at": [338, 470], "beads": "R", "beat": 12},
+        {"id": "m", "kind": "merge", "at": [180, 140], "socket": true},
+        {"id": "c", "kind": "pass", "at": [286.066010, 396.066010]},
+        {"id": "j", "kind": "merge", "at": [180, 440]},
+        {"id": "x", "kind": "cup", "at": [180, 515], "recipe": "G G R"}
       ],
-      "pipes": [["sb", "m", [[50.099998, 215]]], ["sa", "f"], ["f", "m"], ["f", "ca", [[332, 215]]], ["m", "c"]],
-      "tray": ["mixer", "flipper", {"type": "overflow", "n": 3}, {"type": "overflow", "n": 2}, "tank4"]
+      "pipes": [["sb", "m"], ["sa", "m"], ["m", "j"], ["sr", "c"], ["c", "j", [], {"arc": 0}], ["j", "x"]],
+      "tray": ["mixer", "twin", {"type": "candle", "n": 2}, {"type": "candle", "n": 3}]
     },
     {
-      "id": "4-4", "name": "Rose Stays Out", "intro": "A new colour. It mixes with nothing here.", "sigil": {"at": [180, 290], "rings": [150, 75]},
+      "id": "4-4", "name": "Amber First", "intro": "The first layer comes last. Something has to wait for it.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [105, 40], "beads": "B*4", "beat": 11},
-        {"id": "sa", "kind": "spout", "at": [255, 40], "beads": "A*4", "beat": 11, "start": 3},
-        {"id": "sr", "kind": "spout", "at": [14, 440], "beads": "R*4", "beat": 8, "start": 6},
-        {"id": "pb", "kind": "pass", "at": [105, 160.100006]},
-        {"id": "pa", "kind": "pass", "at": [255, 160.100006]},
-        {"id": "pr", "kind": "pass", "at": [50.099998, 365]},
-        {"id": "x1", "kind": "cross", "at": [105, 290], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [255, 290], "socket": true},
-        {"id": "m", "kind": "merge", "at": [180, 440], "socket": true},
-        {"id": "c", "kind": "cup", "at": [180, 512], "want": "G", "count": 8},
-        {"id": "cr", "kind": "cup", "at": [325, 470], "want": "R", "count": 4}
+        {"id": "sb", "kind": "spout", "at": [50, 60], "beads": "B", "beat": 12},
+        {"id": "sa", "kind": "spout", "at": [310, 60], "beads": "A", "beat": 12},
+        {"id": "sl", "kind": "spout", "at": [24, 470], "beads": "A", "beat": 12, "start": 40},
+        {"id": "m", "kind": "merge", "at": [180, 140], "socket": true},
+        {"id": "g", "kind": "pass", "at": [180, 290]},
+        {"id": "q", "kind": "pass", "at": [73.933998, 396.066010]},
+        {"id": "j", "kind": "merge", "at": [180, 440]},
+        {"id": "x", "kind": "cup", "at": [180, 515], "recipe": "A G G"}
       ],
-      "pipes": [["sb", "pb"], ["pb", "x1"], ["sa", "pa"], ["pa", "x2"], ["sr", "pr"], ["pr", "x1"], ["x1", "x2"], ["x2", "cr"], ["x1", "m", [[105, 419.899994]], {"arc": 1}], ["x2", "m", [[255, 419.899994]], {"arc": 1}], ["m", "c"]],
-      "tray": ["mixer", "mixer", "bridge", "tank4", "tank8"]
+      "pipes": [["sb", "m"], ["sa", "m"], ["m", "g"], ["g", "j"], ["sl", "q"], ["q", "j", [], {"arc": 0}], ["j", "x"]],
+      "tray": ["mixer", "twin", {"type": "candle", "n": 1}, {"type": "candle", "n": 2}]
     },
     {
-      "id": "4-5", "name": "Green Crossing", "intro": "On a crossing, a mixed pair leaves the way each came.", "sigil": {"at": [180, 290], "rings": [150, 75]},
+      "id": "4-5", "name": "Green Crossing", "intro": "A mixer on a crossing sends each green on along its own lane.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [60, 40], "beads": "B*4", "beat": 8},
-        {"id": "sa", "kind": "spout", "at": [300, 40], "beads": "A*4", "beat": 10},
-        {"id": "sr", "kind": "spout", "at": [346, 160], "beads": "R*3", "beat": 12, "start": 20},
-        {"id": "x", "kind": "cross", "at": [180, 215], "socket": true},
-        {"id": "pr", "kind": "pass", "at": [330, 290]},
-        {"id": "xr", "kind": "cross", "at": [309.899994, 365], "socket": true},
-        {"id": "cl", "kind": "cup", "at": [40, 470], "want": "G", "count": 4},
-        {"id": "cr", "kind": "cup", "at": [330, 470], "want": "G", "count": 4},
-        {"id": "crr", "kind": "cup", "at": [240, 512], "want": "R", "count": 3}
+        {"id": "sb", "kind": "spout", "at": [40, 60], "beads": "B*4", "beat": 8},
+        {"id": "sa", "kind": "spout", "at": [320, 60], "beads": "A*4", "beat": 10},
+        {"id": "x", "kind": "cross", "at": [180, 140], "socket": true},
+        {"id": "cr", "kind": "cup", "at": [300, 505], "want": "G", "count": 4},
+        {"id": "cl", "kind": "cup", "at": [60, 505], "want": "G", "count": 4}
       ],
-      "pipes": [["sb", "x"], ["sa", "x"], ["x", "xr"], ["x", "cl", [[50.099998, 365]]], ["sr", "pr"], ["pr", "xr"], ["xr", "cr"], ["xr", "crr"]],
-      "tray": ["mixer", "mixer", "bridge", "tank4", "tank8"]
+      "pipes": [["sb", "x"], ["sa", "x"], ["x", "cr"], ["x", "cl"]],
+      "tray": ["mixer", "twin"]
     },
     {
-      "id": "4-6", "name": "Unmix, Remix", "intro": "Split a blend, then mix half of it again.", "sigil": {"at": [180, 290], "rings": [150]},
+      "id": "4-6", "name": "Rose Waits", "intro": "Two phials, two recipes, rose last in both.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [180, 40], "beads": "B+A*5", "beat": 12},
-        {"id": "f", "kind": "fork", "at": [180, 140], "socket": true},
-        {"id": "gb", "kind": "fork", "at": [50.099998, 365], "socket": true},
-        {"id": "ga", "kind": "fork", "at": [309.899994, 365], "socket": true},
-        {"id": "m", "kind": "merge", "at": [180, 440], "socket": true},
-        {"id": "cb", "kind": "cup", "at": [40, 470], "want": "B", "count": 2},
-        {"id": "c", "kind": "cup", "at": [180, 515], "want": "G", "count": 6},
-        {"id": "ca", "kind": "cup", "at": [320, 470], "want": "A", "count": 2}
+        {"id": "sb", "kind": "spout", "at": [40, 60], "beads": "B", "beat": 12},
+        {"id": "sa", "kind": "spout", "at": [320, 60], "beads": "A", "beat": 12},
+        {"id": "rl", "kind": "spout", "at": [16, 300], "beads": "R", "beat": 12},
+        {"id": "rr", "kind": "spout", "at": [344, 300], "beads": "R", "beat": 12},
+        {"id": "x", "kind": "cross", "at": [180, 140], "socket": true},
+        {"id": "ql", "kind": "pass", "at": [50.096199, 365]},
+        {"id": "qr", "kind": "pass", "at": [309.903809, 365]},
+        {"id": "jl", "kind": "merge", "at": [105, 419.903809]},
+        {"id": "jr", "kind": "merge", "at": [255, 419.903809]},
+        {"id": "cl", "kind": "cup", "at": [84, 505], "recipe": "G R"},
+        {"id": "cr", "kind": "cup", "at": [276, 505], "recipe": "G R"}
       ],
-      "pipes": [["s", "f"], ["f", "gb", [], {"arc": 0}], ["f", "ga", [], {"arc": 0}], ["gb", "m"], ["ga", "m"], ["gb", "cb"], ["ga", "ca"], ["m", "c"]],
-      "tray": ["separator", "mixer", "flipper", {"type": "overflow", "n": 3}, "tank4"]
+      "pipes": [["sb", "x"], ["sa", "x"], ["x", "jr"], ["x", "jl"], ["rl", "ql"], ["ql", "jl", [], {"arc": 0}], ["rr", "qr"], ["qr", "jr", [], {"arc": 0}], ["jl", "cl"], ["jr", "cr"]],
+      "tray": ["mixer", "twin", {"type": "candle", "n": 1}, {"type": "candle", "n": 1}]
     },
     {
       "id": "4-7", "name": "The Twin Seals", "intro": "Both seals open together, or not at all.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [50, 60], "beads": "B*3", "beat": 8},
-        {"id": "sa", "kind": "spout", "at": [310, 60], "beads": "A*3", "beat": 12, "start": 7},
-        {"id": "sr", "kind": "spout", "at": [20, 330], "beads": "R*3", "beat": 10, "start": 6},
-        {"id": "p1", "kind": "pass", "at": [50, 215], "twin": "p2"},
-        {"id": "p2", "kind": "pass", "at": [310, 215]},
-        {"id": "x1", "kind": "cross", "at": [116, 330], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [244, 330], "socket": true},
-        {"id": "m", "kind": "merge", "at": [180, 440], "socket": true},
-        {"id": "c", "kind": "cup", "at": [180, 515], "want": "G", "count": 6},
-        {"id": "cr", "kind": "cup", "at": [330, 430], "want": "R", "count": 3}
+        {"id": "sb", "kind": "spout", "at": [24, 120], "beads": "B*3", "beat": 6},
+        {"id": "sa", "kind": "spout", "at": [336, 120], "beads": "A*3", "beat": 9, "start": 3},
+        {"id": "p1", "kind": "pass", "at": [50.096199, 215], "twin": "p2"},
+        {"id": "p2", "kind": "pass", "at": [286.066010, 183.934006]},
+        {"id": "x", "kind": "cross", "at": [180, 140], "socket": true},
+        {"id": "cb", "kind": "cup", "at": [300, 505], "want": "B", "count": 3},
+        {"id": "ca", "kind": "cup", "at": [60, 505], "want": "A", "count": 3}
       ],
-      "pipes": [["sb", "p1"], ["sa", "p2"], ["p1", "x1"], ["p2", "x2"], ["sr", "x1"], ["x1", "x2"], ["x2", "cr", [[330, 330]]], ["x1", "m"], ["x2", "m"], ["m", "c"]],
-      "tray": ["twin", "mixer", "mixer", "tank4", "turnstile"]
+      "pipes": [["sb", "p1"], ["sa", "p2"], ["p1", "x", [], {"arc": 0}], ["p2", "x", [], {"arc": 0}], ["x", "cb"], ["x", "ca"]],
+      "tray": ["twin", "mixer"]
     },
     {
       "id": "4-8", "name": "The Dye Fountain", "type": "spectacle", "intro": "Sit back and watch it mix.", "sigil": {"at": [180, 290], "rings": [150]},
@@ -121,173 +115,183 @@
       "placed": [{"piece": "mixer", "at": "m1", "locked": true}]
     },
     {
-      "id": "4-9", "name": "The Triangle", "intro": "Three points, three colours. Only one point mixes.", "sigil": {"at": [180, 290], "rings": [150]},
+      "id": "4-9", "name": "Three Layers", "intro": "Blue, green, green, then rose: two candles count.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "sa", "kind": "spout", "at": [180, 40], "beads": "A*3", "beat": 18},
-        {"id": "sb", "kind": "spout", "at": [300, 40], "beads": "B*6", "beat": 9},
-        {"id": "sr", "kind": "spout", "at": [348, 365], "beads": "R*4", "beat": 12, "start": 5},
+        {"id": "sb", "kind": "spout", "at": [50, 60], "beads": "B", "beat": 12},
+        {"id": "sa", "kind": "spout", "at": [310, 60], "beads": "A", "beat": 12},
+        {"id": "bf", "kind": "spout", "at": [346, 245], "beads": "B", "beat": 12, "start": 30},
+        {"id": "rf", "kind": "spout", "at": [14, 245], "beads": "R", "beat": 12},
         {"id": "m", "kind": "merge", "at": [180, 140], "socket": true},
-        {"id": "fb", "kind": "fork", "at": [255, 160.100006], "socket": true},
-        {"id": "x1", "kind": "cross", "at": [50.099998, 365], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [309.899994, 365], "socket": true},
-        {"id": "cg", "kind": "cup", "at": [50, 480], "want": "G", "count": 6},
-        {"id": "cr", "kind": "cup", "at": [28, 290], "want": "R", "count": 4},
-        {"id": "cb", "kind": "cup", "at": [300, 500], "want": "B", "count": 3}
+        {"id": "g", "kind": "pass", "at": [221.250000, 293.947113]},
+        {"id": "pb", "kind": "pass", "at": [324.888885, 328.822906]},
+        {"id": "pr", "kind": "pass", "at": [35.111099, 328.822906]},
+        {"id": "j1", "kind": "merge", "at": [255, 419.903809]},
+        {"id": "j", "kind": "merge", "at": [180, 440]},
+        {"id": "x", "kind": "cup", "at": [180, 515], "recipe": "B G G R"}
       ],
-      "pipes": [["sa", "m"], ["sb", "fb"], ["fb", "m", [], {"arc": 0}], ["fb", "x2"], ["m", "x1"], ["sr", "x2"], ["x2", "x1"], ["x1", "cg"], ["x1", "cr"], ["x2", "cb"]],
-      "tray": ["mixer", "mixer", "flipper", "bridge", {"type": "overflow", "n": 3}, "tank4"]
+      "pipes": [["sb", "m"], ["sa", "m"], ["m", "g"], ["g", "j1"], ["bf", "pb"], ["pb", "j1", [], {"arc": 0}], ["j1", "j", [], {"arc": 0}], ["rf", "pr"], ["pr", "j", [], {"arc": 0}], ["j", "x"]],
+      "tray": ["mixer", "twin", {"type": "candle", "n": 1}, {"type": "candle", "n": 3}]
     },
     {
-      "id": "4-10", "name": "Lock or Mix", "intro": "Two globes, two jobs: one mixes, one keeps turns.", "sigil": {"at": [180, 290], "rings": [150]},
+      "id": "4-10", "name": "Seal or Candle", "intro": "Blue first, then rose. Two ways to say it.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [50, 40], "beads": "B*3", "beat": 12},
-        {"id": "sa", "kind": "spout", "at": [310, 40], "beads": "A*3", "beat": 12},
-        {"id": "sr", "kind": "spout", "at": [14, 300], "beads": "R*6", "beat": 8},
-        {"id": "m1", "kind": "merge", "at": [180, 140], "socket": true},
-        {"id": "m2", "kind": "merge", "at": [50.099998, 365], "socket": true},
-        {"id": "f", "kind": "fork", "at": [180, 440], "socket": true},
-        {"id": "cg", "kind": "cup", "at": [110, 520], "want": "G", "count": 6},
-        {"id": "cr", "kind": "cup", "at": [250, 520], "want": "R", "count": 6}
+        {"id": "sb", "kind": "spout", "at": [12, 445], "beads": "B", "beat": 16, "start": 20},
+        {"id": "sr", "kind": "spout", "at": [350, 195], "beads": "R", "beat": 16},
+        {"id": "p1", "kind": "pass", "at": [50.096199, 365], "twin": "p2"},
+        {"id": "p2", "kind": "pass", "at": [330, 290]},
+        {"id": "j", "kind": "merge", "at": [180, 440]},
+        {"id": "x", "kind": "cup", "at": [180, 515], "recipe": "B R"}
       ],
-      "pipes": [["sb", "m1", [[50, 140]]], ["sa", "m1", [[310, 140]]], ["m1", "m2"], ["sr", "m2"], ["m2", "f", [], {"arc": 0}], ["f", "cg"], ["f", "cr"]],
-      "tray": ["mixer", "mixer", "turnstile", {"type": "separator", "a": "G", "b": "R"}, "flipper", "tank4", "tank8"]
+      "pipes": [["sb", "p1"], ["sr", "p2"], ["p1", "j", [], {"arc": 0}], ["p2", "j", [], {"arc": 0}], ["j", "x"]],
+      "tray": ["twin", "mixer", {"type": "candle", "n": 1}, {"type": "candle", "n": 3}]
     },
     {
-      "id": "4-11", "name": "The Wrong Globe", "type": "repair", "intro": "It clots in the bottom globe. Move one piece.", "sigil": {"at": [180, 290], "rings": [150]},
+      "id": "4-11", "name": "The Wrong Globe", "type": "repair", "intro": "Someone set the mixer. Was it the right globe?", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [310, 60], "beads": "B*3", "beat": 8},
-        {"id": "sa", "kind": "spout", "at": [50, 60], "beads": "A*3", "beat": 12, "start": 4},
-        {"id": "sr", "kind": "spout", "at": [340, 330], "beads": "R*3", "beat": 10, "start": 6},
-        {"id": "p1", "kind": "pass", "at": [309.899994, 215], "twin": "p2"},
-        {"id": "p2", "kind": "pass", "at": [50.099998, 215]},
-        {"id": "x1", "kind": "cross", "at": [244, 330], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [116, 330], "socket": true},
-        {"id": "m", "kind": "merge", "at": [180, 440], "socket": true},
-        {"id": "c", "kind": "cup", "at": [180, 515], "want": "G", "count": 6},
-        {"id": "cr", "kind": "cup", "at": [30, 430], "want": "R", "count": 3}
+        {"id": "sb", "kind": "spout", "at": [50, 60], "beads": "B*2", "beat": 10},
+        {"id": "sa", "kind": "spout", "at": [310, 60], "beads": "A*2", "beat": 10},
+        {"id": "sr", "kind": "spout", "at": [338, 470], "beads": "R", "beat": 12},
+        {"id": "m", "kind": "merge", "at": [180, 140], "socket": true},
+        {"id": "c", "kind": "pass", "at": [286.066010, 396.066010]},
+        {"id": "j", "kind": "merge", "at": [180, 440], "socket": true},
+        {"id": "x", "kind": "cup", "at": [180, 515], "recipe": "G G G G R"}
       ],
-      "pipes": [["sb", "p1"], ["sa", "p2"], ["p1", "x1"], ["p2", "x2"], ["sr", "x1"], ["x1", "x2"], ["x2", "cr", [[30, 330]]], ["x1", "m"], ["x2", "m"], ["m", "c"]],
-      "tray": ["tank4", "tank8", "mixer"],
-      "placed": [{"piece": "twin", "at": "p1"}, {"piece": "mixer", "at": "x2"}]
+      "pipes": [["sb", "m"], ["sa", "m"], ["m", "j"], ["sr", "c"], ["c", "j", [], {"arc": 0}], ["j", "x"]],
+      "tray": ["twin", {"type": "candle", "n": 3}, {"type": "candle", "n": 4}],
+      "placed": [{"piece": "mixer", "at": "j"}]
     },
     {
-      "id": "4-12", "name": "Hold and Wait", "intro": "Two mixers share two flasks.", "sigil": {"at": [180, 290], "rings": [150]},
+      "id": "4-12", "name": "Hold and Wait", "intro": "Opposite orders. Candles that wait on each other never burn.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [50, 40], "beads": "B*5", "beat": 12},
-        {"id": "sa", "kind": "spout", "at": [310, 40], "beads": "A*5", "beat": 12},
-        {"id": "fb", "kind": "fork", "at": [50.099998, 215], "socket": true},
-        {"id": "fa", "kind": "fork", "at": [309.899994, 215], "socket": true},
-        {"id": "x", "kind": "cross", "at": [180, 290], "socket": true},
-        {"id": "m1", "kind": "merge", "at": [50.099998, 365], "socket": true},
-        {"id": "m2", "kind": "merge", "at": [309.899994, 365], "socket": true},
-        {"id": "c1", "kind": "cup", "at": [50, 480], "want": "G", "count": 6},
-        {"id": "c2", "kind": "cup", "at": [310, 480], "want": "G", "count": 4}
+        {"id": "sb", "kind": "spout", "at": [40, 60], "beads": "B", "beat": 12},
+        {"id": "sa", "kind": "spout", "at": [320, 60], "beads": "A", "beat": 12},
+        {"id": "rl", "kind": "spout", "at": [16, 300], "beads": "R", "beat": 12},
+        {"id": "rr", "kind": "spout", "at": [344, 300], "beads": "R", "beat": 12, "start": 40},
+        {"id": "x", "kind": "cross", "at": [180, 140], "socket": true},
+        {"id": "gl", "kind": "pass", "at": [135, 307.942291]},
+        {"id": "gr", "kind": "pass", "at": [225, 307.942291]},
+        {"id": "ql", "kind": "pass", "at": [50.096199, 365]},
+        {"id": "qr", "kind": "pass", "at": [309.903809, 365]},
+        {"id": "jl", "kind": "merge", "at": [105, 419.903809]},
+        {"id": "jr", "kind": "merge", "at": [255, 419.903809]},
+        {"id": "cl", "kind": "cup", "at": [84, 505], "recipe": "G R"},
+        {"id": "cr", "kind": "cup", "at": [276, 505], "recipe": "R G"}
       ],
-      "pipes": [["sb", "fb"], ["sa", "fa"], ["fb", "m1", [], {"arc": 0}], ["fb", "x"], ["fa", "m2", [], {"arc": 0}], ["fa", "x"], ["x", "m2"], ["x", "m1"], ["m1", "c1"], ["m2", "c2"]],
-      "tray": ["bridge", "flipper", {"type": "overflow", "n": 3}, "tank4", "tank8"],
-      "placed": [{"piece": "mixer", "at": "m1", "locked": true}, {"piece": "mixer", "at": "m2", "locked": true}]
+      "pipes": [["sb", "x"], ["sa", "x"], ["x", "gr"], ["gr", "jr"], ["x", "gl"], ["gl", "jl"], ["rl", "ql"], ["ql", "jl", [], {"arc": 0}], ["rr", "qr"], ["qr", "jr", [], {"arc": 0}], ["jl", "cl"], ["jr", "cr"]],
+      "tray": ["mixer", "twin", {"type": "candle", "n": 1}, {"type": "candle", "n": 1}]
     },
     {
-      "id": "4-13", "name": "Pearl", "intro": "Green and rose make pearl.", "sigil": {"at": [180, 290], "rings": [150]},
+      "id": "4-13", "name": "Pearl", "intro": "Green first, then green and rose: pearl.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [50, 40], "beads": "B*3", "beat": 12},
-        {"id": "sa", "kind": "spout", "at": [310, 40], "beads": "A*3", "beat": 12},
-        {"id": "sr", "kind": "spout", "at": [12, 240], "beads": "R*5", "beat": 10},
-        {"id": "m1", "kind": "merge", "at": [180, 140], "socket": true},
-        {"id": "f", "kind": "fork", "at": [180, 290], "socket": true},
-        {"id": "fr", "kind": "fork", "at": [50.099998, 365], "socket": true},
-        {"id": "m2", "kind": "merge", "at": [180, 440], "socket": true},
-        {"id": "cp", "kind": "cup", "at": [180, 512], "want": "P", "count": 8},
-        {"id": "cg", "kind": "cup", "at": [320, 470], "want": "G", "count": 2},
-        {"id": "crs", "kind": "cup", "at": [26, 470], "want": "R", "count": 1}
+        {"id": "sb", "kind": "spout", "at": [40, 60], "beads": "B", "beat": 12},
+        {"id": "sa", "kind": "spout", "at": [320, 60], "beads": "A", "beat": 12},
+        {"id": "rf", "kind": "spout", "at": [346, 250], "beads": "R", "beat": 12},
+        {"id": "x", "kind": "cross", "at": [180, 140], "socket": true},
+        {"id": "g", "kind": "pass", "at": [50.096199, 365]},
+        {"id": "m2", "kind": "merge", "at": [324.888885, 328.822906], "socket": true},
+        {"id": "pp", "kind": "pass", "at": [255, 419.903809]},
+        {"id": "j", "kind": "merge", "at": [180, 440]},
+        {"id": "x2", "kind": "cup", "at": [180, 515], "recipe": "G P P"}
       ],
-      "pipes": [["sb", "m1", [[50, 140]]], ["sa", "m1", [[310, 140]]], ["m1", "f"], ["f", "m2"], ["f", "cg"], ["sr", "fr"], ["fr", "m2", [[105, 419.899994]], {"arc": 0}], ["fr", "crs"], ["m2", "cp"]],
-      "tray": ["mixer", "mixer", {"type": "overflow", "n": 4}, {"type": "overflow", "n": 2}, "flipper", "turnstile"]
+      "pipes": [["sb", "x"], ["sa", "x"], ["x", "m2"], ["x", "g"], ["rf", "m2"], ["m2", "pp", [], {"arc": 0}], ["pp", "j", [], {"arc": 0}], ["g", "j", [], {"arc": 0}], ["j", "x2"]],
+      "tray": ["mixer", "mixer", "twin", {"type": "candle", "n": 1}]
     },
     {
-      "id": "4-14", "name": "Hexagram", "intro": "Rose falls through both triangles. Deal it out, keep it clean.", "sigil": {"at": [180, 290], "rings": [150]},
+      "id": "4-14", "name": "Hexagram", "intro": "Green, green, rose, green, green.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [30, 90], "beads": "B*4", "beat": 10},
-        {"id": "sa", "kind": "spout", "at": [330, 90], "beads": "A*4", "beat": 10},
-        {"id": "sr", "kind": "spout", "at": [180, 40], "beads": "R*6", "beat": 6},
-        {"id": "fr", "kind": "fork", "at": [180, 140], "socket": true},
-        {"id": "pb", "kind": "pass", "at": [50.099998, 215], "twin": "pa"},
-        {"id": "pa", "kind": "pass", "at": [309.899994, 215]},
-        {"id": "x1", "kind": "cross", "at": [93.400002, 290], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [266.600006, 290], "socket": true},
-        {"id": "m", "kind": "merge", "at": [180, 440], "socket": true},
-        {"id": "c", "kind": "cup", "at": [180, 512], "want": "G", "count": 8},
-        {"id": "crl", "kind": "cup", "at": [42, 470], "want": "R", "count": 2},
-        {"id": "crr", "kind": "cup", "at": [318, 470], "want": "R", "count": 4}
+        {"id": "b1", "kind": "spout", "at": [20, 120], "beads": "B", "beat": 12},
+        {"id": "a1", "kind": "spout", "at": [120, 40], "beads": "A", "beat": 12},
+        {"id": "b2", "kind": "spout", "at": [240, 40], "beads": "B", "beat": 12},
+        {"id": "a2", "kind": "spout", "at": [340, 120], "beads": "A", "beat": 12},
+        {"id": "rf", "kind": "spout", "at": [20, 470], "beads": "R", "beat": 12},
+        {"id": "m1", "kind": "merge", "at": [73.933998, 183.934006], "socket": true},
+        {"id": "m2", "kind": "merge", "at": [286.066010, 183.934006], "socket": true},
+        {"id": "g1", "kind": "pass", "at": [30, 290]},
+        {"id": "g2", "kind": "pass", "at": [330, 290]},
+        {"id": "pr", "kind": "pass", "at": [73.933998, 396.066010]},
+        {"id": "j1", "kind": "merge", "at": [105, 419.903809]},
+        {"id": "j", "kind": "merge", "at": [180, 440]},
+        {"id": "x", "kind": "cup", "at": [180, 515], "recipe": "G G R G G"}
       ],
-      "pipes": [["sb", "pb"], ["sa", "pa"], ["sr", "fr"], ["fr", "x1"], ["fr", "x2"], ["pb", "x1"], ["pa", "x2"], ["x1", "m"], ["x2", "m"], ["x1", "crl"], ["x2", "crr"], ["m", "c"]],
-      "tray": ["mixer", "mixer", "flipper", {"type": "overflow", "n": 2}, "bridge", "tank4", "tank8"]
+      "pipes": [["b1", "m1"], ["a1", "m1"], ["b2", "m2"], ["a2", "m2"], ["m1", "g1", [], {"arc": 0}], ["g1", "j1"], ["m2", "g2", [], {"arc": 0}], ["g2", "j", [], {"arc": 0}], ["rf", "pr"], ["pr", "j1", [], {"arc": 0}], ["j1", "j", [], {"arc": 0}], ["j", "x"]],
+      "tray": ["mixer", "mixer", "twin", {"type": "candle", "n": 2}, {"type": "candle", "n": 3}]
     },
     {
-      "id": "4-15", "name": "The Great Work", "intro": "Green below, rose beside: pearl at the heart.", "height": 1200, "payoff": [180, 1105], "sigil": [{"at": [180, 300], "rings": [130]}, {"at": [180, 880], "rings": [150]}],
+      "id": "4-15", "name": "The Great Work", "intro": "Green and pearl at the heart of two sigils.", "height": 1200, "payoff": [180, 890], "sigil": [{"at": [180, 290], "rings": [150]}, {"at": [180, 890], "rings": [150]}],
       "nodes": [
-        {"id": "sb", "kind": "spout", "at": [40, 50], "beads": "B*5", "beat": 8},
-        {"id": "sa", "kind": "spout", "at": [320, 50], "beads": "A*5", "beat": 12, "start": 4},
-        {"id": "sr", "kind": "spout", "at": [14, 330], "beads": "R*4", "beat": 12, "start": 3},
-        {"id": "p1", "kind": "pass", "at": [67.400002, 235], "twin": "p2"},
-        {"id": "p2", "kind": "pass", "at": [292.600006, 235]},
-        {"id": "x1", "kind": "cross", "at": [123.400002, 330], "socket": true},
-        {"id": "x2", "kind": "cross", "at": [236.600006, 330], "socket": true},
-        {"id": "mA", "kind": "merge", "at": [180, 430], "socket": true},
-        {"id": "fg", "kind": "fork", "at": [180, 730], "socket": true},
-        {"id": "h", "kind": "merge", "at": [180, 880], "socket": true},
-        {"id": "pp", "kind": "pass", "at": [180, 1030]},
-        {"id": "cg", "kind": "cup", "at": [30, 690], "want": "G", "count": 6},
-        {"id": "cp", "kind": "cup", "at": [180, 1110], "want": "P", "count": 8}
+        {"id": "sb", "kind": "spout", "at": [24, 120], "beads": "B*2", "beat": 6},
+        {"id": "sa", "kind": "spout", "at": [336, 120], "beads": "A*2", "beat": 9, "start": 3},
+        {"id": "sr", "kind": "spout", "at": [14, 860], "beads": "R*2", "beat": 10},
+        {"id": "p1", "kind": "pass", "at": [50.096199, 215], "twin": "p2"},
+        {"id": "p2", "kind": "pass", "at": [286.066010, 183.934006]},
+        {"id": "x", "kind": "cross", "at": [180, 140], "socket": true},
+        {"id": "m2", "kind": "merge", "at": [73.933998, 996.065979], "socket": true},
+        {"id": "pp", "kind": "pass", "at": [105, 1019.903809]},
+        {"id": "g", "kind": "pass", "at": [309.903809, 965]},
+        {"id": "j", "kind": "merge", "at": [180, 1040]},
+        {"id": "c", "kind": "cup", "at": [180, 1115], "recipe": "G G P P P P"}
       ],
-      "pipes": [["sb", "p1"], ["sa", "p2"], ["p1", "x1"], ["p2", "x2"], ["sr", "x1"], ["x1", "x2"], ["x1", "mA"], ["x2", "mA"], ["mA", "fg"], ["x2", "h", [[340, 330], [340, 880]]], ["fg", "h"], ["fg", "cg", [[50.099998, 805]], {"arc": 0}], ["h", "pp"], ["pp", "cp"]],
-      "tray": ["twin", "mixer", "mixer", "mixer", {"type": "overflow", "n": 4}, {"type": "overflow", "n": 2}, "flipper"]
+      "pipes": [["sb", "p1"], ["sa", "p2"], ["p1", "x", [], {"arc": 0}], ["p2", "x", [], {"arc": 0}], ["x", "g"], ["x", "m2"], ["sr", "m2"], ["m2", "pp", [], {"arc": 0}], ["pp", "j", [], {"arc": 0}], ["g", "j", [], {"arc": 0}], ["j", "c"]],
+      "tray": ["twin", "mixer", "mixer", {"type": "candle", "n": 1}, {"type": "candle", "n": 2}]
     },
     {
-      "id": "4-C1", "name": "The Sorting Rite", "type": "challenge", "intro": "One flask pours three colours. Sort them, then pair them.", "sigil": {"at": [180, 290], "rings": [150, 75]},
+      "id": "4-C1", "name": "Hold and Wait II", "type": "challenge", "intro": "Green, green, rose on the left; rose, green, green on the right.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [180, 40], "beads": "B R B R*2 A*2 R", "beat": 10},
-        {"id": "f1", "kind": "fork", "at": [180, 140], "socket": true},
-        {"id": "f2", "kind": "fork", "at": [180, 290], "socket": true},
-        {"id": "m", "kind": "merge", "at": [180, 365], "socket": true},
-        {"id": "h", "kind": "merge", "at": [180, 440], "socket": true},
-        {"id": "cp", "kind": "cup", "at": [180, 512], "want": "P", "count": 8}
+        {"id": "sb", "kind": "spout", "at": [40, 60], "beads": "B*2", "beat": 10},
+        {"id": "sa", "kind": "spout", "at": [320, 60], "beads": "A*2", "beat": 10},
+        {"id": "rl", "kind": "spout", "at": [16, 300], "beads": "R", "beat": 12},
+        {"id": "rr", "kind": "spout", "at": [344, 300], "beads": "R", "beat": 12, "start": 50},
+        {"id": "x", "kind": "cross", "at": [180, 140], "socket": true},
+        {"id": "gl", "kind": "pass", "at": [135, 307.942291]},
+        {"id": "gr", "kind": "pass", "at": [225, 307.942291]},
+        {"id": "ql", "kind": "pass", "at": [50.096199, 365]},
+        {"id": "qr", "kind": "pass", "at": [309.903809, 365]},
+        {"id": "jl", "kind": "merge", "at": [105, 419.903809]},
+        {"id": "jr", "kind": "merge", "at": [255, 419.903809]},
+        {"id": "cl", "kind": "cup", "at": [84, 505], "recipe": "G G R"},
+        {"id": "cr", "kind": "cup", "at": [276, 505], "recipe": "R G G"}
       ],
-      "pipes": [["s", "f1"], ["f1", "f2"], ["f1", "h", [[330, 290]], {"arc": 1}], ["f2", "m", [[115, 327.500000]], {"arc": 1}], ["f2", "m", [[245, 327.500000]], {"arc": 1}], ["m", "h"], ["h", "cp"]],
-      "tray": [{"type": "separator", "a": "R", "b": "A"}, "separator", "mixer", "mixer", "flipper", {"type": "overflow", "n": 3}, "turnstile", "tank4"]
+      "pipes": [["sb", "x"], ["sa", "x"], ["x", "gr"], ["gr", "jr"], ["x", "gl"], ["gl", "jl"], ["rl", "ql"], ["ql", "jl", [], {"arc": 0}], ["rr", "qr"], ["qr", "jr", [], {"arc": 0}], ["jl", "cl"], ["jr", "cr"]],
+      "tray": ["mixer", "twin", {"type": "candle", "n": 1}, {"type": "candle", "n": 2}, {"type": "candle", "n": 2}]
     },
     {
-      "id": "4-C2", "name": "Barrier", "type": "challenge", "intro": "Two greens, one rose. Make the greens go in step.", "sigil": {"at": [180, 290], "rings": [150, 75]},
+      "id": "4-C2", "name": "Barrier", "type": "challenge", "intro": "The seals keep the crossing clear; rose goes in the blue phial first.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "sb1", "kind": "spout", "at": [30, 90], "beads": "B*2", "beat": 12},
-        {"id": "sb2", "kind": "spout", "at": [330, 90], "beads": "B*2", "beat": 12},
-        {"id": "sa", "kind": "spout", "at": [180, 40], "beads": "A*4", "beat": 8},
-        {"id": "sr", "kind": "spout", "at": [14, 420], "beads": "R*3", "beat": 18, "start": 20},
-        {"id": "fa", "kind": "fork", "at": [180, 140], "socket": true},
-        {"id": "m1", "kind": "merge", "at": [50.099998, 215], "socket": true},
-        {"id": "m2", "kind": "merge", "at": [309.899994, 215], "socket": true},
-        {"id": "j", "kind": "merge", "at": [180, 365], "socket": true},
-        {"id": "x", "kind": "cross", "at": [180, 440], "socket": true},
-        {"id": "c", "kind": "cup", "at": [180, 512], "want": "G", "count": 8},
-        {"id": "cr", "kind": "cup", "at": [310, 490], "want": "R", "count": 3}
+        {"id": "sb", "kind": "spout", "at": [24, 120], "beads": "B*3", "beat": 6},
+        {"id": "sa", "kind": "spout", "at": [336, 120], "beads": "A*3", "beat": 9, "start": 3},
+        {"id": "sr", "kind": "spout", "at": [344, 300], "beads": "R", "beat": 12, "start": 60},
+        {"id": "p1", "kind": "pass", "at": [50.096199, 215], "twin": "p2"},
+        {"id": "p2", "kind": "pass", "at": [286.066010, 183.934006]},
+        {"id": "x", "kind": "cross", "at": [180, 140], "socket": true},
+        {"id": "gb", "kind": "pass", "at": [225, 307.942291]},
+        {"id": "qr", "kind": "pass", "at": [309.903809, 365]},
+        {"id": "jb", "kind": "merge", "at": [255, 419.903809]},
+        {"id": "cb", "kind": "cup", "at": [276, 505], "recipe": "R B B B"},
+        {"id": "ca", "kind": "cup", "at": [60, 505], "want": "A", "count": 3}
       ],
-      "pipes": [["sb1", "m1"], ["sb2", "m2"], ["sa", "fa"], ["fa", "m1", [], {"arc": 0}], ["fa", "m2", [], {"arc": 0}], ["m1", "j"], ["m2", "j"], ["j", "x"], ["sr", "x"], ["x", "c"], ["x", "cr"]],
-      "tray": ["mixer", "mixer", "flipper", {"type": "overflow", "n": 2}, "twin", "tank4", "tank8"]
+      "pipes": [["sb", "p1"], ["sa", "p2"], ["p1", "x", [], {"arc": 0}], ["p2", "x", [], {"arc": 0}], ["x", "gb"], ["gb", "jb"], ["x", "ca"], ["sr", "qr"], ["qr", "jb", [], {"arc": 0}], ["jb", "cb"]],
+      "tray": ["twin", "mixer", {"type": "candle", "n": 1}, {"type": "candle", "n": 2}]
     },
     {
-      "id": "4-C3", "name": "Leftover Rose", "type": "challenge", "intro": "Unmix, remix, mix again. Every drop has a place.", "sigil": {"at": [180, 290], "rings": [150, 75]},
+      "id": "4-C3", "name": "The Long Rite", "type": "challenge", "intro": "Amber, blue, green, green, rose. Five layers, three candles.", "sigil": {"at": [180, 290], "rings": [150]},
       "nodes": [
-        {"id": "s", "kind": "spout", "at": [180, 40], "beads": "B+A*3", "beat": 10},
-        {"id": "sr", "kind": "spout", "at": [346, 190], "beads": "R*8", "beat": 6},
-        {"id": "f1", "kind": "fork", "at": [180, 140], "socket": true},
-        {"id": "m1", "kind": "merge", "at": [180, 215], "socket": true},
-        {"id": "fr", "kind": "fork", "at": [330, 290], "socket": true},
-        {"id": "m2", "kind": "merge", "at": [180, 365], "socket": true},
-        {"id": "cp", "kind": "cup", "at": [180, 512], "want": "P", "count": 12},
-        {"id": "cr", "kind": "cup", "at": [335, 440], "want": "R", "count": 2}
+        {"id": "bf", "kind": "spout", "at": [60, 60], "beads": "B", "beat": 12},
+        {"id": "sb", "kind": "spout", "at": [150, 34], "beads": "B", "beat": 12},
+        {"id": "sa", "kind": "spout", "at": [310, 60], "beads": "A", "beat": 12},
+        {"id": "af", "kind": "spout", "at": [14, 245], "beads": "A", "beat": 12, "start": 70},
+        {"id": "rf", "kind": "spout", "at": [346, 245], "beads": "R", "beat": 12},
+        {"id": "m", "kind": "merge", "at": [180, 140], "socket": true},
+        {"id": "pb", "kind": "pass", "at": [105, 160.096207]},
+        {"id": "pa", "kind": "pass", "at": [35.111099, 328.822906]},
+        {"id": "g", "kind": "pass", "at": [221.250000, 293.947113]},
+        {"id": "pr", "kind": "pass", "at": [324.888885, 328.822906]},
+        {"id": "j1", "kind": "merge", "at": [105, 419.903809]},
+        {"id": "j2", "kind": "merge", "at": [255, 419.903809]},
+        {"id": "j", "kind": "merge", "at": [180, 440]},
+        {"id": "x", "kind": "cup", "at": [180, 515], "recipe": "A B G G R"}
       ],
-      "pipes": [["s", "f1"], ["f1", "m1", [[50.099998, 215]], {"arc": 0}], ["f1", "m1", [[309.899994, 215]], {"arc": 0}], ["m1", "m2"], ["sr", "fr"], ["fr", "m2"], ["fr", "cr"], ["m2", "cp"]],
-      "tray": ["separator", "mixer", "mixer", {"type": "overflow", "n": 2}, "flipper", "turnstile", "tank4", "tank8"]
+      "pipes": [["bf", "pb"], ["pb", "j1"], ["af", "pa"], ["pa", "j1", [], {"arc": 0}], ["sb", "m"], ["sa", "m"], ["m", "g"], ["g", "j2"], ["rf", "pr"], ["pr", "j2", [], {"arc": 0}], ["j1", "j", [], {"arc": 0}], ["j2", "j", [], {"arc": 0}], ["j", "x"]],
+      "tray": ["mixer", "twin", {"type": "candle", "n": 1}, {"type": "candle", "n": 2}, {"type": "candle", "n": 3}, {"type": "candle", "n": 4}]
     }
   ]
 }

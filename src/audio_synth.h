@@ -120,6 +120,8 @@ enum class Sound : uint8_t {
   Amen,         // solved: the organ's plagal cadence (IV-I) and the choir's "a-men" as the sigil ignites
   GreatWork,    // 4-15 solved: organ swell, the choir joining, a harp glissando, the full chord at sigil::kGrandLength
   Kindle,       // the map: a candle catching (a soft whoosh)
+  ThreadSnap,   // a candle lets go: its thread snaps (a dry pluck), the stopper drops, a low bell
+  Muddle,       // a layer lands out of turn: a dissonant organ cluster, wavering
   Count,
 };
 

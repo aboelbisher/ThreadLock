@@ -722,23 +722,34 @@ TEST_SUITE("content") {
   TEST_CASE("every World 4 level is a sigil whose every placement ends") {
     const std::vector<World> worlds = LoadAll();
     REQUIRE(worlds.size() >= 4);
-    int rose = 0, pearl = 0, twins = 0, sigils = 0;
+    int rose = 0, pearl = 0, twins = 0, sigils = 0, recipes = 0, candles = 0;
     for (const Level& level : worlds[3].levels) {
       INFO("level " << level.id);
       ++sigils;
       CHECK(sigil::IsSigil(level));
       CHECK(LookProblems(level).empty());
-      bool has_rose = false, has_pearl = false, has_twin = false, has_mixer = false;
+      bool has_rose = false, has_pearl = false, has_twin = false, has_mixer = false, has_recipe = false;
       for (const Node& node : level.nodes) {
         for (const Bead& bead : node.beads) has_rose = has_rose || bead.Has(Color::Rose);
-        has_pearl = has_pearl || (node.kind == NodeKind::Cup && node.want == Color::Pearl);
+        has_pearl = has_pearl || (node.kind == NodeKind::Cup && node.want == Color::Pearl) ||
+                    std::find(node.recipe.begin(), node.recipe.end(), Color::Pearl) != node.recipe.end();
         has_twin = has_twin || node.twin >= 0;
+        has_recipe = has_recipe || !node.recipe.empty();
       }
-      for (const TrayPiece& piece : level.tray) has_mixer = has_mixer || piece.piece.type == PieceType::Mixer;
-      CHECK(has_mixer);
+      for (const TrayPiece& piece : level.tray) {
+        has_mixer = has_mixer || piece.piece.type == PieceType::Mixer;
+        CHECK(InKit(4, piece.piece.type));  // round 4: mixer, twin seal, candle only
+      }
+      // A candle in the Lean machine: it's needed.
+      bool lean_candle = false;
+      for (size_t i = 0; i < level.pars.lean.at.size(); ++i)
+        lean_candle = lean_candle || (level.pars.lean.at[i] >= 0 && level.tray[i].piece.type == PieceType::Candle);
+      candles += lean_candle;
+      CHECK((has_mixer || has_twin));
       rose += has_rose;
       pearl += has_pearl;
       twins += has_twin;
+      recipes += has_recipe;
       int longest = 0;
       ForEachPlacement(level, [&](const Placement& placement) {
         const Outcome outcome = Simulate(level, placement, false);
@@ -749,43 +760,42 @@ TEST_SUITE("content") {
       CHECK(longest < (level.look.height > 600.0f ? 800 : 400));
     }
     CHECK(sigils == 18);
+    CHECK(recipes >= 9);
+    CHECK(candles >= 4);
     CHECK(rose >= 4);
-    CHECK(pearl >= 3);
+    CHECK(pearl >= 2);
     CHECK(twins >= 3);
   }
 
   TEST_CASE("The Great Work (4-15): two sigils on two screens") {
     const Level level = Shipped("4-15");
     REQUIRE(level.look.sigils.size() == 2);
-    CHECK(level.look.sigils[0] == Sigil{{180, 300}, {130}});
-    CHECK(level.look.sigils[1] == Sigil{{180, 880}, {150}});
+    CHECK(level.look.sigils[0] == Sigil{{180, 290}, {150}});
+    CHECK(level.look.sigils[1] == Sigil{{180, 890}, {150}});
     CHECK(level.look.height == 1200.0f);
     CHECK(LookProblems(level).empty());
-    // The empty board clots at the first crossing on screen 1.
+    // The empty board clots at the crossing on screen 1.
     {
       Board board(level);
       const Run run = RunBoard(board);
       CHECK(run.outcome.failure == Failure::Mud);
-      CHECK(run.outcome.fail_node == NodeOf(level, "x1"));
-      CHECK(run.outcome.fail_tick == 35);
+      CHECK(run.outcome.fail_node == NodeOf(level, "x"));
     }
-    // Lean: the twin seals, a mixer for green on screen 1, the pearl mixer at the heart of screen 2, the overflow.
+    // Lean: a mixer on the crossing, the pearl mixer at the heart of screen 2, a candle that keeps pearl after green.
     const Outcome lean = Simulate(level, level.pars.lean, false);
     CHECK(lean.solved);
-    CHECK(lean.ticks == 164);
-    CHECK(level.pars.pieces == 4);
-    // Without the twin seals it clots on screen 1.
+    CHECK(level.pars.pieces == 3);
+    // Without the candle the pearls meet the green over the phial: it fails on screen 2.
     {
       Board board(level);
       board.SetPlacement(level.pars.lean);
       for (int piece = 0; piece < board.PieceCount(); ++piece) {
-        if (board.PieceInfo(piece).piece.type == PieceType::TwinGate) board.Unplace(piece);
+        if (board.PieceInfo(piece).piece.type == PieceType::Candle) board.Unplace(piece);
       }
       const Run run = RunBoard(board);
-      CHECK(run.outcome.failure == Failure::Mud);
-      CHECK(level.nodes[static_cast<size_t>(run.outcome.fail_node)].at.y < 600.0f);
+      CHECK(run.outcome.failure != Failure::None);
+      CHECK(level.nodes[static_cast<size_t>(run.outcome.fail_node)].at.y > 600.0f);
     }
-    // Its candles: the top pair on each screen, the bottom pair on the last.
     CHECK(sigil::Candles(level).size() >= 5);
   }
 
@@ -820,29 +830,29 @@ TEST_SUITE("content") {
     CHECK(Has(LookProblems(MakeLevel(off)), "node q2 isn't on the sigil's points or lines"));
   }
 
-  TEST_CASE("World 4's lessons: leftovers, the crossing mixer, the wrong globe, hold and wait, pearl") {
-    // 4-3: a mixer alone holds the leftover amber and waits for a blue that never comes.
+  TEST_CASE("World 4's lessons: a recipe, the crossing mixer, the wrong globe, hold and wait, pearl") {
+    // 4-3: a mixer alone: rose has the shorter way and lands first, out of turn.
     {
       const Level level = Shipped("4-3");
       Board board(level);
       REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), NodeOf(level, "m")));
       const Run run = RunBoard(board);
-      CHECK(run.outcome.failure == Failure::Jam);
-      CHECK(board.Jam().lonely == NodeOf(level, "m"));
+      CHECK(run.outcome.failure == Failure::Muddled);
+      CHECK(sigil::FailureText(level, board, run.outcome) ==
+            "The phial's recipe is green, green, then rose, bottom up. Rose came first, out of turn.");
     }
-    // 4-5: a mixer on the crossing sends each mixed pair on its own lane: green lands in both phials (a bridge
-    // keeps the right lane's green apart from the rose it crosses further down).
+    // 4-5: a mixer on the crossing sends each mixed pair on its own lane: green lands in both phials.
     {
       const Level level = Shipped("4-5");
       Board board(level);
       REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), NodeOf(level, "x")));
-      REQUIRE(board.Place(PieceOf(board, PieceType::Bridge), NodeOf(level, "xr")));
       const Run run = RunBoard(board);
       CHECK(run.outcome.solved);
-      CHECK(run.Ticks(EventType::Land, NodeOf(level, "cl")).size() > 0);
-      CHECK(run.Ticks(EventType::Land, NodeOf(level, "cr")).size() > 0);
+      CHECK(run.Ticks(EventType::Land, NodeOf(level, "cl")).size() == 4);
+      CHECK(run.Ticks(EventType::Land, NodeOf(level, "cr")).size() == 4);
     }
-    // 4-11: as placed it clots in the bottom globe; moving the mixer there solves it.
+    // 4-11: as placed the mixer sits on the globe over the phial and blue meets amber unmixed above; moving it up
+    // (and a candle for rose) solves it.
     {
       const Level level = Shipped("4-11");
       Board board(level);
@@ -850,34 +860,33 @@ TEST_SUITE("content") {
       CHECK(broken.outcome.failure == Failure::Mud);
       CHECK(broken.outcome.fail_node == NodeOf(level, "m"));
       board.Stop();
-      // The placed mixer moves from the crossing to the bottom globe.
-      const int placed = board.PieceAt(NodeOf(level, "x2"));
+      const int placed = board.PieceAt(NodeOf(level, "j"));
       REQUIRE(placed >= 0);
       REQUIRE(board.Place(placed, NodeOf(level, "m")));
+      REQUIRE(board.Place(PieceOf(board, PieceType::Candle, 1), NodeOf(level, "c")));
       CHECK(RunBoard(board).outcome.solved);
     }
-    // 4-12: on the empty board each mixer holds one drop and waits for the other's: a circle of waiting.
+    // 4-12: both candles on the right phial wait for it to fill, and nothing can: the left one muddles first, then the
+    // run ends THREADLOCKED at a candle.
     {
       const Level level = Shipped("4-12");
       Board board(level);
+      REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), NodeOf(level, "x")));
+      REQUIRE(board.Place(PieceOf(board, PieceType::Candle, 0), NodeOf(level, "gr")));
+      REQUIRE(board.Place(PieceOf(board, PieceType::Candle, 1), NodeOf(level, "qr")));
       const Run run = RunBoard(board);
-      REQUIRE(run.outcome.failure == Failure::Jam);
-      const JamReport jam = board.Jam();
-      for (const char* mixer : {"m1", "m2"}) {
-        CHECK(std::find(jam.stuck_nodes.begin(), jam.stuck_nodes.end(), NodeOf(level, mixer)) != jam.stuck_nodes.end());
-      }
-      if (!jam.cycle.empty()) {
-        const std::vector<Vec2> loop = sigil::JamLoop(level, jam.cycle);
-        REQUIRE(loop.size() >= 3);
-        CHECK(loop.front() == loop.back());
-      }
+      CHECK(run.outcome.failure == Failure::Muddled);
+      REQUIRE(run.outcome.jammed);
+      const int lonely = board.Jam().lonely;
+      CHECK((lonely == NodeOf(level, "gr") || lonely == NodeOf(level, "qr")));
     }
-    // 4-13: green mixed, then mixed with rose: eight pearls land and it solves.
+    // 4-13: green, then green mixed with rose: pearl, in order.
     {
       const Level level = Shipped("4-13");
       const Outcome lean = Simulate(level, level.pars.lean, false);
       CHECK(lean.solved);
-      CHECK(Board(level).GetLevel().nodes[static_cast<size_t>(NodeOf(level, "cp"))].want == Color::Pearl);
+      const Node& phial = level.nodes[static_cast<size_t>(NodeOf(level, "x2"))];
+      CHECK(phial.recipe == std::vector<Color>{Color::Green, Color::Pearl, Color::Pearl});
     }
   }
 

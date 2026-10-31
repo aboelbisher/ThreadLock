@@ -660,7 +660,17 @@ std::vector<Color> LanternColors(const Level& level) {
   };
   std::vector<Cup> cups;
   for (const Node& node : level.nodes) {
-    if (node.kind == NodeKind::Cup) cups.push_back({node.at.x, node.want});
+    // A recipe phial (World 4) shows each colour of its recipe once, bottom up.
+    if (node.kind == NodeKind::Cup && !node.recipe.empty()) {
+      std::vector<Color> seen;
+      for (Color layer : node.recipe) {
+        if (std::find(seen.begin(), seen.end(), layer) != seen.end()) continue;
+        seen.push_back(layer);
+        cups.push_back({node.at.x, layer});
+      }
+    } else if (node.kind == NodeKind::Cup) {
+      cups.push_back({node.at.x, node.want});
+    }
     if (node.kind == NodeKind::Rack) {
       for (const Slot& slot : node.slots) cups.push_back({node.at.x, slot.want});
     }

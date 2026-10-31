@@ -599,4 +599,12 @@ TEST_SUITE("city map") {
     CHECK(kMapEnd + 20.0f < kHeight);
     for (const Vec2 l : lamps) CHECK(DistrictAt(l.y) == 4);
   }
+
+  TEST_CASE("a recipe phial lights its level in each colour of its recipe, bottom up") {
+    Level level;
+    std::vector<std::string> errors;
+    REQUIRE(ParseLevel(R"({"id": "t-r", "nodes": [{"id": "s", "kind": "spout", "at": [180, 40], "beads": "G G R", "beat": 4},
+      {"id": "c", "kind": "cup", "at": [180, 400], "recipe": "G G R"}], "pipes": [["s", "c"]], "tray": []})", level, errors));
+    CHECK(LanternColors(level) == std::vector<Color>{Color::Green, Color::Rose});
+  }
 }

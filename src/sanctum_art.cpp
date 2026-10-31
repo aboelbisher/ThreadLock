@@ -628,7 +628,9 @@ void SanctumArt::DrawPhial(Canvas& canvas, const ArtFrame& frame, int cup) const
   const float fill =
       std::clamp(frame.cup_fill[static_cast<size_t>(cup)] / static_cast<float>(std::max(1, node.count)), 0.0f, 1.0f) *
       0.82f;
-  if (fill > 0.005f) {
+  if (!node.recipe.empty()) {
+    DrawRecipe(canvas, frame, cup, c, r);
+  } else if (fill > 0.005f) {
     const bool mud = state.impure;
     const Rgba color = mud ? kPhialMud : LiquidColor(*frame.palette, node.want);
     const Rgba core = mud ? kPhialMudCore : Mixed(color, Hex(0xFFFFFF), 0.7f);
@@ -653,6 +655,39 @@ void SanctumArt::DrawPhial(Canvas& canvas, const ArtFrame& frame, int cup) const
   }
 }
 
+// A recipe phial (round 4): its layers ghosted bottom up in their colours, the dashed lines between them, and
+// what has landed filling them in order (the last layer rising as it lands; a muddled layer in the colour that came).
+void SanctumArt::DrawRecipe(Canvas& canvas, const ArtFrame& frame, int cup, glm::vec2 c, float r) const {
+  const Node& node = frame.level->nodes[static_cast<size_t>(cup)];
+  const float s = frame.Scale();
+  const int n = static_cast<int>(node.recipe.size());
+  auto top = [&](float layers) { return c.y + r - 2.0f * r * 0.82f * layers / static_cast<float>(n); };
+  const float inner = r - 1.5f * s;
+  for (int j = n - 1; j >= 0; --j) {
+    const std::vector<glm::vec2> band = Below(c, inner, top(static_cast<float>(j + 1)));
+    if (band.size() > 2) art::FillConvex(canvas, band, WithAlpha(LiquidColor(*frame.palette, node.recipe[static_cast<size_t>(j)]), 0.14f));
+  }
+  const std::vector<barges::Landing>* landed =
+      frame.board->Started() && static_cast<size_t>(cup) < frame.landed.size() ? &frame.landed[static_cast<size_t>(cup)] : nullptr;
+  const float filled = frame.cup_fill[static_cast<size_t>(cup)];
+  const int k = landed ? std::min(n, static_cast<int>(landed->size())) : 0;
+  for (int j = k - 1; j >= 0; --j) {
+    const float layers = std::min(static_cast<float>(j + 1), filled);
+    if (layers <= static_cast<float>(j)) continue;
+    const Bead& bead = (*landed)[static_cast<size_t>(j)].bead;
+    const Rgba color = bead.IsMud() ? kPhialMud : LiquidColor(*frame.palette, bead.a);
+    const std::vector<glm::vec2> band = Below(c, inner, top(layers));
+    if (band.size() > 2) art::FillConvex(canvas, band, color);
+  }
+  if (k > 0 && !(*landed)[static_cast<size_t>(k - 1)].bead.IsMud())
+    glow_.Draw(canvas, c, r + 16.0f * s, WithAlpha(LiquidColor(*frame.palette, (*landed)[static_cast<size_t>(k - 1)].bead.a), 0.12f));
+  for (int j = 1; j < n; ++j) {
+    const float y = top(static_cast<float>(j)), dy = c.y - y;
+    const float w = std::sqrt(std::max(0.0f, inner * inner - dy * dy));
+    art::DashedLine(canvas, {c.x - w, y}, {c.x + w, y}, 1.0f * s, WithAlpha(kRim, 0.35f), 5);
+  }
+}
+
 bool SanctumArt::Bad(const ArtFrame& frame, int cup) const {
   if (!frame.board->Started()) return false;
   const CupState& state = frame.board->Cup(cup);
@@ -672,6 +707,24 @@ void SanctumArt::DrawPill(Canvas& canvas, const ArtFrame& frame, int cup) const 
   std::snprintf(count, sizeof(count), "%d/%d", state.count, node.count);
   const bool bad = Bad(frame, cup), full = state.count >= node.count;
   const Rgba want = LiquidColor(*frame.palette, node.want);
+  if (!node.recipe.empty()) {
+    // The recipe, bottom to top: the layers landed dim, the next one ringed.
+    const int n = static_cast<int>(node.recipe.size());
+    const float step = 13.0f * s, width = static_cast<float>(n) * step + 12.0f * s, height = sigil::kPillHeight * s;
+    const glm::vec2 c = frame.layout.ToCanvas(sigil::PillAt(*frame.level, cup));
+    const glm::vec2 half{width * 0.5f, height * 0.5f};
+    canvas.FillRect({c - half - glm::vec2(1.0f * s), c + half + glm::vec2(1.0f * s)},
+                    bad ? WithAlpha(kFail, 0.75f) : full ? WithAlpha(kPillFull, 0.55f) : WithAlpha(kRim, 0.45f),
+                    height * 0.5f + 1.0f * s);
+    canvas.FillRect({c - half, c + half}, kPillBack, height * 0.5f);
+    for (int j = 0; j < n; ++j) {
+      const Color layer = node.recipe[static_cast<size_t>(j)];
+      const glm::vec2 g{c.x - half.x + 6.0f * s + step * (static_cast<float>(j) + 0.5f), c.y};
+      if (j == state.count && !bad && frame.board->Started()) canvas.Ring(g, 6.2f * s, 1.3f * s, kPillFull);
+      art::Glyph(canvas, layer, g, 4.0f * s, WithAlpha(LiquidColor(*frame.palette, layer), j < state.count ? 0.4f : 1.0f));
+    }
+    return;
+  }
   const float text = frame.font->Measure(count, 13.0f * s);
   const float width = text + 30.0f * s, height = sigil::kPillHeight * s;
   const glm::vec2 c = frame.layout.ToCanvas(sigil::PillAt(*frame.level, cup));

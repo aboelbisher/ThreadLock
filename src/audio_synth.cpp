@@ -1310,6 +1310,24 @@ std::vector<float> Make(Sound sound, uint32_t rate) {
       Normalize(out.samples, 0.7f);
       return out.samples;
     }
+    case Sound::ThreadSnap: {  // a dry pluck (the thread), a wooden tap (the stopper), a low bell under them
+      Buffer out(rate, 3.6f);
+      Plink(out, 0.0f, 2600.0f, 0.9f);
+      Partial(out, 0, 1318.5f, 0.35f, 0.0005f, 0.02f);
+      Plink(out, 0.11f, 420.0f, 0.6f);
+      Bell(out, kG2 * 1.5f, 0.12f, 0.55f);
+      Normalize(out.samples, 0.6f);
+      return out.samples;
+    }
+    case Sound::Muddle: {  // an organ cluster (C, C#, F#) swelling and wavering, the glass ringing sour
+      Buffer out(rate, 1.6f);
+      for (const auto [f, a] : {std::pair{261.6f, 0.5f}, std::pair{277.2f, 0.45f}, std::pair{370.0f, 0.4f}, std::pair{523.3f, 0.2f}})
+        Partial(out, 0, f, a, 0.08f, 0.6f);
+      for (size_t i = 0; i < out.samples.size(); ++i) out.samples[i] *= 1.0f - 0.25f * (0.5f + 0.5f * std::sin(out.T(i) * 2.0f * 3.14159265f * 6.0f));
+      GlassRing(out, 1108.7f, 0.0f, 0.2f);
+      Normalize(out.samples, 0.7f);
+      return out.samples;
+    }
     case Sound::SealBell: {  // a low bell (G2), the brass leaves' shimmer as they slide
       Buffer out(rate, 3.4f);
       Bell(out, kG2, 0.0f, 1.0f);
@@ -1555,7 +1573,7 @@ const char* SoundName(Sound sound) {
       "ShortQuay",     "Gridlock",     "LastOrders",   "RushHour",     "HarpNote",    "ChoirNote",  "OrganNote",
       "BowlNote",      "PearlNote",    "PhialBlue",    "PhialAmber",   "PhialGreen",  "PhialRose",  "PhialPearl",
       "MixSwell",      "SealBell",     "FlaskPour",    "Clot",         "SealCrack",   "PhialSpill", "HollowPhial",
-      "Amen",          "GreatWork",    "Kindle"};
+      "Amen",          "GreatWork",    "Kindle",       "ThreadSnap",   "Muddle"};
   static_assert(std::size(kNames) == static_cast<size_t>(Sound::Count));
   return sound < Sound::Count ? kNames[static_cast<size_t>(sound)] : "?";
 }

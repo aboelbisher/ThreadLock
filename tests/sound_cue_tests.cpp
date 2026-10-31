@@ -388,4 +388,35 @@ TEST_SUITE("sound cues") {
     REQUIRE(mud.sounds.size() == 1);
     CHECK(mud.sounds[0].sound == Sound::Clot);
   }
+
+  TEST_CASE("the sanctum's round-4 cues: a candle's thread snaps, a layer out of turn sours") {
+    const std::string json = R"({"id": "t-cue-candle",
+      "nodes": [{"id": "sb", "kind": "spout", "at": [60, 40], "beads": "B", "beat": 12},
+                {"id": "sa", "kind": "spout", "at": [300, 40], "beads": "A", "beat": 12},
+                {"id": "sr", "kind": "spout", "at": [330, 200], "beads": "R", "beat": 12},
+                {"id": "m", "kind": "merge", "at": [180, 150], "socket": true},
+                {"id": "c", "kind": "pass", "at": [330, 330]},
+                {"id": "j", "kind": "merge", "at": [180, 400]},
+                {"id": "x", "kind": "cup", "at": [180, 520], "recipe": "G G R"}],
+      "pipes": [["sb", "m"], ["sa", "m"], ["m", "j"], ["sr", "c"], ["c", "j", [[330, 400]]], ["j", "x"]],
+      "tray": ["mixer", {"type": "candle", "n": 2}]})";
+    const Level level = MakeLevel(json);
+    {
+      Board board(level);
+      REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), NodeOf(level, "m")));
+      REQUIRE(board.Place(PieceOf(board, PieceType::Candle), NodeOf(level, "c")));
+      const Heard heard = HearRun(board, level, SoundSet::Sanctum);
+      REQUIRE(board.GetOutcome().solved);
+      CHECK(Count(heard.cues, Sound::ThreadSnap) == 1);
+      CHECK(Count(heard.cues, Sound::Muddle) == 0);
+    }
+    {
+      Board board(level);
+      REQUIRE(board.Place(PieceOf(board, PieceType::Mixer), NodeOf(level, "m")));
+      const Heard heard = HearRun(board, level, SoundSet::Sanctum);
+      CHECK(board.GetOutcome().failure == Failure::Muddled);
+      CHECK(Count(heard.cues, Sound::Muddle) == 1);
+      CHECK(Count(heard.cues, Sound::ThreadSnap) == 0);
+    }
+  }
 }
