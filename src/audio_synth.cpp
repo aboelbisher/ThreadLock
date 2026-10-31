@@ -1126,6 +1126,15 @@ std::vector<float> Make(Sound sound, uint32_t rate) {
       Normalize(out.samples, 0.7f);
       return out.samples;
     }
+    case Sound::BucketTip: {  // the seesaw's wooden clack, then a pizzicato run down as the dose pours
+      Buffer out(rate, 1.4f);
+      Plink(out, 0.0f, 520.0f, 0.9f);
+      Plink(out, 0.012f, 1300.0f, 0.4f);
+      const float run[] = {kC6, kC6 * 0.75f, kC6 * 0.6667f, kC6 * 0.5f};
+      for (int k = 0; k < 4; ++k) Pizzicato(out, run[k] * 0.5f, 0.06f + 0.07f * static_cast<float>(k), 0.5f);
+      Normalize(out.samples, 0.6f);
+      return out.samples;
+    }
     case Sound::VibesNote: {
       Buffer out(rate, 2.8f);
       Vibes(out, kC4, 0.0f, 1.0f);
@@ -1568,7 +1577,7 @@ const char* SoundName(Sound sound) {
       "HarmonicaNote", "CelestaNote",  "LanternBlue",  "LanternAmber", "PaneChime",   "Heart",      "RoseWindow",
       "Smoke",         "Drip",         "CruciblePour", "Ascent",       "MarimbaNote", "PizzNote",   "PaidBlue",
       "PaidAmber",     "Sludge",       "JarTap",       "SpillWood",    "ShortDull",   "RackClack",  "Till",
-      "MarketDay",     "CorkPop",      "ShopBell",     "VibesNote",    "BassNote",    "RhodesNote", "HarbourBlue",
+      "MarketDay",     "CorkPop",      "ShopBell",     "BucketTip",     "VibesNote",    "BassNote",    "RhodesNote", "HarbourBlue",
       "HarbourAmber",  "HarbourGreen", "LockBrush",    "MillClunk",    "GateClank",   "Murk",       "Wash",
       "ShortQuay",     "Gridlock",     "LastOrders",   "RushHour",     "HarpNote",    "ChoirNote",  "OrganNote",
       "BowlNote",      "PearlNote",    "PhialBlue",    "PhialAmber",   "PhialGreen",  "PhialRose",  "PhialPearl",

@@ -12,6 +12,7 @@
 //
 // `assets` defaults to ./assets (run it from the repo's root).
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -689,6 +690,61 @@ int main(int argc, char** argv) {
   }
   const std::string command = argv[1];
   if (command == "sounds" && argc > 2) return Sounds(argv[2]);
+  // run <level.json> <placement>: one machine ("bucket3@f1/0,flipper@f2") on a level from a file: how it ends and
+  // what every cup got, per colour (to write a prescription from a machine).
+  if (command == "run" && argc > 3) {
+    Level level;
+    std::vector<std::string> errors;
+    if (!ParseLevel(ReadText(argv[2]), level, errors)) {
+      for (const std::string& error : errors) std::printf("PROBLEM %s\n", error.c_str());
+      return 1;
+    }
+    Board board(level);
+    std::vector<bool> used(level.tray.size(), false);
+    std::stringstream items(argv[3]);
+    std::string item;
+    while (std::getline(items, item, ',')) {
+      const size_t at = item.find('@');
+      if (at == std::string::npos) continue;
+      std::string key = item.substr(0, at), rest = item.substr(at + 1);
+      int setting = 0;
+      if (const size_t slash = rest.find('/'); slash != std::string::npos) {
+        setting = std::atoi(rest.c_str() + slash + 1);
+        rest = rest.substr(0, slash);
+      }
+      int n = 0;
+      while (!key.empty() && std::isdigit(static_cast<unsigned char>(key.back()))) key.pop_back();
+      if (key.size() < item.substr(0, at).size()) n = std::atoi(item.substr(key.size(), at - key.size()).c_str());
+      for (size_t i = 0; i < level.tray.size(); ++i) {
+        if (used[i] || PieceKey(level.tray[i].piece.type) != key || (n && level.tray[i].piece.n != n)) continue;
+        used[i] = true;
+        if (!board.Place(static_cast<int>(i), level.NodeIndex(rest))) std::printf("PROBLEM can't place %s\n", item.c_str());
+        board.SetSetting(static_cast<int>(i), setting);
+        break;
+      }
+    }
+    board.Start();
+    while (board.Running()) board.Tick();
+    const Outcome& outcome = board.GetOutcome();
+    std::printf("OUTCOME %s %s %d\n", outcome.solved ? "solved" : FailureKey(outcome.failure),
+                outcome.fail_node >= 0 ? level.nodes[static_cast<size_t>(outcome.fail_node)].id.c_str() : "-", outcome.ticks);
+    for (size_t n = 0; n < level.nodes.size(); ++n) {
+      const Node& node = level.nodes[n];
+      auto got = [](const CupState& cup) {
+        std::string text;
+        for (size_t c = 0; c < cup.got.size(); ++c) {
+          if (cup.got[c]) text += std::string(text.empty() ? "" : " ") + ColorLetter(static_cast<Color>(c)) + "=" + std::to_string(cup.got[c]);
+        }
+        return text;
+      };
+      if (node.kind == NodeKind::Cup) std::printf("CUP %s %s\n", node.id.c_str(), got(board.Cup(static_cast<int>(n))).c_str());
+      if (node.kind == NodeKind::Rack) {
+        for (size_t k = 0; k < node.slots.size(); ++k)
+          std::printf("CUP %s/%zu %s\n", node.id.c_str(), k, got(board.Bottle(static_cast<int>(n), static_cast<int>(k))).c_str());
+      }
+    }
+    return 0;
+  }
   if (command == "try" && argc > 2) {
     Level level;
     std::vector<std::string> errors;

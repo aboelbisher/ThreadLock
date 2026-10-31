@@ -304,8 +304,15 @@ std::vector<Color> JarColors(const Node& spout) {
 // A bottle with its mouth at `mouth` (board units), `scale` its size: what's in it and the glass over it.
 // `drops` = how full it looks (animated), `count` = the drops in it by the rules (the surface tips while the
 // two differ), `wanted` = its order's drops (a tick for each, a line where it's full).
+// How many colours a prescription asks for (a one-colour order: 1).
+int Colours(const Wants& wants) {
+  int n = 0;
+  for (uint8_t w : wants) n += w > 0;
+  return n;
+}
+
 void BottleOver(Canvas& canvas, const ArtFrame& frame, Vec2 mouth, float scale, const Rgba& color, int wanted,
-                int count, float drops, int seed) {
+                int count, float drops, int seed, const Wants* wants = nullptr, const CupState* state = nullptr) {
   const float s = frame.Scale() * scale;
   auto at = [&](glm::vec2 p) { return frame.layout.ToCanvas({mouth.x + p.x * scale, mouth.y + p.y * scale}); };
   const float want = static_cast<float>(std::max(1, wanted));
@@ -328,6 +335,22 @@ void BottleOver(Canvas& canvas, const ArtFrame& frame, Vec2 mouth, float scale, 
     }
     canvas.Line(at(glm::vec2(0.0f, y) - along * 10.5f), at(glm::vec2(0.0f, y) + along * 10.5f), 1.6f * s,
                 WithAlpha(Mixed(color, Hex(0xFFFFFF), 0.65f), 0.85f));
+    // A prescription (World 2, round 4): bands of each colour it holds, bottom up, in the order of the colours.
+    if (wants && state && Colours(*wants) > 1 && !state->impure) {
+      float below = 0.0f;
+      for (size_t c = 0; c < state->got.size(); ++c) {
+        if (state->got[c] <= 0) continue;
+        const float band = std::min(static_cast<float>(state->got[c]), std::max(0.0f, drops - below));
+        if (band <= 0.0f) break;
+        const float y0 = surface(below / want), y1 = surface((below + band) / want);
+        std::vector<glm::vec2> keep = Cut(Cut(inside, {0.0f, y1}, {0.0f, 1.0f}), {0.0f, y0}, {0.0f, -1.0f});
+        if (keep.size() >= 3) {
+          for (glm::vec2& p : keep) p = at(p);
+          art::FillConvex(canvas, keep, LiquidColor(*frame.palette, static_cast<Color>(c)));
+        }
+        below += band;
+      }
+    }
   }
   // The glass over it: its edge and a shine; a tick for each drop it wants, a line where it's full.
   std::vector<glm::vec2> edge{at({kBottleGlass.neck, 0.0f})};
@@ -628,11 +651,32 @@ void ApothecaryArt::DrawSlips(Canvas& canvas, const ArtFrame& frame) const {
     const float room = (apothecary::kSlipWidth - 4.0f) * s;
     if (const float wide = hand.Measure(order.name, name_size); wide > room) name_size *= room / wide;
     canvas.Text(hand, order.name, at(0.0f, 22.0f), name_size, Align::Center, ink);
-    const Rgba liquid = LiquidColor(*frame.palette, order.want);
-    TextStyle want{.color = Mixed(liquid, Hex(0x000000), 0.3f)};
-    want.rotation = tilt;
-    canvas.Text(hand, std::to_string(order.count), at(3.0f, 38.0f), 19.0f * s, Align::Center, want);
-    art::Glyph(canvas, order.want, at(-9.0f, 38.5f), 3.2f * s, liquid);
+    if (Colours(order.wants) > 1) {
+      // A prescription: a row per colour, the count in the hand and the colour's glyph, ticked once it's exact.
+      const int rows = Colours(order.wants);
+      const float row = rows > 2 ? 9.0f : 11.0f;
+      float y = 38.0f - row * 0.5f * static_cast<float>(rows - 1);
+      const CupState* got = nullptr;
+      if (frame.board->Started())
+        got = order.slot >= 0 ? &frame.board->Bottle(order.node, order.slot) : &frame.board->Cup(order.node);
+      for (size_t c = 0; c < order.wants.size(); ++c) {
+        if (!order.wants[c]) continue;
+        const Color colour = static_cast<Color>(c);
+        const Rgba liquid = LiquidColor(*frame.palette, colour);
+        TextStyle want{.color = Mixed(liquid, Hex(0x000000), 0.3f)};
+        want.rotation = tilt;
+        canvas.Text(hand, std::to_string(order.wants[c]), at(-4.0f, y), (rows > 2 ? 12.0f : 14.0f) * s, Align::Center, want);
+        art::Glyph(canvas, colour, at(6.0f, y + 0.5f), 2.8f * s, liquid);
+        if (got && got->got[c] == order.wants[c]) canvas.Line(at(11.0f, y), at(17.0f, y - 4.0f), 1.4f * s, kInkBrown);
+        y += row;
+      }
+    } else {
+      const Rgba liquid = LiquidColor(*frame.palette, order.want);
+      TextStyle want{.color = Mixed(liquid, Hex(0x000000), 0.3f)};
+      want.rotation = tilt;
+      canvas.Text(hand, std::to_string(order.count), at(3.0f, 38.0f), 19.0f * s, Align::Center, want);
+      art::Glyph(canvas, order.want, at(-9.0f, 38.5f), 3.2f * s, liquid);
+    }
 
     // PAID: a rubber stamp's box and word, askew, coming down from big to its place over the count.
     if (const Marker* paid = Moment(frame, Marker::Paid, order.node, order.slot)) {
@@ -1062,7 +1106,7 @@ void ApothecaryArt::DrawBottle(Canvas& canvas, const ArtFrame& frame, int n) con
   const apothecary::RackSpot spot{mouth, {mouth.x, mouth.y + kBottleGlass.base}};
   DrawMoments(canvas, frame, n, -1, spot, false);
   BottleOver(canvas, frame, mouth, 1.0f, cup.impure ? kMud : LiquidColor(*frame.palette, node.want), node.count,
-             cup.count, frame.cup_fill[static_cast<size_t>(n)], n);
+             cup.count, frame.cup_fill[static_cast<size_t>(n)], n, &node.wants, &cup);
   DrawMoments(canvas, frame, n, -1, spot, true);
 
   // A brass nozzle on the end of each copper line into it.
@@ -1483,7 +1527,7 @@ void ApothecaryArt::DrawRack(Canvas& canvas, const ArtFrame& frame, int rack) co
     if (sp < 0.0f) tag(0.55f);
     const CupState& bottle = board.Started() ? board.Bottle(rack, k) : CupState{};
     BottleOver(canvas, frame, spot.mouth, sc, bottle_color(k), slot.count, bottle.count,
-               frame.bottle_fill[static_cast<size_t>(rack)][static_cast<size_t>(k)], rack * 8 + k);
+               frame.bottle_fill[static_cast<size_t>(rack)][static_cast<size_t>(k)], rack * 8 + k, &slot.wants, &bottle);
     DrawMoments(canvas, frame, rack, k, spot, true);
     if (sp >= 0.0f) tag(1.0f);
   }

@@ -815,6 +815,13 @@ std::vector<std::string> LookProblems(const Level& level) {
       }
     }
   }
+  // Round 4: a shop (World 2) counts; it has no crossings or merges, so nothing can make mud there.
+  if (level.world == 2 && !level.look.shelves.empty()) {
+    for (const Node& node : level.nodes) {
+      if (node.kind == NodeKind::Cross || node.kind == NodeKind::Merge)
+        problems.push_back("node " + node.id + ": a shop has no crossings or merges");
+    }
+  }
   const std::vector<std::string> kit = KitProblems(level);
   problems.insert(problems.end(), kit.begin(), kit.end());
   return problems;
@@ -831,7 +838,7 @@ bool InKit(int world, PieceType type) {
   }
 }
 
-bool KitEnforced(int world) { return world == 1 || world == 4; }
+bool KitEnforced(int world) { return world == 1 || world == 2 || world == 4; }
 
 std::vector<std::string> KitProblems(const Level& level) {
   std::vector<std::string> problems;

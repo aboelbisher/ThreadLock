@@ -47,9 +47,11 @@ struct Search {
       taken[Index(node)] = static_cast<int>(type);
       if (pair) taken[Index(n.twin)] = static_cast<int>(type);
       placement.at[Index(piece)] = node;
-      const int settings = HasSetting(type) ? 2 : 1;
+      // A bucket's setting is the side of its first dose: it matters only on a fork.
+      const bool sided = HasSetting(type) && !(type == PieceType::Bucket && n.kind != NodeKind::Fork);
+      const int settings = sided ? 2 : 1;
       for (int s = 0; s < settings && !stopped; ++s) {
-        placement.setting[Index(piece)] = HasSetting(type) ? s : level.tray[Index(piece)].setting;
+        placement.setting[Index(piece)] = sided ? s : level.tray[Index(piece)].setting;
         Pieces(k + 1);
       }
       taken[Index(node)] = -1;

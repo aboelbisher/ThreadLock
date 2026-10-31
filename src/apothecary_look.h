@@ -35,6 +35,7 @@ struct Order {
   std::string name;
   Color want = Color::Blue;
   int count = 0;
+  Wants wants{};  // per colour (a prescription has two or more)
 };
 std::vector<Order> Orders(const Level& level);
 

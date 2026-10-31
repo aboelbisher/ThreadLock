@@ -653,11 +653,27 @@ int OpenGates(const MapLevels& levels, const StarMap& stars) {
 
 float Dawn(int stars) { return std::clamp(static_cast<float>(stars) / 45.0f, 0.0f, 1.0f); }
 
+namespace {
+struct LanternCup {
+  float x;
+  Color want;
+};
+// A prescription (World 2) shows each colour it asks for; a one-colour cup its colour.
+void AddWants(std::vector<LanternCup>& cups, float x, const Wants& wants, Color want) {
+  int colours = 0;
+  for (uint8_t w : wants) colours += w > 0;
+  if (colours < 2) {
+    cups.push_back({x, want});
+    return;
+  }
+  for (size_t c = 0; c < wants.size(); ++c) {
+    if (wants[c]) cups.push_back({x, static_cast<Color>(c)});
+  }
+}
+}  // namespace
+
 std::vector<Color> LanternColors(const Level& level) {
-  struct Cup {
-    float x;
-    Color want;
-  };
+  using Cup = LanternCup;
   std::vector<Cup> cups;
   for (const Node& node : level.nodes) {
     // A recipe phial (World 4) shows each colour of its recipe once, bottom up.
@@ -669,10 +685,10 @@ std::vector<Color> LanternColors(const Level& level) {
         cups.push_back({node.at.x, layer});
       }
     } else if (node.kind == NodeKind::Cup) {
-      cups.push_back({node.at.x, node.want});
+      AddWants(cups, node.at.x, node.wants, node.want);
     }
     if (node.kind == NodeKind::Rack) {
-      for (const Slot& slot : node.slots) cups.push_back({node.at.x, slot.want});
+      for (const Slot& slot : node.slots) AddWants(cups, node.at.x, slot.wants, slot.want);
     }
   }
   std::stable_sort(cups.begin(), cups.end(), [](const Cup& a, const Cup& b) { return a.x < b.x; });

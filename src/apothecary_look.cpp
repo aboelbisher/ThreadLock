@@ -31,12 +31,12 @@ std::vector<Order> Orders(const Level& level) {
   for (size_t n = 0; n < level.nodes.size(); ++n) {
     const Node& node = level.nodes[n];
     if (node.kind == NodeKind::Cup && !node.order.empty())
-      orders.push_back({static_cast<int>(n), -1, node.order, node.want, node.count});
+      orders.push_back({static_cast<int>(n), -1, node.order, node.want, node.count, node.wants});
     if (node.kind != NodeKind::Rack) continue;
     for (size_t k = 0; k < node.slots.size(); ++k) {
       const Slot& slot = node.slots[k];
       if (!slot.order.empty())
-        orders.push_back({static_cast<int>(n), static_cast<int>(k), slot.order, slot.want, slot.count});
+        orders.push_back({static_cast<int>(n), static_cast<int>(k), slot.order, slot.want, slot.count, slot.wants});
     }
   }
   return orders;

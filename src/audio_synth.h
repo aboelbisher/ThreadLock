@@ -83,6 +83,7 @@ enum class Sound : uint8_t {
   // The city map's market square.
   CorkPop,   // a bottle in the shop window corked (Lean)
   ShopBell,  // the shop's door bell: a level's bottle done, the shop waking
+  BucketTip,  // a bucket tips its dose: a wooden clack and a pizzicato run down
   // The Canal set (World 3).
   VibesNote,     // blue: a vibraphone, C4, its motor's tremolo on
   BassNote,      // amber: a plucked upright bass, C3

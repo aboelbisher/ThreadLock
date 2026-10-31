@@ -96,6 +96,36 @@ TEST_SUITE("content") {
     MESSAGE(levels << " levels checked");
   }
 
+  TEST_CASE("World 2 counts: prescriptions, buckets and racks; no crossings or merges in the shop") {
+    const std::vector<World> worlds = LoadAll();
+    REQUIRE(worlds.size() >= 2);
+    REQUIRE(worlds[1].levels.size() == 18);
+    int prescriptions = 0, buckets = 0, racks = 0;
+    for (const Level& level : worlds[1].levels) {
+      INFO("level " << level.id);
+      bool rx = false, bucket = false, rack = false;
+      auto colours = [](const Wants& wants) {
+        int n = 0;
+        for (uint8_t w : wants) n += w > 0;
+        return n;
+      };
+      for (const Node& node : level.nodes) {
+        CHECK(node.kind != NodeKind::Cross);
+        CHECK(node.kind != NodeKind::Merge);
+        rx = rx || (node.kind == NodeKind::Cup && colours(node.wants) > 1);
+        for (const Slot& slot : node.slots) rx = rx || colours(slot.wants) > 1;
+        rack = rack || node.kind == NodeKind::Rack;
+      }
+      for (const TrayPiece& piece : level.tray) bucket = bucket || piece.piece.type == PieceType::Bucket;
+      prescriptions += rx;
+      buckets += bucket;
+      racks += rack;
+    }
+    CHECK(prescriptions >= 6);
+    CHECK(buckets >= 5);
+    CHECK(racks >= 4);
+  }
+
   TEST_CASE("each world's tray holds only its own pieces (round 4: the worlds rebuilt so far)") {
     for (const World& world : LoadAll()) {
       for (const Level& level : world.levels) {
