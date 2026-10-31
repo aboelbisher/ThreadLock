@@ -76,6 +76,9 @@ PieceText TextFor(const Piece& piece) {
               "Nothing"};
     case PieceType::TwinGate:
       return {"Holds two ways in until both have a drop, then lets the pair go together.", "Nothing"};
+    case PieceType::Candle:
+      return {"On a groove into a phial: holds its drop until the phial holds the number on it, then lets go for good.",
+              "Nothing"};
   }
   return {"", ""};
 }
@@ -109,9 +112,10 @@ WhereText WhereFor(PieceType type) {
                                {NodeKind::Merge, false, "merges"}};
   std::vector<std::string> works, traps;
   for (const Place& place : kPlaces) {
-    const PieceRole role = Role(type, place.kind, place.twin);
+    // A pipe here leads to a cup, so a candle shows where it can work.
+    const PieceRole role = Role(type, place.kind, place.twin, place.kind == NodeKind::Pass);
     // Twin pipes are pipes too: name them only when a piece does something else there.
-    if (place.twin && role == Role(type, NodeKind::Pass, false)) continue;
+    if (place.twin && role == Role(type, NodeKind::Pass, false, true)) continue;
     if (role == PieceRole::Acts) works.push_back(place.name);
     if (role == PieceRole::Trap) traps.push_back(place.name);
   }
@@ -148,6 +152,7 @@ const char* FailureTitle(const Outcome& outcome, const WorldLook& look) {
     case Failure::Spill: return "Spill!";
     case Failure::Dry: return "A cup ran dry";
     case Failure::Jam: return "THREADLOCKED";
+    case Failure::Muddled: return "Muddled!";
     case Failure::None: break;
   }
   return "Not quite";
@@ -217,6 +222,7 @@ std::string FailureText(const Level& level, const Board& board, const Outcome& o
       const std::string why = JamText(level, board);
       return canals ? why + " " + HarbourCounts(level, board) : why;
     }
+    case Failure::Muddled: return "A layer landed out of turn.";
     case Failure::None: break;
   }
   return "";
@@ -1283,7 +1289,7 @@ void LevelScreen::DrawInfo(UIContext& ui) {
   const wlw::ui::Font& font = app_.GetFont();
   const Piece& piece = board_.PieceInfo(info_piece_).piece;
   std::string title = PieceName(piece.type);
-  if (piece.type == PieceType::Overflow) title += " " + std::to_string(piece.n);
+  if (piece.type == PieceType::Overflow || piece.type == PieceType::Candle) title += " " + std::to_string(piece.n);
   const wlw::ui::DialogResult dialog = wlw::ui::Dialog(ui, title, {310.0f, 336.0f}, true);
   if (dialog.close) {
     dialog_ = Dialog::None;

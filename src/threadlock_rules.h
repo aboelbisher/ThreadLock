@@ -71,12 +71,13 @@ enum class PieceType : uint8_t {
   Bridge,     // the lanes of a crossing don't touch (no waiting, no mud)
   Mixer,      // waits for one drop from each way in, mixes them
   TwinGate,   // holds two ways in until both have a drop, then both go together
+  Candle,     // on a pipe socket that leads to a cup: holds its drop until that cup holds n, then lets go for good
 };
-inline constexpr int kPieceTypes = 9;
+inline constexpr int kPieceTypes = 10;
 
 struct Piece {
   PieceType type = PieceType::Separator;
-  int n = 0;              // Overflow: how many go its way
+  int n = 0;              // Overflow: how many go its way; Candle: what its cup must hold first (1-4)
   Color a = Color::Blue;  // Separator: the colours it sorts (a to side 0 unless swapped)
   Color b = Color::Amber;
   bool operator==(const Piece&) const = default;
@@ -109,7 +110,8 @@ bool IsSocketKind(NodeKind kind);  // fork, pass, cross, merge: where sockets ca
 // What a piece does in a socket (DESIGN.md §3): its job, nothing (it still counts for Lean), or a
 // trap (its first drop waits forever for a partner that can't come: THREADLOCKED).
 enum class PieceRole : uint8_t { Acts, Idle, Trap };
-PieceRole Role(PieceType type, NodeKind kind, bool twin_pair = false);
+// `feeds_cup`: a pipe socket whose way out runs straight to a cup (Node::feeds_cup), where a candle acts.
+PieceRole Role(PieceType type, NodeKind kind, bool twin_pair = false, bool feeds_cup = false);
 const char* PieceRoleKey(PieceRole role);  // "acts"
 
 inline constexpr float kCellLength = 10.0f;  // board units a bead moves per tick
@@ -144,6 +146,7 @@ struct Node {
   // Cup
   Color want = Color::Blue;
   int count = 0;
+  std::vector<Color> recipe;  // World 4: the layers it wants in order, bottom up (count = recipe.size(); want = the first)
   std::string order;     // the order it fills (look only: World 2's bottles, named on a slip)
   std::string district;  // the district it serves (look only: World 3's harbours, e.g. "Lantern Row")
   // Pass: the other half of a twin pair (-1 = none)
@@ -162,11 +165,14 @@ struct Node {
   std::vector<int> ins;   // pipes; Cross: lane i = ins[i] -> outs[i]
   std::vector<int> outs;  // pipes
   int dwell = 1;          // ticks a bead spends inside (Cup / Drain / Rack / Spout: 0)
+  int feeds_cup = -1;     // Pass: the cup its way out runs straight to (through passes, gates, mills, merges), else -1
   float radius = 0.0f;    // drawn size: pipes start and end at this distance from `at`
 };
 
 // The role of a piece on this node (a twin gate acts on either half of a twin pair).
-inline PieceRole Role(PieceType type, const Node& node) { return Role(type, node.kind, node.twin >= 0); }
+inline PieceRole Role(PieceType type, const Node& node) {
+  return Role(type, node.kind, node.twin >= 0, node.feeds_cup >= 0);
+}
 
 struct Pipe {
   int from = 0;           // node
@@ -297,6 +303,7 @@ enum class Failure : uint8_t {
   Spill,     // a cup got more than it wants
   Dry,       // a cup ended short
   Jam,       // nothing can ever move again: THREADLOCKED
+  Muddled,   // a recipe cup got a layer out of turn (World 4)
 };
 const char* FailureKey(Failure failure);
 
@@ -316,6 +323,8 @@ enum class EventType : uint8_t {
   Turn,      // rack `node` turned: bottle `slot` is under its pipe from this tick on
   Finished,  // every drop has landed (`value` = 1 if solved)
   Jammed,    // nothing can ever move again
+  Open,      // the candle on `node` let its first drop go (its cup holds enough): it stays open
+  Muddle,    // `drop` (`bead`) landed in recipe cup `node` out of turn (`value` = the layer it landed as, from 0)
 };
 
 struct Event {
@@ -368,6 +377,8 @@ struct Outcome {
   int fail_node = -1;               // where it happened
   int fail_slot = -1;               // which bottle, when it happened at a rack
   int fail_tick = -1;               // when
+  int fail_layer = -1;              // Muddled: the layer the drop landed as (from 0, bottom up)
+  Bead fail_bead{};                 // Muddled: what landed out of turn
   int ticks = 0;                    // when the run ended
   int pieces = 0;                   // movable pieces on the board (Lean)
 };
@@ -377,7 +388,7 @@ struct JamReport {
   std::vector<int> stuck_nodes;  // nodes with a drop stuck inside or at their entrance
   std::vector<int> cycle;        // nodes around a circle of waiting, in order (empty = none)
   // A node whose drop waits for something that never comes: a mixer's or twin gate's partner (a
-  // trap: one way in), or the mill turn that would open a shut gate.
+  // trap: one way in), the mill turn that would open a shut gate, or a candle whose cup never fills.
   int lonely = -1;
 };
 
@@ -442,6 +453,8 @@ class Board {
   int Poured(int spout) const { return poured_[Index(spout)]; }
   int FlipperNext(int node) const { return flipper_next_[Index(node)]; }
   int OverflowPassed(int node) const { return overflow_passed_[Index(node)]; }
+  bool CandleOpen(int node) const { return started_ && candle_open_[Index(node)] != 0; }
+  bool CandleActs(int node) const;  // a candle sits on this pipe socket and its way out leads to a cup
   int InsideCount(int node) const { return static_cast<int>(inside_[Index(node)].size()); }
   bool Waiting(int pipe) const;  // a drop is stuck at the end of `pipe`
   JamReport Jam() const;
@@ -496,6 +509,7 @@ class Board {
   std::vector<int> poured_, next_pour_;
   std::vector<int> flipper_next_, overflow_passed_;
   std::vector<std::array<int, 2>> mixer_slot_;
+  std::vector<uint8_t> candle_open_;  // per node
   std::vector<int> last_exit_tick_;
   std::vector<Bead> last_exit_bead_;
   std::vector<Event> events_;

@@ -182,6 +182,18 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
     node.flap = reader.Int(item, "flap", 0);
     node.flap_tappable = reader.Bool(item, "tap", false);
     if (node.kind == NodeKind::Cup) {
+      if (item.contains("recipe")) {
+        // World 4: the layers in order, bottom up ("G G R"); the count comes from it.
+        if (item.contains("want") || item.contains("count"))
+          reader.Error("cup '" + node.id + "': a recipe replaces 'want' and 'count'");
+        std::vector<Bead> layers;
+        const std::string recipe = reader.String(item, "recipe");
+        if (!ParseBeads(recipe, layers) || layers.empty()) reader.Error("cup '" + node.id + "': bad recipe '" + recipe + "'");
+        for (const Bead& layer : layers) {
+          if (layer.IsBlend()) reader.Error("cup '" + node.id + "': a recipe layer is one colour");
+          node.recipe.push_back(layer.a);
+        }
+      }
       reader.Color(item, "want", node.want);
       node.count = reader.Int(item, "count", 0);
       node.order = reader.String(item, "order");
@@ -538,8 +550,14 @@ std::string WriteLevel(const Level& level) {
       out += ", \"beads\": \"" + BeadsText(n.beads) + "\", \"beat\": " + std::to_string(n.beat);
       if (n.start != 1) out += ", \"start\": " + std::to_string(n.start);
     }
-    if (n.kind == NodeKind::Cup) {
+    if (n.kind == NodeKind::Cup && !n.recipe.empty()) {
+      std::string layers;
+      for (Color layer : n.recipe) layers += std::string(layers.empty() ? "" : " ") + ColorLetter(layer);
+      out += ", \"recipe\": \"" + layers + "\"";
+    } else if (n.kind == NodeKind::Cup) {
       out += std::string(", \"want\": \"") + ColorLetter(n.want) + "\", \"count\": " + std::to_string(n.count);
+    }
+    if (n.kind == NodeKind::Cup) {
       if (!n.order.empty()) out += ", \"order\": " + text(n.order);
       if (!n.district.empty()) out += ", \"district\": " + text(n.district);
     }
@@ -605,8 +623,8 @@ std::string WriteLevel(const Level& level) {
   std::string placed;
   for (const TrayPiece& piece : level.tray) {
     std::string spec = std::string("\"") + PieceKey(piece.piece.type) + "\"";
-    if (piece.piece.type == PieceType::Overflow) {
-      spec = "{\"type\": \"overflow\", \"n\": " + std::to_string(piece.piece.n) + "}";
+    if (piece.piece.type == PieceType::Overflow || piece.piece.type == PieceType::Candle) {
+      spec = std::string("{\"type\": \"") + PieceKey(piece.piece.type) + "\", \"n\": " + std::to_string(piece.piece.n) + "}";
     }
     if (piece.piece.type == PieceType::Separator && (piece.piece.a != Color::Blue || piece.piece.b != Color::Amber)) {
       spec = std::string("{\"type\": \"separator\", \"a\": \"") + ColorLetter(piece.piece.a) + "\", \"b\": \"" +
@@ -635,7 +653,7 @@ std::string PlacementText(const Level& level, const Placement& placement) {
     if (!text.empty()) text += ", ";
     const PieceType type = level.tray[i].piece.type;
     text += PieceKey(type);
-    if (type == PieceType::Overflow) text += std::to_string(level.tray[i].piece.n);
+    if (type == PieceType::Overflow || type == PieceType::Candle) text += std::to_string(level.tray[i].piece.n);
     text += "@" + level.nodes[static_cast<size_t>(placement.at[i])].id;
     if (HasSetting(type) && i < placement.setting.size()) text += "/" + std::to_string(placement.setting[i]);
   }
@@ -762,6 +780,36 @@ std::vector<std::string> LookProblems(const Level& level) {
       }
     }
   }
+  const std::vector<std::string> kit = KitProblems(level);
+  problems.insert(problems.end(), kit.begin(), kit.end());
+  return problems;
+}
+
+bool InKit(int world, PieceType type) {
+  using enum PieceType;
+  switch (world) {
+    case 1: return type == Separator || type == Turnstile || type == TankShort || type == TankTall;
+    case 2: return type == Flipper || type == Overflow;
+    case 3: return type == Bridge;
+    case 4: return type == Mixer || type == TwinGate || type == Candle;
+    default: return true;  // the Lab
+  }
+}
+
+bool KitEnforced(int world) { return world == 1; }
+
+std::vector<std::string> KitProblems(const Level& level) {
+  std::vector<std::string> problems;
+  bool candle = false;
+  for (const TrayPiece& piece : level.tray) {
+    candle |= piece.piece.type == PieceType::Candle;
+    if (KitEnforced(level.world) && !InKit(level.world, piece.piece.type))
+      problems.push_back(std::string("the ") + PieceName(piece.piece.type) + " isn't in World " +
+                         std::to_string(level.world) + "'s kit");
+  }
+  if (candle && std::none_of(level.nodes.begin(), level.nodes.end(),
+                             [](const Node& node) { return node.socket && node.feeds_cup >= 0; }))
+    problems.push_back("a candle is in the tray, but no pipe socket leads to a cup");
   return problems;
 }
 

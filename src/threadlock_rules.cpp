@@ -33,13 +33,13 @@ constexpr PieceInfoRow kPieceRows[] = {
     {PieceType::TankShort, "Short tank", "tank4", false},   {PieceType::TankTall, "Tall tank", "tank8", false},
     {PieceType::Flipper, "Flipper", "flipper", true},       {PieceType::Overflow, "Overflow", "overflow", true},
     {PieceType::Bridge, "Bridge", "bridge", false},         {PieceType::Mixer, "Mixer", "mixer", false},
-    {PieceType::TwinGate, "Twin gate", "twin", false},
+    {PieceType::TwinGate, "Twin gate", "twin", false},       {PieceType::Candle, "Candle", "candle", false},
 };
 
 constexpr const char* kNodeKinds[] = {"spout", "fork",  "pass", "cross", "merge",
                                       "cup",   "drain", "rack", "mill",  "gate"};
 constexpr const char* kLevelTypes[] = {"build", "repair", "spectacle", "challenge", "lab"};
-constexpr const char* kFailures[] = {"none", "mud", "wrong_cup", "spill", "dry", "jam"};
+constexpr const char* kFailures[] = {"none", "mud", "wrong_cup", "spill", "dry", "jam", "muddled"};
 constexpr const char* kRoles[] = {"acts", "idle", "trap"};
 
 float Distance(Vec2 a, Vec2 b) { return std::hypot(b.x - a.x, b.y - a.y); }
@@ -223,8 +223,10 @@ bool IsSocketKind(NodeKind kind) {
 }
 
 // DESIGN.md §3, "Every piece in every socket".
-PieceRole Role(PieceType type, NodeKind kind, bool twin_pair) {
+PieceRole Role(PieceType type, NodeKind kind, bool twin_pair, bool feeds_cup) {
   using enum PieceType;
+  // A candle counts what lands in a cup: it works only on a pipe socket whose way out leads to one.
+  if (type == Candle) return kind == NodeKind::Pass && feeds_cup ? PieceRole::Acts : PieceRole::Idle;
   switch (kind) {
     case NodeKind::Fork:  // 1 in, 2 out: routers and tanks work (the flap sends a tank's drops on)
       if (type == Turnstile || type == Bridge) return PieceRole::Idle;
@@ -345,6 +347,14 @@ std::vector<std::string> Level::Finalize() {
       case NodeKind::Merge: expect(2, 1); break;
       case NodeKind::Cup:
         expect(1, 0);
+        if (!node.recipe.empty()) {
+          for (Color layer : node.recipe) {
+            if (layer == Color::None || layer == Color::Mud || layer == Color::Ink)
+              problem("cup '" + node.id + "' has a recipe layer that isn't a liquid");
+          }
+          node.count = static_cast<int>(node.recipe.size());
+          node.want = node.recipe.front();
+        }
         if (node.count < 1 || node.want == Color::None) problem("cup '" + node.id + "' wants nothing");
         break;
       case NodeKind::Drain: expect(1, 0); break;
@@ -503,8 +513,29 @@ std::vector<std::string> Level::Finalize() {
     if (swapped > straight) std::swap(node.outs[0], node.outs[1]);
   }
 
+  // Pipe sockets that lead straight to a cup (through passes, gates, mills and merges): where a candle acts.
+  for (Node& node : nodes) {
+    node.feeds_cup = -1;
+    if (node.kind != NodeKind::Pass) continue;
+    const Node* at = &node;
+    for (size_t guard = 0; guard <= nodes.size() && at->outs.size() == 1; ++guard) {
+      const int next = pipes[static_cast<size_t>(at->outs[0])].to;
+      const Node& to = nodes[static_cast<size_t>(next)];
+      if (to.kind == NodeKind::Cup) {
+        node.feeds_cup = next;
+        break;
+      }
+      if (to.kind != NodeKind::Pass && to.kind != NodeKind::Gate && to.kind != NodeKind::Mill &&
+          to.kind != NodeKind::Merge)
+        break;
+      at = &to;
+    }
+  }
+
   for (const TrayPiece& tray_piece : tray) {
     if (tray_piece.piece.type == PieceType::Overflow && tray_piece.piece.n < 1) problem("an overflow needs n >= 1");
+    if (tray_piece.piece.type == PieceType::Candle && (tray_piece.piece.n < 1 || tray_piece.piece.n > 4))
+      problem("a candle needs n 1-4");
     if (tray_piece.at < 0) continue;
     if (static_cast<size_t>(tray_piece.at) >= nodes.size()) {
       problem("a placed piece is on a node that doesn't exist");
@@ -746,6 +777,10 @@ bool Board::Shared(int node) const {
   return !(kind == NodeKind::Cross && Is(node, PieceType::Bridge));
 }
 
+bool Board::CandleActs(int node) const {
+  return Is(node, PieceType::Candle) && Role(PieceType::Candle, level_->nodes[Index(node)]) == PieceRole::Acts;
+}
+
 bool Board::FlapInCharge(int node) const { return level_->nodes[Index(node)].kind == NodeKind::Fork && !Routes(node); }
 
 bool Board::FlapTappable(int node) const { return FlapInCharge(node) && level_->nodes[Index(node)].flap_tappable; }
@@ -862,6 +897,7 @@ void Board::Start() {
   flipper_next_.assign(node_count, 0);
   overflow_passed_.assign(node_count, 0);
   mixer_slot_.assign(node_count, {-1, -1});
+  candle_open_.assign(node_count, 0);
   last_exit_tick_.assign(node_count, -1000);
   last_exit_bead_.assign(node_count, Bead{});
   for (size_t n = 0; n < node_count; ++n) {
@@ -973,10 +1009,30 @@ void Board::Land(int d, int node) {
     land.value = cup->count;
     land.slot = slot;
     events_.push_back(land);
-    const bool pure = drop.bead.a == want && (!drop.bead.IsBlend() || drop.bead.b == want);
-    if (!pure && !cup->impure) {
-      cup->impure = true;
-      Fail(drop.bead.IsMud() ? Failure::Mud : Failure::WrongCup, node, slot);
+    if (!n.recipe.empty()) {
+      // A recipe takes its layers in order, one at a time: the layer this drop lands as must be the next one.
+      // A blend is two layers at once, so it's always out of turn.
+      const int layer = cup->count - drop.bead.Drops();
+      const bool in_turn = !drop.bead.IsBlend() && layer < count && drop.bead.a == n.recipe[Index(layer)];
+      if (!in_turn && layer < count && !cup->impure) {
+        cup->impure = true;
+        if (drop.bead.IsMud()) {
+          Fail(Failure::Mud, node, slot);
+        } else {
+          events_.push_back({.type = EventType::Muddle, .node = node, .drop = drop.id, .bead = drop.bead, .value = layer});
+          Fail(Failure::Muddled, node, slot);
+          if (outcome_.failure == Failure::Muddled && outcome_.fail_tick == tick_ && outcome_.fail_node == node) {
+            outcome_.fail_layer = layer;
+            outcome_.fail_bead = drop.bead;
+          }
+        }
+      }
+    } else {
+      const bool pure = drop.bead.a == want && (!drop.bead.IsBlend() || drop.bead.b == want);
+      if (!pure && !cup->impure) {
+        cup->impure = true;
+        Fail(drop.bead.IsMud() ? Failure::Mud : Failure::WrongCup, node, slot);
+      }
     }
     if (cup->count > count && !cup->spilled) {
       cup->spilled = true;
@@ -1098,8 +1154,18 @@ bool Board::TryLeave(int d) {
     LeaveOnto(partner, m.outs[0]);
     return true;
   }
+  // A candle holds its drop until its cup holds enough, then stays open.
+  const bool candle = n.kind == NodeKind::Pass && CandleActs(node);
+  if (candle && !candle_open_[Index(node)]) {
+    const int piece = node_piece_[Index(node)];
+    if (cups_[Index(n.feeds_cup)].count < PieceInfo(piece).piece.n) return false;
+  }
   const int pipe = n.outs[Index(drop.lane_out)];
   if (CellAt(pipe, 0) >= 0) return false;
+  if (candle && !candle_open_[Index(node)]) {
+    candle_open_[Index(node)] = 1;
+    events_.push_back({.type = EventType::Open, .node = node, .drop = drop.id, .bead = drop.bead});
+  }
   LeaveOnto(d, pipe);
   return true;
 }
@@ -1427,6 +1493,12 @@ JamReport Board::Jam() const {
         }
         const int ahead = CellAt(n.outs[0], 0);
         waits_for[i] = ahead >= 0 ? ahead : CellAt(level_->nodes[Index(n.twin)].outs[0], 0);
+        continue;
+      }
+      if (n.kind == NodeKind::Pass && CandleActs(node) && !candle_open_[Index(node)] &&
+          cups_[Index(n.feeds_cup)].count < PieceInfo(node_piece_[Index(node)]).piece.n) {
+        // A candle waiting for its cup: when nothing moves, nothing more will land there.
+        report.lonely = node;
         continue;
       }
       if (drop.lane_out == -2) {

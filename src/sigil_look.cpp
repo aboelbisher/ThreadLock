@@ -661,7 +661,13 @@ std::string FailureText(const Level& level, const Board& board, const Outcome& o
     case Failure::Jam: {
       const int lonely = board.Jam().lonely;
       std::string why = "Each mixer holds one drop and waits for the other's: neither can finish.";
-      if (lonely >= 0) {
+      const int lonely_piece = lonely >= 0 ? board.PieceAt(lonely) : -1;
+      if (lonely_piece >= 0 && board.PieceInfo(lonely_piece).piece.type == PieceType::Candle) {
+        const Node& candle = level.nodes[static_cast<size_t>(lonely)];
+        const int want = board.PieceInfo(lonely_piece).piece.n, holds = board.Cup(candle.feeds_cup).count;
+        why = "The candle waits for its phial to hold " + std::to_string(want) + "; it holds " + std::to_string(holds) +
+              ", and nothing more is coming. Its flame gutters.";
+      } else if (lonely >= 0) {
         Color held = Color::None;
         int lane = 0;
         for (const Drop& drop : board.Drops()) {
@@ -685,6 +691,23 @@ std::string FailureText(const Level& level, const Board& board, const Outcome& o
         }
       }
       return why + " " + PhialCounts(level, board);
+    }
+    case Failure::Muddled: {
+      // "The recipe is green, green, then rose, bottom up. Rose came second, out of turn."
+      std::string recipe;
+      if (node) {
+        for (size_t i = 0; i < node->recipe.size(); ++i) {
+          if (i > 0) recipe += i + 1 == node->recipe.size() ? ", then " : ", ";
+          recipe += ColorName(node->recipe[i]);
+        }
+      }
+      constexpr const char* kOrdinals[] = {"first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"};
+      const int layer = outcome.fail_layer;
+      const std::string came = outcome.fail_bead.IsBlend()
+                                   ? "Two layers came at once"
+                                   : Capital(ColorName(outcome.fail_bead.a)) + " came " +
+                                         (layer >= 0 && layer < 8 ? kOrdinals[layer] : "next");
+      return "The phial's recipe is " + recipe + ", bottom up. " + came + ", out of turn.";
     }
     case Failure::None: break;
   }

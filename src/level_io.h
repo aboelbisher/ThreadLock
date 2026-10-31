@@ -74,4 +74,14 @@ std::string WriteLevel(const Level& level);
 // grooves through nodes, along or across each other, twin bars). Empty = good.
 std::vector<std::string> LookProblems(const Level& level);
 
+// Round 4 (DESIGN.md v4 §3): each world's tray holds only its own pieces. W1 separator, turnstile, tanks; W2
+// flipper, overflow, bucket; W3 signal, passing place, bridge; W4 mixer, twin gate, candle. The Lab keeps the
+// mixed kit.
+bool InKit(int world, PieceType type);
+// The worlds whose levels are built for round 4 (the others still have v3's shared kit until they're rebuilt).
+bool KitEnforced(int world);
+// A tray or placed piece outside its world's kit (where enforced); a candle where no pipe socket leads to a cup.
+// Part of LookProblems.
+std::vector<std::string> KitProblems(const Level& level);
+
 }  // namespace threadlock

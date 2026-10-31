@@ -26,6 +26,8 @@ struct PieceLook {
   float spin = 0.0f;            // turnstile arms / mixer swirl
   float arm = -1.0f;            // flipper: the side it points to now (0..1, animated); -1 = from the setting
   int remaining = -1;           // overflow: how many still go its way (-1 = n)
+  int burnt = 0;                // candle: rings burnt so far (what its cup holds, up to n)
+  bool open = false;            // candle: it has let go (stays open)
   bool locked = false;          // a padlock in its corner
   Rgba accent = Hex(0xF6DA9A);  // arrows: which lane goes first, an overflow's way
 };

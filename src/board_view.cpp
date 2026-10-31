@@ -166,6 +166,29 @@ void DrawPiece(Canvas& canvas, const Piece& piece, glm::vec2 c, float s, const P
       canvas.Circle(c, 4.2f * s, liquid(Color::Green));
       break;
     }
+    case PieceType::Candle: {
+      // Brass dish, a wax column ringed once per drop its cup still needs, a flame; a thread across while shut.
+      art::Medallion(canvas, c, 22.0f * s, alpha);
+      const int n = std::max(1, piece.n), left = std::max(0, n - std::min(n, look.burnt));
+      const float ring = 18.0f / static_cast<float>(n), wax = 4.0f + ring * static_cast<float>(left);
+      const glm::vec2 base = c + glm::vec2(0.0f, 11.0f * s);
+      canvas.FillRect({base + glm::vec2(-5.0f * s, -wax * s), base + glm::vec2(5.0f * s, 0.0f)},
+                      WithAlpha(Hex(0xEFE3C8), alpha), 2.0f * s);
+      for (int k = 1; k <= left; ++k) {
+        const float y = -4.0f - ring * static_cast<float>(k) + ring;
+        canvas.Line(base + glm::vec2(-5.0f, y) * s, base + glm::vec2(5.0f, y) * s, 1.1f * s,
+                    WithAlpha(Hex(0xB5A37E), alpha));
+      }
+      const glm::vec2 flame = base + glm::vec2(0.0f, -wax - 4.0f) * s;
+      canvas.Circle(flame, 5.0f * s, WithAlpha(Hex(0xFFC46A), 0.35f * alpha));
+      canvas.Circle(flame, 2.4f * s, WithAlpha(Hex(0xFFE7A6), alpha));
+      if (!look.open) canvas.Line(c + glm::vec2(-17.0f, 15.0f) * s, c + glm::vec2(17.0f, 15.0f) * s, 2.2f * s, accent);
+      if (font) {
+        canvas.Text(*font, std::to_string(piece.n), c + glm::vec2(15.0f, -12.0f) * s, 12.0f * s, Align::Center,
+                    TextStyle{.color = mark});
+      }
+      break;
+    }
     case PieceType::TwinGate: {
       const glm::vec2 h(24.0f * s, 16.0f * s);
       art::Plate(canvas, {c - h, c + h}, 8.0f * s, 4.0f * s, alpha);
@@ -251,7 +274,7 @@ void BoardView::OnEvents(const std::vector<Event>& events, const Board& board) {
         const Node& node = level_->nodes[static_cast<size_t>(e.node)];
         const Color want =
             node.kind == NodeKind::Rack && e.slot >= 0 ? node.slots[static_cast<size_t>(e.slot)].want : node.want;
-        if ((node.kind == NodeKind::Cup || node.kind == NodeKind::Rack) &&
+        if ((node.kind == NodeKind::Cup || node.kind == NodeKind::Rack) && node.recipe.empty() &&
             !(e.bead.a == want && (!e.bead.IsBlend() || e.bead.b == want)) && !e.bead.IsMud()) {
           add(Marker::WrongCup, e.node, e.slot);
         }
@@ -275,6 +298,7 @@ void BoardView::OnEvents(const std::vector<Event>& events, const Board& board) {
         }
         break;
       case EventType::Jammed: add(Marker::Jam, -1); break;
+      case EventType::Muddle: add(Marker::WrongCup, e.node); break;  // a layer out of turn: the phial rings red
       default: break;
     }
   }
@@ -486,6 +510,10 @@ void BoardView::DrawParts(Canvas& canvas, const Options& options) {
     if (board.Started() && board.RoleOf(i) == PieceRole::Idle) look.alpha = 0.38f;
     if (piece.type == PieceType::Overflow && board.Started())
       look.remaining = std::max(0, piece.n - board.OverflowPassed(node));
+    if (piece.type == PieceType::Candle && board.Started() && board.CandleActs(node)) {
+      look.burnt = board.Cup(level_->nodes[static_cast<size_t>(node)].feeds_cup).count;
+      look.open = board.CandleOpen(node);
+    }
     DrawPiece(canvas, piece, PieceCenter(board, node), s, look, palette, level_,
               &level_->nodes[static_cast<size_t>(node)], &font);
   }

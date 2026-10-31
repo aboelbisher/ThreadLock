@@ -96,6 +96,17 @@ TEST_SUITE("content") {
     MESSAGE(levels << " levels checked");
   }
 
+  TEST_CASE("each world's tray holds only its own pieces (round 4: the worlds rebuilt so far)") {
+    for (const World& world : LoadAll()) {
+      for (const Level& level : world.levels) {
+        INFO("level " << level.id);
+        CHECK(KitProblems(level).empty());
+        if (!KitEnforced(level.world)) continue;
+        for (const TrayPiece& piece : level.tray) CHECK(InKit(level.world, piece.piece.type));
+      }
+    }
+  }
+
   TEST_CASE("the level writer keeps everything (the tool's format and search commands use it)") {
     for (const World& world : LoadAll()) {
       for (const Level& level : world.levels) {
