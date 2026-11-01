@@ -132,6 +132,11 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
   reader.where = "level " + level.id;
   level.name = reader.String(json, "name", level.id);
   level.intro = reader.String(json, "intro");
+  if (json.contains("traffic")) {
+    const std::string traffic = reader.String(json, "traffic");
+    if (traffic == "two-way") level.two_way = true;
+    else if (traffic != "one-way") reader.Error("'traffic' should be two-way or one-way");
+  }
   if (json.contains("height")) {
     if (json["height"].is_number())
       level.look.height = json["height"].get<float>();
@@ -193,6 +198,7 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
     return false;
   }
   std::vector<std::string> twins;
+  std::vector<std::string> tos;
   std::vector<std::vector<std::string>> gears;
   for (const Json& item : json["nodes"]) {
     Node node;
@@ -211,6 +217,7 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
       node.start = reader.Int(item, "start", 1);
     }
     node.flap = reader.Int(item, "flap", 0);
+    node.berths = reader.Int(item, "berths", 2);
     node.flap_tappable = reader.Bool(item, "tap", false);
     if (node.kind == NodeKind::Cup) {
       if (item.contains("recipe")) {
@@ -272,7 +279,13 @@ bool ReadLevel(const Json& json, Level& level, std::vector<std::string>& errors)
     }
     gears.push_back(std::move(geared));
     twins.push_back(reader.String(item, "twin"));
+    tos.push_back(reader.String(item, "to"));
     level.nodes.push_back(std::move(node));
+  }
+  for (size_t i = 0; i < tos.size(); ++i) {
+    if (tos[i].empty()) continue;
+    level.nodes[i].to = level.NodeIndex(tos[i]);
+    if (level.nodes[i].to < 0) reader.Error("node '" + level.nodes[i].id + "': no harbour '" + tos[i] + "'");
   }
   for (size_t i = 0; i < twins.size(); ++i) {
     if (twins[i].empty()) continue;
@@ -551,6 +564,7 @@ std::string WriteLevel(const Level& level) {
   std::string out = "{\n  \"id\": " + text(level.id) + ", \"name\": " + text(level.name);
   if (level.type != LevelType::Build) out += std::string(", \"type\": \"") + LevelTypeKey(level.type) + "\"";
   if (!level.intro.empty()) out += ", \"intro\": " + text(level.intro);
+  if (level.two_way) out += ", \"traffic\": \"two-way\"";
   const Level::LevelLook look_default;
   if (level.look.height != look_default.height) out += ", \"height\": " + number(level.look.height);
   if (!(level.look.payoff == look_default.payoff)) out += ", \"payoff\": " + point(level.look.payoff);
@@ -578,7 +592,9 @@ std::string WriteLevel(const Level& level) {
     if (n.kind == NodeKind::Spout) {
       out += ", \"beads\": \"" + BeadsText(n.beads) + "\", \"beat\": " + std::to_string(n.beat);
       if (n.start != 1) out += ", \"start\": " + std::to_string(n.start);
+      if (n.to >= 0) out += ", \"to\": " + text(level.nodes[static_cast<size_t>(n.to)].id);
     }
+    if (n.kind == NodeKind::Basin && n.berths != 2) out += ", \"berths\": " + std::to_string(n.berths);
     if (n.kind == NodeKind::Cup && !n.recipe.empty()) {
       std::string layers;
       for (Color layer : n.recipe) layers += std::string(layers.empty() ? "" : " ") + ColorLetter(layer);

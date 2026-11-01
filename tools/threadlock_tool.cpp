@@ -724,7 +724,24 @@ int main(int argc, char** argv) {
       }
     }
     board.Start();
-    while (board.Running()) board.Tick();
+    const bool trace = argc > 4 && std::string(argv[4]) == "trace";
+    while (board.Running()) {
+      const std::vector<Event>& events = board.Tick();
+      if (!trace) continue;
+      std::printf("%4d", board.Ticks());
+      for (const Drop& drop : board.Drops()) {
+        if (!drop.alive) continue;
+        if (drop.loc.kind == Loc::OnPipe)
+          std::printf("  %s p%d:%d%s", BeadText(drop.bead).c_str(), drop.loc.index, drop.loc.cell, drop.dir > 0 ? ">" : "<");
+        else
+          std::printf("  %s @%s", BeadText(drop.bead).c_str(), level.nodes[static_cast<size_t>(drop.loc.index)].id.c_str());
+      }
+      for (const Event& e : events) {
+        if (e.type == EventType::Standoff) std::printf("  STANDOFF p%d", e.pipe);
+        if (e.type == EventType::Land) std::printf("  LAND %s", level.nodes[static_cast<size_t>(e.node)].id.c_str());
+      }
+      std::printf("\n");
+    }
     const Outcome& outcome = board.GetOutcome();
     std::printf("OUTCOME %s %s %d\n", outcome.solved ? "solved" : FailureKey(outcome.failure),
                 outcome.fail_node >= 0 ? level.nodes[static_cast<size_t>(outcome.fail_node)].id.c_str() : "-", outcome.ticks);

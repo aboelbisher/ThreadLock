@@ -35,10 +35,11 @@ constexpr PieceInfoRow kPieceRows[] = {
     {PieceType::Bridge, "Bridge", "bridge", false},         {PieceType::Mixer, "Mixer", "mixer", false},
     {PieceType::TwinGate, "Twin gate", "twin", false},       {PieceType::Candle, "Candle", "candle", false},
     {PieceType::Bucket, "Bucket", "bucket", true},
+    {PieceType::Signal, "Signal", "signal", true},        {PieceType::Passing, "Passing place", "passing", false},
 };
 
 constexpr const char* kNodeKinds[] = {"spout", "fork",  "pass", "cross", "merge",
-                                      "cup",   "drain", "rack", "mill",  "gate"};
+                                      "cup",   "drain", "rack", "mill",  "gate", "basin"};
 constexpr const char* kLevelTypes[] = {"build", "repair", "spectacle", "challenge", "lab"};
 constexpr const char* kFailures[] = {"none", "mud", "wrong_cup", "spill", "dry", "jam", "muddled", "half_full"};
 constexpr const char* kRoles[] = {"acts", "idle", "trap"};
@@ -228,6 +229,8 @@ PieceRole Role(PieceType type, NodeKind kind, bool twin_pair, bool feeds_cup) {
   using enum PieceType;
   // A candle counts what lands in a cup: it works only on a pipe socket whose way out leads to one.
   if (type == Candle) return kind == NodeKind::Pass && feeds_cup ? PieceRole::Acts : PieceRole::Idle;
+  // The canal pieces work on a canal socket (two-way canals).
+  if (type == Signal || type == Passing) return kind == NodeKind::Pass ? PieceRole::Acts : PieceRole::Idle;
   // A bucket fills and tips wherever there's one way out per dose: a fork, a pipe, a merge (not a crossing's lanes).
   if (type == Bucket) return IsSocketKind(kind) && kind != NodeKind::Cross ? PieceRole::Acts : PieceRole::Idle;
   switch (kind) {
@@ -326,7 +329,10 @@ std::vector<std::string> Level::Finalize() {
       case NodeKind::Rack: node.dwell = 0, node.radius = 0.0f; break;
       case NodeKind::Drain: node.dwell = 0, node.radius = 14.0f; break;
       case NodeKind::Gate: node.dwell = 1, node.radius = 5.0f; break;
+      case NodeKind::Basin: node.dwell = 1, node.radius = 20.0f; break;
     }
+    // Two-way canals: every place takes a barge for one tick.
+    if (two_way && node.dwell > 1) node.dwell = 1;
   }
   for (size_t i = 0; i < nodes.size(); ++i) {
     for (size_t j = i + 1; j < nodes.size(); ++j) {
@@ -403,7 +409,18 @@ std::vector<std::string> Level::Finalize() {
         }
         break;
       case NodeKind::Gate: expect(1, 1); break;
+      case NodeKind::Basin:
+        if (!two_way) problem("basin '" + node.id + "' needs two-way canals");
+        if (ins + outs < 1) problem("basin '" + node.id + "' joins no canals");
+        if (node.berths < 1 || node.berths > 4) problem("basin '" + node.id + "' needs 1-4 berths");
+        break;
     }
+    if (two_way && (node.kind == NodeKind::Fork || node.kind == NodeKind::Merge || node.kind == NodeKind::Drain ||
+                    node.kind == NodeKind::Rack))
+      problem("node '" + node.id + "': two-way canals meet in basins (no forks, merges, drains or racks)");
+    if (node.to >= 0 && (node.kind != NodeKind::Spout || static_cast<size_t>(node.to) >= nodes.size() ||
+                         nodes[static_cast<size_t>(node.to)].kind != NodeKind::Cup))
+      problem("node '" + node.id + "' sails to something that isn't a harbour");
     if (node.socket && !IsSocketKind(node.kind)) {
       problem("node '" + node.id + "' (" + NodeKindKey(node.kind) + ") can't be a socket");
     }
@@ -800,6 +817,7 @@ bool Board::BucketActs(int node) const {
 }
 
 bool Board::Shared(int node) const {
+  if (two_way_) return false;  // barges wait instead of mixing
   const NodeKind kind = level_->nodes[Index(node)].kind;
   if (kind != NodeKind::Cross && kind != NodeKind::Merge) return false;
   // A turnstile lets one drop in at a time, a mixer mixes what it holds, a bridge keeps a crossing's
@@ -947,6 +965,8 @@ void Board::Start() {
   tick_ = 0;
   next_id_ = 0;
   started_ = true;
+  two_way_ = level_->two_way;
+  if (two_way_) PrepareTwoWay();
 }
 
 void Board::Stop() {
@@ -1281,7 +1301,9 @@ void Board::Finish(bool jammed) {
     }
   } else {
     const JamReport jam = Jam();
-    if (jam.half_full >= 0 && jam.lonely < 0 && jam.cycle.empty()) {
+    if (two_way_) {
+      Fail(Failure::Jam, jam.full_basin >= 0 ? jam.full_basin : jam.stuck_nodes.empty() ? -1 : jam.stuck_nodes.front());
+    } else if (jam.half_full >= 0 && jam.lonely < 0 && jam.cycle.empty()) {
       Fail(Failure::HalfFull, jam.half_full);  // the last dose never filled its bucket: never tipped
     } else {
       int where = jam.lonely >= 0 ? jam.lonely : !jam.cycle.empty() ? jam.cycle.front() : -1;
@@ -1348,7 +1370,9 @@ const std::vector<Event>& Board::Tick() {
   // on the tick its drop leaves. Contested places go by priority: a turnstile's arrow, then lane
   // order for entries; entry order for exits.
   const size_t node_count = level_->nodes.size();
-  for (bool progress = true; progress;) {
+  bool pending = false;
+  if (two_way_) TickTwoWay(pending);
+  for (bool progress = !two_way_; progress;) {
     progress = false;
     for (size_t n = 0; n < node_count; ++n) {
       for (size_t k = 0; k < inside_[n].size();) {
@@ -1435,7 +1459,7 @@ const std::vector<Event>& Board::Tick() {
     if (drop.loc.kind == Loc::OnPipe) {
       drop.waiting = true;
       const Pipe& pipe = level_->pipes[Index(drop.loc.index)];
-      if (drop.loc.cell == pipe.cells - 1 && !(i < was_waiting.size() && was_waiting[i])) {
+      if (!two_way_ && drop.loc.cell == pipe.cells - 1 && !(i < was_waiting.size() && was_waiting[i])) {
         events_.push_back(
             {.type = EventType::Wait, .node = pipe.to, .pipe = drop.loc.index, .drop = drop.id, .bead = drop.bead});
       }
@@ -1462,7 +1486,7 @@ const std::vector<Event>& Board::Tick() {
   const bool empty = std::none_of(drops_.begin(), drops_.end(), [](const Drop& drop) { return drop.alive; });
   if (empty && spouts_done) {
     Finish(false);
-  } else if ((!moved_any_ && !timers && Frozen()) || tick_ >= kMaxTicks) {
+  } else if ((!moved_any_ && !timers && (two_way_ ? !pending : Frozen())) || tick_ >= kMaxTicks) {
     Finish(true);
   }
   return events_;
@@ -1501,6 +1525,7 @@ int Board::NextArrival(int pipe) const {
 }
 
 JamReport Board::Jam() const {
+  if (two_way_) return JamTwoWay();
   JamReport report;
   if (!started_) return report;
   // Each stuck drop waits for one other drop (or for something that never comes): a functional
@@ -1617,6 +1642,406 @@ JamReport Board::Jam() const {
       }
     }
     for (int p : path) state[Index(p)] = 2;
+  }
+  return report;
+}
+
+
+// ---- Two-way canals (World 3, round 4) ----
+//
+// Every pipe runs both ways, one barge a cell. A barge sails to its harbour by the fewest cells (fixed ties: the lower
+// pipe index), moves a cell when the cell ahead is free, and enters a node when the node has room. Two barges facing one
+// free cell from both sides both stop (a standoff). Basins hold berths and let any barge whose way is clear leave; a
+// crossing holds one (a bridge: one per lane); a canal socket one (a passing place: one from each side). A signal lets
+// barges onto its stretch only while none on it heads the other way. Nothing mixes. Integers only.
+
+namespace {
+bool StretchEnd(NodeKind kind) { return kind != NodeKind::Pass && kind != NodeKind::Mill && kind != NodeKind::Gate; }
+int Other(const Pipe& pipe, int node) { return pipe.from == node ? pipe.to : pipe.from; }
+}  // namespace
+
+void Board::PrepareTwoWay() {
+  const Level& level = *level_;
+  const size_t pipe_count = level.pipes.size();
+  // The pipes at each node.
+  std::vector<std::vector<int>> at(level.nodes.size());
+  for (size_t p = 0; p < pipe_count; ++p) {
+    at[Index(level.pipes[p].from)].push_back(static_cast<int>(p));
+    at[Index(level.pipes[p].to)].push_back(static_cast<int>(p));
+  }
+  // Stretches: from each end node along each of its pipes, through sockets, mills and gates, to the next end.
+  stretches_.clear();
+  stretch_of_.assign(pipe_count, -1);
+  for (size_t v = 0; v < level.nodes.size(); ++v) {
+    if (!StretchEnd(level.nodes[v].kind)) continue;
+    for (int first : at[v]) {
+      if (stretch_of_[Index(first)] >= 0) continue;
+      Stretch stretch;
+      stretch.ends[0] = static_cast<int>(v);
+      int node = static_cast<int>(v), pipe = first;
+      for (size_t guard = 0; guard <= pipe_count; ++guard) {
+        stretch.pipes.push_back(pipe);
+        stretch_of_[Index(pipe)] = static_cast<int>(stretches_.size());
+        const int next = Other(level.pipes[Index(pipe)], node);
+        if (StretchEnd(level.nodes[Index(next)].kind)) {
+          stretch.ends[1] = next;
+          break;
+        }
+        stretch.nodes.push_back(next);
+        int on = -1;
+        for (int q : at[Index(next)]) {
+          if (q != pipe) on = q;
+        }
+        if (on < 0 || stretch_of_[Index(on)] >= 0) {
+          stretch.ends[1] = next;
+          break;
+        }
+        node = next;
+        pipe = on;
+      }
+      stretches_.push_back(std::move(stretch));
+    }
+  }
+  // Routes: per harbour, the cells to go from heading along pipe p toward one of its ends (index p * 2 + 1 = toward
+  // its \`to\`). Bellman-Ford in integers: the same on every device.
+  harbours_.clear();
+  for (size_t n = 0; n < level.nodes.size(); ++n) {
+    if (level.nodes[n].kind == NodeKind::Cup) harbours_.push_back(static_cast<int>(n));
+  }
+  auto exits = [&](int v, int came) {
+    std::vector<int> out;
+    const Node& node = level.nodes[Index(v)];
+    if (node.kind == NodeKind::Spout || node.kind == NodeKind::Cup) return out;
+    if (node.kind == NodeKind::Cross) {
+      for (size_t k = 0; k < node.ins.size() && k < node.outs.size(); ++k) {
+        if (node.ins[k] == came) out.push_back(node.outs[k]);
+        if (node.outs[k] == came) out.push_back(node.ins[k]);
+      }
+      return out;
+    }
+    for (int q : at[Index(v)]) {
+      if (q != came) out.push_back(q);
+    }
+    return out;
+  };
+  way_cost_.assign(harbours_.size(), std::vector<int>(pipe_count * 2, -1));
+  for (size_t h = 0; h < harbours_.size(); ++h) {
+    std::vector<int>& cost = way_cost_[h];
+    for (size_t round = 0; round <= pipe_count * 2 + 2; ++round) {
+      bool changed = false;
+      for (size_t p = 0; p < pipe_count; ++p) {
+        const Pipe& pipe = level.pipes[p];
+        for (int toward_to = 0; toward_to < 2; ++toward_to) {
+          const int v = toward_to ? pipe.to : pipe.from;
+          int best = -1;
+          if (v == harbours_[h]) {
+            best = 0;
+          } else {
+            for (int e : exits(v, static_cast<int>(p))) {
+              const int c = cost[Index(e) * 2 + (level.pipes[Index(e)].from == v ? 1 : 0)];
+              if (c >= 0 && (best < 0 || c + 1 < best)) best = c + 1;
+            }
+          }
+          if (best < 0) continue;
+          const int value = pipe.cells + best;
+          int& slot = cost[p * 2 + static_cast<size_t>(toward_to)];
+          if (slot < 0 || value < slot) {
+            slot = value;
+            changed = true;
+          }
+        }
+      }
+      if (!changed) break;
+    }
+  }
+}
+
+int Board::StretchSignal(int stretch) const {
+  for (int node : stretches_[Index(stretch)].nodes) {
+    if (Is(node, PieceType::Signal) && level_->nodes[Index(node)].kind == NodeKind::Pass) return node;
+  }
+  return -1;
+}
+
+bool Board::StretchOpen(int stretch, int k) const {
+  if (!started_) return true;
+  const int so = k == 0 ? 1 : -1;
+  for (const Drop& drop : drops_) {
+    if (drop.alive && drop.stretch == stretch && drop.so != so) return false;
+  }
+  return true;
+}
+
+int Board::NextPipe(const Drop& drop, int node) const {
+  const Level& level = *level_;
+  size_t h = 0;
+  while (h < harbours_.size() && harbours_[h] != drop.dest) ++h;
+  if (h == harbours_.size()) return -1;
+  const Node& n = level.nodes[Index(node)];
+  int best = -1, best_cost = -1;
+  for (size_t p = 0; p < level.pipes.size(); ++p) {
+    const Pipe& pipe = level.pipes[p];
+    if ((pipe.from != node && pipe.to != node) || static_cast<int>(p) == drop.via) continue;
+    if (n.kind == NodeKind::Cross) {  // a crossing: straight on along its lane
+      bool lane = false;
+      for (size_t k = 0; k < n.ins.size() && k < n.outs.size(); ++k) {
+        lane |= (n.ins[k] == drop.via && n.outs[k] == static_cast<int>(p)) ||
+                (n.outs[k] == drop.via && n.ins[k] == static_cast<int>(p));
+      }
+      if (!lane) continue;
+    }
+    const int c = way_cost_[h][p * 2 + (pipe.from == node ? 1 : 0)];
+    if (c >= 0 && (best_cost < 0 || c < best_cost)) {
+      best = static_cast<int>(p);
+      best_cost = c;
+    }
+  }
+  return best;
+}
+
+bool Board::TwoWayAdmits(int node, const Drop& drop, int via) const {
+  (void)drop;
+  const Node& n = level_->nodes[Index(node)];
+  const std::vector<int>& inside = inside_[Index(node)];
+  switch (n.kind) {
+    case NodeKind::Cup: return true;
+    case NodeKind::Basin: return static_cast<int>(inside.size()) < std::max(1, n.berths);
+    case NodeKind::Pass:
+      if (Is(node, PieceType::Passing)) {
+        if (inside.size() >= 2) return false;
+        for (int other : inside) {
+          if (drops_[Index(other)].via == via) return false;  // one from each side
+        }
+        return true;
+      }
+      return inside.empty();
+    case NodeKind::Cross:
+      if (Is(node, PieceType::Bridge)) {  // two lanes: one barge on each
+        auto lane = [&](int pipe) {
+          for (size_t k = 0; k < n.ins.size(); ++k) {
+            if (n.ins[k] == pipe || n.outs[k] == pipe) return static_cast<int>(k);
+          }
+          return -1;
+        };
+        for (int other : inside) {
+          if (lane(drops_[Index(other)].via) == lane(via)) return false;
+        }
+        return true;
+      }
+      return inside.empty();
+    case NodeKind::Mill: return inside.empty();
+    case NodeKind::Gate: return gate_open_[Index(node)] && inside.empty();
+    default: return false;
+  }
+}
+
+bool Board::EntryAllowed(const Drop& drop, int pipe, int node) const {
+  const int s = stretch_of_[Index(pipe)];
+  if (s < 0 || StretchSignal(s) < 0) return true;
+  const Stretch& stretch = stretches_[Index(s)];
+  if (node != stretch.ends[0] && node != stretch.ends[1]) return true;  // moving along inside it
+  const int so = node == stretch.ends[0] ? 1 : -1;
+  for (const Drop& other : drops_) {
+    if (other.alive && &other != &drop && other.stretch == s && other.so != so) return false;
+  }
+  return true;
+}
+
+void Board::EnterStretch(Drop& drop, int pipe, int node) {
+  const int s = stretch_of_[Index(pipe)];
+  const Stretch& stretch = stretches_[Index(s)];
+  if (node == stretch.ends[0]) {
+    drop.stretch = s;
+    drop.so = 1;
+  } else if (node == stretch.ends[1]) {
+    drop.stretch = s;
+    drop.so = -1;
+  }
+}
+
+void Board::TickTwoWay(bool& pending) {
+  const Level& level = *level_;
+  const size_t node_count = level.nodes.size();
+  std::vector<uint8_t> blocked;           // per drop slot: stopped this tick by a standoff
+  std::vector<uint8_t> spout_blocked(node_count, 0);
+  bool standoff_told = false;
+  struct Intent {
+    int d = -1;      // drop slot (-1: a spout's next barge)
+    int pipe = -1;   // onto this pipe's cell...
+    int cell = -1;
+    int node = -1;   // ...or into this node
+    int from = -1;   // the node it leaves (a spout, a node it's in), -1 = along its pipe
+    int prio = 1;
+  };
+  for (int round = 0; round < 64; ++round) {
+    blocked.resize(drops_.size(), 0);
+    std::vector<Intent> intents;
+    for (size_t i = 0; i < drops_.size(); ++i) {
+      const Drop& drop = drops_[i];
+      if (!drop.alive || drop.moved || blocked[i]) continue;
+      if (drop.loc.kind == Loc::OnPipe) {
+        const Pipe& pipe = level.pipes[Index(drop.loc.index)];
+        const int next = drop.loc.cell + drop.dir;
+        if (next >= 0 && next < pipe.cells)
+          intents.push_back({static_cast<int>(i), drop.loc.index, next, -1, -1, 1});
+        else
+          intents.push_back({static_cast<int>(i), -1, -1, drop.dir > 0 ? pipe.to : pipe.from, -1, 1});
+      } else if (drop.loc.kind == Loc::InNode && drop.dwell == 0) {
+        const int node = drop.loc.index;
+        const int e = NextPipe(drop, node);
+        if (e < 0 || !EntryAllowed(drop, e, node)) continue;
+        const Pipe& pipe = level.pipes[Index(e)];
+        intents.push_back({static_cast<int>(i), e, pipe.from == node ? 0 : pipe.cells - 1, -1, node, 1});
+      }
+    }
+    for (size_t n = 0; n < node_count; ++n) {
+      const Node& node = level.nodes[n];
+      if (node.kind != NodeKind::Spout || Index(poured_[n]) >= node.beads.size() || spout_blocked[n]) continue;
+      if (tick_ < next_pour_[n]) {
+        pending = true;
+        continue;
+      }
+      const int e = node.outs[0];
+      Drop probe;
+      if (!EntryAllowed(probe, e, static_cast<int>(n))) continue;
+      intents.push_back({-1, e, 0, -1, static_cast<int>(n), 1});
+    }
+    // Two barges facing one free cell from both sides: neither moves (a standoff).
+    auto heading = [&](const Intent& it) {
+      if (it.from >= 0) return level.pipes[Index(it.pipe)].from == it.from ? 1 : -1;
+      return drops_[Index(it.d)].dir;
+    };
+    for (size_t a = 0; a < intents.size(); ++a) {
+      for (size_t b = a + 1; b < intents.size(); ++b) {
+        const Intent& x = intents[a];
+        const Intent& y = intents[b];
+        if (x.pipe < 0 || x.pipe != y.pipe || x.cell != y.cell || CellAt(x.pipe, x.cell) >= 0) continue;
+        if (heading(x) == heading(y)) continue;  // one behind the other: the first in order goes
+        for (const Intent* it : {&x, &y}) {
+          if (it->d >= 0) blocked[Index(it->d)] = 1;
+          else spout_blocked[Index(it->from)] = 1;
+        }
+        if (!standoff_told && x.d >= 0 && y.d >= 0) {
+          standoff_told = true;
+          events_.push_back({.type = EventType::Standoff, .pipe = x.pipe, .drop = drops_[Index(x.d)].id,
+                             .other = drops_[Index(y.d)].id});
+        }
+      }
+    }
+    // A signal's arrow: a barge entering its stretch from the arrow's end goes first.
+    for (Intent& it : intents) {
+      if (it.pipe < 0 || it.from < 0) continue;
+      const int s = stretch_of_[Index(it.pipe)];
+      const int signal = StretchSignal(s);
+      if (signal >= 0 && it.from == stretches_[Index(s)].ends[Index(pieces_[Index(node_piece_[Index(signal)])].setting & 1)])
+        it.prio = 0;
+    }
+    std::stable_sort(intents.begin(), intents.end(), [](const Intent& a, const Intent& b) { return a.prio < b.prio; });
+    bool any = false;
+    for (const Intent& it : intents) {
+      if (it.d >= 0 && (blocked[Index(it.d)] || drops_[Index(it.d)].moved)) continue;
+      if (it.d < 0 && spout_blocked[Index(it.from)]) continue;
+      if (it.pipe >= 0) {
+        if (CellAt(it.pipe, it.cell) >= 0) continue;
+        int d = it.d;
+        if (d < 0) {  // a spout pours its next barge
+          const Node& spout = level.nodes[Index(it.from)];
+          if (Index(poured_[Index(it.from)]) >= spout.beads.size()) continue;
+          Drop probe;
+          if (!EntryAllowed(probe, it.pipe, it.from)) continue;
+          d = NewDrop(spout.beads[Index(poured_[Index(it.from)])]);
+          Drop& drop = drops_[Index(d)];
+          drop.prev = {Loc::InNode, it.from, 0};
+          drop.dest = spout.to;
+          if (drop.dest < 0) {
+            for (int h : harbours_) {
+              if (level.nodes[Index(h)].wants[static_cast<size_t>(drop.bead.a)] > 0) {
+                drop.dest = h;
+                break;
+              }
+            }
+          }
+          ++poured_[Index(it.from)];
+          next_pour_[Index(it.from)] = tick_ + spout.beat;
+          events_.push_back({.type = EventType::Pour, .node = it.from, .pipe = it.pipe, .drop = drop.id, .bead = drop.bead});
+        } else if (it.from >= 0) {  // leaving a node
+          if (!EntryAllowed(drops_[Index(d)], it.pipe, it.from)) continue;
+          std::erase(inside_[Index(it.from)], d);
+          const Node& n = level.nodes[Index(it.from)];
+          events_.push_back({.type = EventType::Leave, .node = it.from, .pipe = it.pipe, .drop = drops_[Index(d)].id,
+                             .bead = drops_[Index(d)].bead});
+          if (n.kind == NodeKind::Mill) {
+            ++mill_turns_[Index(it.from)];
+            for (int gate : n.gears) ++pending_flips_[Index(gate)];
+          }
+        } else {
+          Cell(drops_[Index(d)].loc.index, drops_[Index(d)].loc.cell) = -1;
+        }
+        Drop& drop = drops_[Index(d)];
+        const Pipe& pipe = level.pipes[Index(it.pipe)];
+        if (it.from >= 0) {
+          drop.dir = pipe.from == it.from ? 1 : -1;
+          EnterStretch(drop, it.pipe, it.from);
+        }
+        drop.loc = {Loc::OnPipe, it.pipe, it.cell};
+        Cell(it.pipe, it.cell) = d;
+        drop.moved = true;
+        moved_any_ = true;
+        any = true;
+      } else {
+        Drop& drop = drops_[Index(it.d)];
+        const int via = drop.loc.index;
+        if (!TwoWayAdmits(it.node, drop, via)) continue;
+        Cell(via, drop.loc.cell) = -1;
+        const Stretch& stretch = stretches_[Index(stretch_of_[Index(via)])];
+        if (it.node == stretch.ends[0] || it.node == stretch.ends[1]) drop.stretch = -1;
+        events_.push_back({.type = EventType::Enter, .node = it.node, .pipe = via, .drop = drop.id, .bead = drop.bead});
+        drop.moved = true;
+        moved_any_ = true;
+        any = true;
+        if (level.nodes[Index(it.node)].kind == NodeKind::Cup) {
+          Land(it.d, it.node);
+          continue;
+        }
+        drop.loc = {Loc::InNode, it.node, 0};
+        drop.entered = tick_;
+        drop.via = via;
+        drop.dwell = drop.dwell_total = std::max(1, level.nodes[Index(it.node)].dwell);
+        drop.lane_in = drop.lane_out = -1;
+        inside_[Index(it.node)].push_back(it.d);
+      }
+    }
+    if (!any) break;
+  }
+}
+
+JamReport Board::JamTwoWay() const {
+  JamReport report;
+  if (!started_) return report;
+  auto add = [&](int node) {
+    if (node >= 0 && std::find(report.stuck_nodes.begin(), report.stuck_nodes.end(), node) == report.stuck_nodes.end())
+      report.stuck_nodes.push_back(node);
+  };
+  for (size_t n = 0; n < level_->nodes.size(); ++n) {
+    if (!inside_[n].empty()) add(static_cast<int>(n));
+    if (level_->nodes[n].kind == NodeKind::Basin && static_cast<int>(inside_[n].size()) >= std::max(1, level_->nodes[n].berths) &&
+        report.full_basin < 0)
+      report.full_basin = static_cast<int>(n);
+  }
+  for (size_t a = 0; a < drops_.size() && report.standoff_a < 0; ++a) {
+    const Drop& x = drops_[a];
+    if (!x.alive || x.stretch < 0) continue;
+    for (size_t b = a + 1; b < drops_.size(); ++b) {
+      const Drop& y = drops_[b];
+      if (y.alive && y.stretch == x.stretch && y.so != x.so) {
+        report.standoff_a = x.id;
+        report.standoff_b = y.id;
+        for (const Drop* drop : {&x, &y}) {
+          if (drop->loc.kind == Loc::InNode) add(drop->loc.index);
+        }
+        break;
+      }
+    }
   }
   return report;
 }

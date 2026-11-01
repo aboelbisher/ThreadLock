@@ -73,8 +73,10 @@ enum class PieceType : uint8_t {
   TwinGate,   // holds two ways in until both have a drop, then both go together
   Candle,     // on a pipe socket that leads to a cup: holds its drop until that cup holds n, then lets go for good
   Bucket,     // fills with n drops, tips, pours them on as one train; on a fork the doses alternate sides
+  Signal,     // two-way canals: its stretch takes barges one direction at a time; its arrow picks who wins a tie
+  Passing,    // two-way canals: a passing place on a canal socket (one barge each way may share it)
 };
-inline constexpr int kPieceTypes = 11;
+inline constexpr int kPieceTypes = 13;
 
 struct Piece {
   PieceType type = PieceType::Separator;
@@ -103,6 +105,7 @@ enum class NodeKind : uint8_t {
   Rack,   // a turning rack: bottles (`slots`) step round under the end of its pipe every `period` ticks
   Mill,   // a mill wheel on a pipe: each drop leaving it flips the gates in `gears`
   Gate,   // a gate on a pipe: shut, it lets nothing in
+  Basin,  // two-way canals: wide water where canals meet, holding `berths` barges; any whose way is clear leaves
 };
 const char* NodeKindKey(NodeKind kind);
 bool ParseNodeKind(std::string_view text, NodeKind& out);
@@ -166,6 +169,10 @@ struct Node {
   std::vector<std::vector<Vec2>> rods;  // per gear: the bends of its rod to the gate (look only; may be shorter)
   // Gate: open at the start
   bool open = true;
+  // Basin (two-way canals): how many barges it holds
+  int berths = 2;
+  // Spout (two-way canals): the harbour its barges sail to (-1 = the one that wants their colour)
+  int to = -1;
 
   // ---- Derived by Level::Finalize ----
   std::vector<int> ins;   // pipes; Cross: lane i = ins[i] -> outs[i]
@@ -275,6 +282,9 @@ struct Level {
   int world = 0;
   int number = 0;  // in its world
   LevelType type = LevelType::Build;
+  // Two-way canals (World 3, round 4: "traffic": "two-way"): every pipe runs both ways, one barge a cell; barges
+  // sail to their harbour by the shortest way; basins hold berths; nothing mixes, barges wait.
+  bool two_way = false;
   std::string intro;  // one line shown on the board at the start (a level's teaching sentence)
   std::vector<Node> nodes;
   std::vector<Pipe> pipes;
@@ -333,6 +343,7 @@ enum class EventType : uint8_t {
   Open,      // the candle on `node` let its first drop go (its cup holds enough): it stays open
   Muddle,    // `drop` (`bead`) landed in recipe cup `node` out of turn (`value` = the layer it landed as, from 0)
   Tip,       // the bucket on `node` filled and tips: its dose pours out of side `value` (index into outs)
+  Standoff,  // two barges face one free cell of `pipe` from both sides (`drop`, `other`): neither can move
 };
 
 struct Event {
@@ -365,6 +376,13 @@ struct Drop {
   int lane_in = -1;   // which of the node's ins it came by
   int lane_out = -1;  // which of the node's outs it leaves by (-2 = splits to both)
   int entered = 0;    // the tick it entered its node
+  // Two-way canals: which way it heads along its pipe (+1 from -> to), the harbour it sails to, the pipe it came by
+  // into its node, and the stretch it's on with its heading there (+1 away from the stretch's first end).
+  int dir = 1;
+  int dest = -1;
+  int via = -1;
+  int stretch = -1;
+  int so = 0;
   bool alive = false;
   bool moved = false;    // this tick
   bool waiting = false;  // stuck this tick (the view piles liquid up)
@@ -401,6 +419,9 @@ struct JamReport {
   int lonely = -1;
   // A bucket holding drops it will never tip (every drop left sits in buckets that can't fill): World 2's failure.
   int half_full = -1;
+  // Two-way canals: two barges nose to nose on one stretch (drop ids), and a basin full of barges that can't leave.
+  int standoff_a = -1, standoff_b = -1;
+  int full_basin = -1;
 };
 
 // ---- Geometry (for drawing) ----
@@ -467,6 +488,13 @@ class Board {
   bool CandleOpen(int node) const { return started_ && candle_open_[Index(node)] != 0; }
   bool CandleActs(int node) const;  // a candle sits on this pipe socket and its way out leads to a cup
   bool BucketActs(int node) const;  // a bucket sits on this fork, pipe socket or merge
+  // Two-way canals: the stretch a pipe belongs to (the canals between two basins / harbours / wharves / crossings,
+  // joined through canal sockets, mills and gates) and its two end nodes; -1 on one-way boards.
+  int StretchOf(int pipe) const { return two_way_ ? stretch_of_[Index(pipe)] : -1; }
+  std::array<int, 2> StretchEnds(int stretch) const { return stretches_[Index(stretch)].ends; }
+  int StretchSignal(int stretch) const;  // the node of the signal guarding it, -1 = none
+  // Whether a barge from end k (0/1) of the stretch could enter it now: no barge on it heads the other way.
+  bool StretchOpen(int stretch, int k) const;
   bool BucketPouring(int node) const { return started_ && bucket_pouring_[Index(node)] != 0; }
   int BucketSide(int node) const { return started_ ? bucket_side_[Index(node)] : 0; }  // the side its next dose goes
   int InsideCount(int node) const { return static_cast<int>(inside_[Index(node)].size()); }
@@ -525,6 +553,24 @@ class Board {
   std::vector<std::array<int, 2>> mixer_slot_;
   std::vector<uint8_t> candle_open_;  // per node
   std::vector<uint8_t> bucket_pouring_, bucket_side_;  // per node
+
+  // Two-way canals
+  struct Stretch {
+    std::array<int, 2> ends{-1, -1};
+    std::vector<int> pipes, nodes;  // its canals and the sockets / mills / gates along it
+  };
+  bool two_way_ = false;
+  std::vector<Stretch> stretches_;
+  std::vector<int> stretch_of_;              // per pipe
+  std::vector<int> harbours_;                // cup nodes, in order (routes are kept per harbour)
+  std::vector<std::vector<int>> way_cost_;   // per harbour: per (pipe * 2 + toward_to): cells to go, -1 = none
+  void PrepareTwoWay();
+  void TickTwoWay(bool& timers);
+  int NextPipe(const Drop& drop, int node) const;  // the pipe a barge in `node` leaves by, -1 = none
+  bool TwoWayAdmits(int node, const Drop& drop, int via) const;
+  bool EntryAllowed(const Drop& drop, int pipe, int node) const;  // a signal lets it onto that pipe from `node`
+  void EnterStretch(Drop& drop, int pipe, int node);
+  JamReport JamTwoWay() const;
   std::vector<int> last_exit_tick_;
   std::vector<Bead> last_exit_bead_;
   std::vector<Event> events_;
