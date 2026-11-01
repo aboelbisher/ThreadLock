@@ -119,7 +119,8 @@ assets/shaders/               canvas shaders: lantern_wall (World 1's backdrop),
                               sanctum_table (World 4's), ui_gradient (the EDIT / PLAY button)
 assets/fonts/                 Lilita One (the UI), Caveat (World 2's slips), Cormorant SC (World 3's streets), Cinzel (World 4's)
 tools/threadlock_tool.cpp     the level tool (below)
-tests/                        doctest: rules, sockets (the piece x socket table), machine parts, solver, content
+tests/                        doctest: rules, sockets (the piece x socket table), machine parts, recipes + candles,
+                              buckets + prescriptions, canal traffic (two-way), solver, content
                               (every shipped level + generated ones), board camera, sounds, the city map
 android/                      Gradle project: ThreadlockActivity (WlwActivity + AdMobService)
 external/WLWengine/           the engine (v0.2.0 + KeepScreenOn + TextStyle::rotation, c39718e)
@@ -154,12 +155,18 @@ external/WLWengine/           the engine (v0.2.0 + KeepScreenOn + TextStyle::rot
   the same puzzle everywhere): pipe cells use doubles + plain `sqrt` (never `std::hypot` / float sums), and the
   generator makes one random draw per statement (C++ leaves argument order unspecified: MSVC and clang differ).
   The test "generated levels are the same on every device" pins fingerprints; run the tests on a phone too.
-- **Round 4 (v4, planned, not built yet; DESIGN.md §3-§5):** new pieces Bucket (n 2-4; W2), Signal and
-  PassingPlace (W3), Candle (n 1-4; W4); failures HalfFull ("Never tipped") and Muddled; events Tip, Open, Standoff,
-  Muddle. Cups take prescriptions (`"want": {"B": 2, "A": 1}`, W2) or recipes (`"recipe": "G G R"`, W4). W3 levels
-  are `"traffic": "two-way"` (barges with a heading, routed to their harbour, `Basin` nodes with `"berths"`, a spout's
-  `"to"`, stretches; no mud) and everything two-way runs only when that flag is set, so W1, W2, W4 and the Lab keep
-  their runs and pars. A kit check (`KitProblems` in `LookProblems`) keeps each world's tray to its own pieces.
+- **Round 4 (v4, built 1 Nov; DESIGN.md §3-§5):** pieces Bucket (n 2-4, W2), Signal + Passing (W3), Candle (n 1-4, W4);
+  failures HalfFull ("Never tipped") and Muddled; events Tip, Open, Muddle, Standoff. A cup's `wants` (per colour)
+  are a prescription (`"want": {"B": 2, "A": 1}`, W2: a colour it doesn't want is wrong, one too many spills, a blend
+  counts one of each) or filled from want/count; a cup's `recipe` (`"recipe": "G G R"`, W4) takes layers in order.
+  A candle acts on a pass whose way out runs to a cup through passes, gates, mills and merges (`Node::feeds_cup`). A
+  bucket holds drops (lane_out -1) until it has n, then tips them out as a train; frozen with drops in a filling bucket
+  = HalfFull (`JamReport::half_full`). `Level::two_way` (`"traffic": "two-way"`, W3) switches Board::Tick to
+  `TickTwoWay` (one-way runs are untouched): Drop::dir/dest/via/stretch/so, routes per harbour by fewest cells
+  (Bellman-Ford, pipe-index ties), Basin nodes (`"berths"`), a spout's `"to"`, stretches between end nodes (not
+  Pass/Mill/Gate), standoffs only for opposite headings, a signal's arrow = setting 0 up its pass's in-pipe, 1 down
+  its out-pipe; `JamReport::standoff_a/b, full_basin`. `KitProblems`/`InKit` keep each world's tray to its kit
+  (enforced for worlds 1-4; the Lab keeps the mixed kit); a shop (W2) has no crossings or merges.
 
 ## The level tool (PC)
 ```
@@ -173,7 +180,12 @@ threadlock_tool lab <seed> <easy|medium|hard> <png>
 threadlock_tool sounds <dir>           every sound as a 48 kHz WAV, 30 s of ambience, a short demo run (listen on the PC)
 threadlock_tool search <kind> <difficulty> <seed> <count> <min pieces> <max solutions> [png dir]
                                        generated machines as level JSON (a start for hard levels)
+threadlock_tool try <level.json> [world]   one level from a file: problems, cells, every solution, the empty board
+threadlock_tool run <level.json> <placement> [trace]   one machine ("bucket3@f1/0,signal@p/1"): its end, every cup's
+                                       colours (to write a prescription from a machine), each tick with trace
 ```
+Searching levels: write candidates as JSON from a script, `try` each, keep the ones with one Lean machine and an empty
+board that fails (round 4 was designed this way; `run` + a big prescription gives a machine's cup contents).
 Level design loop: draft JSON -> `solve`/`render` -> move bends (cells follow length) -> `bake` -> tests.
 Pipe shapes: an object after the bends, `["s", "c", [[x, y], ...], {"coil": [segment, turns], "drip": segment}]`
 (segment k = point k to k+1 of from, bends..., to). A grand machine (finale) adds look-only `"height": 1200` (board
@@ -250,6 +262,7 @@ open everything, hints, wipe, ads).
 ## Next steps
 DESIGN.md §11 is the build order. All four launch worlds are done (World 4, The Mixing Hall, 23 October), each with
 its district on the map. The Lab draws its boards in the Lantern Works' art without the rose window, tinted mint
-(world_look.h kLabLook). Next: round 4 (DESIGN §11 "Round 4"): step 1, the mocks (nine playable boards on a
-claude.ai page, three per world, with a JS solver), then World 4, World 2, World 3 rebuilt on their own laws and
-trays. The World 1 playtest (step 4) can run any time; then launch (step 5).
+(world_look.h kLabLook). Round 4 is built (each world its own law and kit). Still to do for it: see it on the Pixel 4
+and run the ARM64 tests there (it wasn't connected); give the bridge a W3 level (crossings in a two-way narrow always
+deadlock: DESIGN §5 W3 "Open"); tighten the W3 levels that have several Lean machines. Then the World 1 playtest
+(step 4) and launch (step 5).

@@ -354,18 +354,16 @@ ambience plays.
   colour ("Mrs Hale's prescription takes 1 amber: the second amber spilled."), a short bottle lists what's
   missing. Sounds: a marimba tick rising with the bucket's fill, the tip (a wooden clack + a pizzicato run),
   a dull knock for never tipped.
-  **v4 levels** (ids kept; prescriptions from 2-4): 2-1 Opening Time (flipper, 3 + 3); 2-2 The Odd Drop (5 =
-  3 + 2); 2-3 Inventory (overflow, the rest down the sink); 2-4 First Dose (the pitch's board: B A B A B A
-  into 2B+1A / 1B+2A, a bucket of 3; a flipper and a bucket of 2 as decoys); 2-5 Three Sisters (overflow then
-  flipper); 2-6 The Handle (a handled fork + a bucket); 2-7 Morning Orders (a rack of three: a bucket aims one
-  whole dose per bottle); 2-8 The Bottling Line (three forks along the shelf, four prescriptions); 2-9 The
-  Lazy Susan (a flipper halves the rate for the rack); 2-10 The Half-Full Bucket (seven drops, buckets of 2
-  and 3: sizes so nothing's stranded); 2-11 The Shop Boy (repair: a bucket of 2 where a 3 belongs, a flipper
-  set wrong); 2-12 Doses of Doses (a bucket feeding a bucket); 2-13 Rush Order (a 4-bottle rack every 3
-  ticks, aimed with doses); 2-14 Doctor's Orders (a blend jar: a blend counts one of each); 2-15 Market Day
-  (two screens: the stock room's buckets and flippers, the counter's rack and sink; Lean 4). Challenges:
-  2-C1 Exact Change (overflows only), 2-C2 Closing Time (a rack every 3 ticks, buckets only), 2-C3 The Ledger
-  (one jar of twelve interleaved drops into four prescriptions).
+  **v4 levels (built 1 November)**: kept from v3 (they already used only W2's pieces): 2-1 Opening Time, 2-2 The
+  Odd Drop, 2-3 Inventory, 2-4 Three Sisters, 2-6 The Handle, 2-8 The Bottling Line, 2-C1 Exact Change. Rebuilt:
+  2-5 First Dose (B A B A B A into 2B+1A / 1B+2A: a bucket of 3; Lean 1), 2-7 Morning Orders (an overflow sends two to
+  the sink, a bucket of 3 aims whole doses at a rack turning every 3 ticks; Lean 2, one answer), 2-9 The Lazy Susan
+  (a flipper feeds the rack one drop a turn), 2-10 The Half-Full Bucket (the round-4 mock: an overflow of 3 and a
+  bucket of 2; the tempting bucket of 3 strands the seventh drop), 2-11 The Shop Boy (repair: a bucket of 2 where a
+  3 belongs, a flipper set wrong), 2-12 Doses of Doses (a bucket of 3 feeding a bucket of 2; Lean 3, one answer),
+  2-13 Rush Order (a bucket on the fork and one before the rack; Lean 2, one answer), 2-14 Doctor's Orders (a blend
+  jar: a blend counts one of each), 2-15 Market Day (two screens, Lean 3, two answers), 2-C2 Closing Time (buckets
+  only, a 4-bottle rack every 3 ticks), 2-C3 The Ledger (twelve drops into four prescriptions; Lean 3, one answer).
 
 ### World 3 · Rush Hour · The Canal City
 - **Place:** the city's canals at night, seen from above.
@@ -421,17 +419,16 @@ ambience plays.
   passing place widens its canal into a bay; the flow dashes go (they'd lie on a two-way canal); basins are
   wide water with berths and bollards. Sounds: the signal's clack when its lamps change, a standoff's two
   horns a tritone apart, a mooring creak in basins.
-  **v4 levels** (ids kept; all two-way canal maps): 3-1 The Narrows (the pitch's board: one narrow both ways;
-  a signal; a passing place as decoy); 3-2 Convoy (the arrow decides who waits; Swift needs the right side
-  first); 3-3 The Passing Place (barges meet exactly at the bay; a signal works too, slower); 3-4 Two Narrows
-  (a two-berth basin between two narrows: a signal on each); 3-5 Old Bridge (a one-at-a-time crossing backs
-  queues into a narrow: a bridge); 3-6 The Mill Gate (a mill shuts the far gate: a block signal; signal the
-  other stretch); 3-7 Every Other Barge; 3-8 The Roundabout (three basins in a ring); 3-9 Two Mills; 3-10 The
-  Long Queue (four barges, a basin of three); 3-11 The Harbourmaster (repair: signals with wrong arrows);
-  3-12 Interchange (three canals, crossings, one bridge); 3-13 Ring Road (four basins round a block: circular
-  wait); 3-14 Signal Box (two signals, a passing place, mills); 3-15 Rush Hour (two screens). Challenges: 3-C1
-  Gridlock (four one-berth basins, no bridges), 3-C2 Zipper (alternating convoys through one narrow), 3-C3
-  Night Ferry (a long narrow with two bays).
+  **v4 levels (built 1 November)**: all two-way canal maps on four layouts, every one with a wharf and a harbour at
+  each end meeting the canals in basins: one narrow (3-1 The Narrows, 3-2 Convoy, 3-3 The Passing Place, 3-5 The
+  Long Narrow, 3-12 Zipper Lane, 3-C3 Night Ferry), two narrows with a middle basin (3-4 Two Narrows, 3-10 The Long
+  Queue, 3-11 The Harbourmaster (repair: passing places where signals belong), 3-C2 Zipper), two narrows with a mill
+  in one geared to a gate in the other (3-6 The Mill Gate, 3-7 Every Other Barge, 3-9 The Shut Gate, 3-14 Signal Box,
+  and 3-15 Rush Hour stretched over two screens), and four basins round a block (3-8 The Roundabout, 3-13 Ring Road,
+  3-C1 Gridlock). Most are Lean 1-2; several have more than one Lean machine (a signal's arrow often doesn't matter).
+  **Open:** no level needs the bridge yet. A crossing in the middle of a two-way narrow always deadlocks (a barge held
+  in the crossing can't get onto a stretch filling from the far end, and each stretch's signal guards only itself),
+  so crossings need their own idea (a one-way axis, or a basin each side) before the bridge earns its place.
 
 ### World 4 · The Mixing Hall · The Sanctum
 - **Place:** the alchemists' sanctum, an obsidian table lit by candles.
@@ -504,16 +501,17 @@ ambience plays.
   rose. Rose came second, out of turn.") and the lonely candle (its flame gutters, its phial rings: "The
   candle waits for the phial to hold 2; it holds 1."). Sounds: a burn pluck per ring, the thread's snap (a
   dry pluck + a low bell), an organ cluster for Muddled. The mixer's swirl takes the colours it mixes.
-  **v4 levels** (ids kept; every level a sigil): 4-1 First Green (a mixer); 4-2 Partners (one of each; arcs);
-  4-3 Green, then Rose (the pitch's board: recipe G G R, a mixer + a candle of 2; a seal as decoy); 4-4
-  Leftovers (one amber too many: the mixer where the counts pair up, the extra amber to its own phial); 4-5
-  Green Crossing; 4-6 Rose Waits (two phials want rose last: two candles); 4-7 The Twin Seals; 4-8 The Dye
-  Fountain (spectacle); 4-9 Three Layers (recipe B G R: candles of 1 and 2); 4-10 Seal or Candle (both order
-  it: the seal is Lean, the candle Swift); 4-11 The Wrong Globe (repair: move the mixer); 4-12 Hold and Wait
-  (two mixers hold each other's partners; a candle breaks the cycle); 4-13 Pearl (green, then green + rose, in
-  order); 4-14 Hexagram (six points, a four-layer recipe); 4-15 The Great Work (two sigils: green behind twin
-  seals runs down, rose joins at the heart for pearl; recipe G P P; Lean 4). Challenges: 4-C1 Hold and Wait II,
-  4-C2 Barrier (seals + a third stream ordered by a candle), 4-C3 The Long Rite (five layers, three candles).
+  **v4 levels (built 1 November)**: 4-1 First Green and 4-2 Partners (a mixer; a twin seal as decoy), 4-3 Green,
+  then Rose (the pitch's board: recipe G G R, a mixer and a candle of 2), 4-4 Amber First (A G G: amber comes late, a
+  candle of 1 holds the greens), 4-5 Green Crossing (a mixer on a crossing), 4-6 Rose Waits (two phials, G R each:
+  two candles of 1), 4-7 The Twin Seals (released together, blue and amber pass the crossing apart; Lean 1), 4-8 The
+  Dye Fountain (kept), 4-9 Three Layers (B G G R: candles of 1 and 3), 4-10 Seal or Candle (B R: the seal is Swift, a
+  candle also works), 4-11 The Wrong Globe (repair: the mixer sits on the globe over the phial), 4-12 Hold and Wait
+  (G R and R G: both candles on the right phial wait forever), 4-13 Pearl (G P P: a mixer on a crossing, a pearl
+  mixer, a candle), 4-14 Hexagram (G G R G G: two mixers, candles of 2 and 3), 4-15 The Great Work (two sigils, G G
+  P P P P; Lean 3), 4-C1 Hold and Wait II (G G R and R G G), 4-C2 Barrier (the seals keep the crossing clear, a candle
+  puts rose first in the blue phial), 4-C3 The Long Rite (A B G G R: three candles). A phial takes one pipe in, so
+  grooves into one phial meet in a globe above it (candles count through globes).
 
 ### Worlds 5–8
 Live updates after launch, to be re-planned (v2's plan: The Layer Bar, Signal Tower, Clockworks, The
@@ -608,12 +606,14 @@ committed after the owner's OK, in small commits:
 5. Launch: Threadlock's own AdMob app and units, analytics, store page, closed test. Then worlds 5–8 as
    live updates.
 
-**Round 4 (v4), approved 1 November**, before launch, in this order (decision 17):
-0. This document and CLAUDE.md.
-1. Mocks before any C++: one claude.ai page with nine playable boards (three harder ones per world) on
+**Round 4 (v4), approved 1 November and built the same day** (all four worlds on their own kits, 72 levels, 0
+problems from the tool), in this order (decision 17):
+0. This document and CLAUDE.md. **Done.**
+1. **Done:** the "Round 4 Mocks" page on claude.ai. Mocks before any C++: one claude.ai page with nine playable boards (three harder ones per world) on
    small data-driven JS sims grown from the pitch's, with a brute-force solver (Lean par, solutions, the
    empty board fails). The owner plays them on the phone; rule changes found there land here first.
-2. World 4 (the smallest change), 3. World 2, 4. World 3 (the biggest). Each world as in step 3 above:
+2. World 4 (the smallest change), 3. World 2, 4. World 3 (the biggest). **All done** (not yet seen on the Pixel 4:
+   it wasn't connected; its ARM64 test run is still to do). Each world as in step 3 above:
    rules + tests; the level format + look checks + the mock board as its first level; the art; the levels
    (15 + 3); the sounds; the map (lantern colours from prescriptions and recipes, the news); these docs.
    Shared code (the new piece types, events, failures, the kit check) lands with the first world that needs
