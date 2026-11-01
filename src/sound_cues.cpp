@@ -118,6 +118,7 @@ Cues CuesFor(const std::vector<Event>& events, const Level& level, const Board& 
       }
       case EventType::Open: play(Sound::ThreadSnap, 0.7f, 1.0f, e.node, true); break;
       case EventType::Tip: play(Sound::BucketTip, 0.6f, 1.0f, e.node); break;
+      case EventType::Standoff: play(Sound::Standoff, 0.8f, 1.0f, -1, true); break;
       case EventType::Muddle:
         play(Sound::Muddle, 0.9f, 1.0f, e.node, true);
         cues.buzzes.push_back({60, 0.9f});

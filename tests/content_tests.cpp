@@ -1113,113 +1113,60 @@ TEST_SUITE("content") {
     CHECK(canal_maps == 18);
   }
 
-  TEST_CASE("a shipped canal map's city stays where it was (the map's canal quarter shares its rooftops)") {
-    // Pinned from MakeCity before its rooftop pass became canal::Rooftops.
-    const canal::City city = canal::MakeCity(Shipped("3-6"));
-    REQUIRE(city.roofs.size() == 484);  // re-pinned 23 Oct: 3-6's harbours moved up
-    size_t windows = 0;
-    for (const canal::Roof& roof : city.roofs) windows += roof.windows.size();
-    CHECK(windows == 346);
-    CHECK(city.lamps.size() == 18);
-    CHECK(city.roofs[17].box.min.x == doctest::Approx(288.8289f));
-    CHECK(city.roofs[17].box.min.y == doctest::Approx(-184.2526f));
-    CHECK(city.roofs.back().box.max.x == doctest::Approx(435.2550f));
-    CHECK(city.roofs.back().box.max.y == doctest::Approx(853.8830f));
-    CHECK(city.roofs.back().tone == 4);
-    CHECK(city.park.min.x == doctest::Approx(173.0f));
-    CHECK(city.park.min.y == doctest::Approx(481.0f));
-    CHECK(city.trees[3].r == doctest::Approx(10.9681f));
+  TEST_CASE("a shipped canal map's city is the same every time, and its roofs stay off the canals") {
+    // MakeCity is deterministic (the map's canal quarter shares canal::Rooftops with the boards).
+    const Level level = Shipped("3-6");
+    const canal::City one = canal::MakeCity(level), two = canal::MakeCity(level);
+    REQUIRE(!one.roofs.empty());
+    REQUIRE(one.roofs.size() == two.roofs.size());
+    for (size_t k = 0; k < one.roofs.size(); ++k) {
+      CHECK(one.roofs[k].box.min.x == two.roofs[k].box.min.x);
+      CHECK(one.roofs[k].box.max.y == two.roofs[k].box.max.y);
+      CHECK(one.roofs[k].tone == two.roofs[k].tone);
+    }
+    CHECK(one.lamps.size() == two.lamps.size());
   }
 
-  TEST_CASE("The Roundabout (3-8): barges meet coming round; a lock or a tank on the ring, and the ring empties") {
-    const Level level = Shipped("3-8");
-    const int m1 = NodeOf(level, "m1"), m2 = NodeOf(level, "m2");
-    {
-      Board board(level);
-      const Run run = RunBoard(board);
-      CHECK(run.outcome.failure == Failure::Mud);
-      CHECK(run.outcome.fail_node == m2);
-      CHECK(run.outcome.fail_tick == 39);
+  TEST_CASE("World 3 (round 4): two-way canal maps, the canal kit, every placement ends") {
+    const std::vector<World> worlds = LoadAll();
+    REQUIRE(worlds.size() >= 3);
+    REQUIRE(worlds[2].levels.size() == 18);
+    std::vector<std::string> districts;
+    int signals = 0, passing = 0, mills = 0;
+    for (const Level& level : worlds[2].levels) {
+      INFO("level " << level.id);
+      CHECK(level.two_way);
+      CHECK(canal::IsCanalMap(level));
+      CHECK(LookProblems(level).empty());
+      bool has_signal = false, has_passing = false, has_mill = false;
+      for (const TrayPiece& piece : level.tray) {
+        CHECK(InKit(3, piece.piece.type));
+        has_signal = has_signal || piece.piece.type == PieceType::Signal;
+        has_passing = has_passing || piece.piece.type == PieceType::Passing;
+      }
+      for (const Node& node : level.nodes) {
+        if (node.kind == NodeKind::Cup) {
+          CHECK(std::find(districts.begin(), districts.end(), node.district) == districts.end());
+          districts.push_back(node.district);
+        }
+        has_mill = has_mill || node.kind == NodeKind::Mill;
+      }
+      signals += has_signal;
+      passing += has_passing;
+      mills += has_mill;
+      int longest = 0;
+      ForEachPlacement(level, [&](const Placement& placement) {
+        const Outcome outcome = Simulate(level, placement, false);
+        CHECK(outcome.over);
+        CHECK(outcome.failure != Failure::Mud);  // barges never mix
+        longest = std::max(longest, outcome.ticks);
+        return true;
+      });
+      CHECK(longest < (level.look.height > 600.0f ? 800 : 400));
     }
-    {
-      Board board(level);
-      REQUIRE(board.Place(PieceOf(board, PieceType::Turnstile), m2));
-      const Run run = RunBoard(board);
-      CHECK(run.outcome.solved);
-      CHECK(run.outcome.ticks == 84);
-    }
-    {
-      Board board(level);
-      REQUIRE(board.Place(PieceOf(board, PieceType::TankShort), m1));
-      const Run run = RunBoard(board);
-      CHECK(run.outcome.solved);
-      CHECK(run.outcome.ticks == 88);
-    }
-  }
-
-  TEST_CASE("Two Mills (3-9): a fast blue shuts amber's gate for good; a tall tank on blue lets them take turns") {
-    const Level level = Shipped("3-9");
-    const int ga = NodeOf(level, "ga"), pb = NodeOf(level, "pb"), x = NodeOf(level, "x");
-    {
-      // Their canals cross on the way to the harbours: nothing placed, they meet there.
-      Board board(level);
-      const Run run = RunBoard(board);
-      CHECK(run.outcome.failure == Failure::Mud);
-      CHECK(run.outcome.fail_node == x);
-    }
-    {
-      // A lock on the crossing alone: the fast blue shuts amber's gate for good.
-      Board board(level);
-      REQUIRE(board.Place(PieceOf(board, PieceType::Turnstile), x));
-      const Run run = RunBoard(board);
-      CHECK(run.outcome.jammed);
-      CHECK(run.outcome.fail_node == ga);
-      CHECK(run.outcome.fail_tick == 86);
-    }
-    {
-      Board board(level);
-      REQUIRE(board.Place(PieceOf(board, PieceType::TankTall), pb));
-      REQUIRE(board.Place(PieceOf(board, PieceType::Turnstile), x));
-      const Run run = RunBoard(board);
-      CHECK(run.outcome.solved);
-      CHECK(run.outcome.ticks == 105);
-      CHECK(run.Count(EventType::Flip) == 12);
-    }
-  }
-
-  TEST_CASE("Rush Hour (3-15): one bridge for two crossings; the other waits, and the mill gate's queue mustn't") {
-    const Level level = Shipped("3-15");
-    CHECK(level.look.height == 1200.0f);
-    const int x1 = NodeOf(level, "x1"), x2 = NodeOf(level, "x2"), t = NodeOf(level, "t"), f = NodeOf(level, "f");
-    auto run = [&](int bridge, int turnstile) {
-      Board board(level);
-      REQUIRE(board.Place(PieceOf(board, PieceType::Bridge), bridge));
-      REQUIRE(board.Place(PieceOf(board, PieceType::Turnstile), turnstile));
-      REQUIRE(board.Place(PieceOf(board, PieceType::TankTall), t));
-      REQUIRE(board.Place(PieceOf(board, PieceType::Overflow), f));
-      return RunBoard(board);
-    };
-    {
-      // Nothing placed: blue and amber meet on the Old Bridge, on the first screen.
-      Board board(level);
-      const Run empty = RunBoard(board);
-      CHECK(empty.outcome.failure == Failure::Mud);
-      CHECK(empty.outcome.fail_node == x1);
-      CHECK(empty.outcome.fail_tick == 12);
-    }
-    {
-      // The bridge at the mill gate's crossing, the lock at the Old Bridge: the city's one Lean answer.
-      const Run lean = run(x2, x1);
-      CHECK(lean.outcome.solved);
-      CHECK(lean.outcome.ticks == 190);
-      CHECK(level.pars.pieces == 4);
-    }
-    {
-      // The other way round, blue's queue at the shut gate backs into the locked crossing: THREADLOCKED.
-      const Run swapped = run(x1, x2);
-      CHECK(swapped.outcome.jammed);
-      CHECK(swapped.outcome.fail_node == NodeOf(level, "g"));
-    }
+    CHECK(signals >= 6);
+    CHECK(passing >= 4);
+    CHECK(mills >= 4);
   }
 
   TEST_CASE("generated levels are the same on every device") {

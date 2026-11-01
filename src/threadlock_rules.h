@@ -570,6 +570,7 @@ class Board {
   bool TwoWayAdmits(int node, const Drop& drop, int via) const;
   bool EntryAllowed(const Drop& drop, int pipe, int node) const;  // a signal lets it onto that pipe from `node`
   void EnterStretch(Drop& drop, int pipe, int node);
+  int EndFrom(int node, int pipe) const;  // along `pipe` from `node` (through sockets, mills, gates) to a stretch end
   JamReport JamTwoWay() const;
   std::vector<int> last_exit_tick_;
   std::vector<Bead> last_exit_bead_;

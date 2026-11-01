@@ -76,6 +76,12 @@ PieceText TextFor(const Piece& piece) {
               "Nothing"};
     case PieceType::TwinGate:
       return {"Holds two ways in until both have a drop, then lets the pair go together.", "Nothing"};
+    case PieceType::Signal:
+      return {"On a canal: barges enter its stretch one direction at a time, and a convoy may follow. Its arrow picks "
+              "who goes first when both ends want in.",
+              "Turn the arrow"};
+    case PieceType::Passing:
+      return {"Widens a canal so two barges heading opposite ways can pass, if they meet right there.", "Nothing"};
     case PieceType::Bucket:
       return {"Fills with the number of drops on it, then tips them all out as one dose. On a fork the doses take turns.",
               "Choose the first side"};
@@ -164,6 +170,23 @@ const char* FailureTitle(const Outcome& outcome, const WorldLook& look) {
 
 // Why nothing can move (a jam): the lock or gate or piece the board's cycle waits on.
 std::string JamText(const Level& level, const Board& board) {
+  if (level.two_way) {
+    // Two-way canals: two bows touching, or a basin full from both ends, or a circle.
+    const JamReport jam = board.Jam();
+    if (jam.standoff_a >= 0) {
+      Color a = Color::Blue, b = Color::Amber;
+      for (const Drop& drop : board.Drops()) {
+        if (drop.alive && drop.id == jam.standoff_a) a = drop.bead.a;
+        if (drop.alive && drop.id == jam.standoff_b) b = drop.bead.a;
+      }
+      const std::string first = ColorName(a), second = ColorName(b);
+      return std::string(first == "amber" ? "An " : "A ") + first + " barge and " +
+             (a == b ? "another" : std::string(second == "amber" ? "an " : "a ") + second + " one") +
+             " met nose to nose in one canal. Neither can back up.";
+    }
+    if (jam.full_basin >= 0) return "A basin filled from both ends: every barge in it waits for a canal a barge outside is waiting to leave.";
+    return "Every barge waits for the one ahead of it, all the way round.";
+  }
   const int lonely = board.Jam().lonely;
   if (lonely < 0) return "Nothing can move: each lock waits for another.";
   if (level.nodes[static_cast<size_t>(lonely)].kind == NodeKind::Gate)

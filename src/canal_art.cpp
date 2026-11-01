@@ -238,6 +238,7 @@ void CanalArt::DrawBack(Canvas& picture, const ArtFrame& frame) {
   tiles_.EndFrame();
 
   DrawFlow(picture, frame);
+  DrawBays(picture, frame);
   for (size_t n = 0; n < frame.level->nodes.size(); ++n) {
     if (frame.level->nodes[n].kind == NodeKind::Spout) DrawMoored(picture, frame, static_cast<int>(n));
   }
@@ -329,6 +330,21 @@ void CanalArt::DrawCanals(Canvas& canvas, const ArtFrame& frame) const {
   // A junction opens into a little basin with a bollard at each corner; a crossing with a bridge locked on it
   // is an aqueduct: one canal runs over the other between parapets.
   const Level& level = *frame.level;
+  // Two-way canals: a basin is wide round water with a bollard per berth on its quay.
+  for (size_t n = 0; n < level.nodes.size(); ++n) {
+    const Node& node = level.nodes[n];
+    if (node.kind != NodeKind::Basin) continue;
+    const glm::vec2 c = layout.ToCanvas(node.at);
+    const float r = BasinRadius(node);
+    canvas.Circle(c, (r + 5.0f) * s, kBank);
+    canvas.Circle(c, (r + 2.5f) * s, kQuay);
+    canvas.Circle(c, r * s, kWater);
+    const int berths = std::max(1, node.berths);
+    for (int k = 0; k < berths; ++k) {
+      const float a = -1.5708f + 6.2832f * (static_cast<float>(k) + 0.5f) / static_cast<float>(berths);
+      canvas.Circle(c + glm::vec2(std::cos(a), std::sin(a)) * ((r + 3.5f) * s), 2.2f * s, kBollard);
+    }
+  }
   for (size_t n = 0; n < level.nodes.size(); ++n) {
     const Node& node = level.nodes[n];
     if (node.kind != NodeKind::Cross && node.kind != NodeKind::Merge && node.kind != NodeKind::Fork) continue;
@@ -450,6 +466,7 @@ void CanalArt::DrawGate(Canvas& canvas, const ArtFrame& frame, int n) const {
 // ---- Each frame ----
 
 void CanalArt::DrawFlow(Canvas& picture, const ArtFrame& frame) const {
+  if (frame.level->two_way) return;  // two-way canals have no current to show (dashes would lie)
   // Two strands of dashes, one each side of the middle, drifting with the current at their own pace.
   const float s = frame.Scale();
   const float top = frame.layout.ToBoard({0.0f, 0.0f}).y - 10.0f;
@@ -495,7 +512,8 @@ void CanalArt::DrawDrops(Canvas& picture, const ArtFrame& frame) {
   if (frame.board->Started()) {
     for (const Drop& drop : frame.board->Drops()) {
       if (!drop.alive) continue;
-      const barges::Pose pose = barges::PoseOf(*frame.level, ways_, drop, frame.alpha);
+      barges::Pose pose = barges::PoseOf(*frame.level, ways_, drop, frame.alpha);
+      if (frame.level->two_way && drop.loc.kind == Loc::InNode) pose.at = Berth(frame, drop, pose.at);
       BargeLook look{pose.fade, true};
       if (murk && drop.bead.IsMud()) look = {0.55f, false};
       if (jam && drop.waiting) look.tail_light = pulse;
@@ -860,6 +878,33 @@ void CanalArt::DrawJam(Canvas& canvas, const ArtFrame& frame, const Marker& mark
       for (float d = -shift; d < length; d += period) Trace(canvas, line, d, d + dash, kCircleWidth * s, kFail);
     }
   }
+  // Two-way canals: the two bows touching, ringed red; a full basin ringed red.
+  if (jam.standoff_a >= 0) {
+    glm::vec2 sum{0.0f}, a{0.0f};
+    int found = 0;
+    for (const Drop& drop : frame.board->Drops()) {
+      if (!drop.alive || (drop.id != jam.standoff_a && drop.id != jam.standoff_b)) continue;
+      const Vec2 p = barges::PoseOf(*frame.level, ways_, drop, 1.0f).at;
+      const glm::vec2 c = frame.layout.ToCanvas(p);
+      if (found == 0) a = c;
+      sum += c;
+      ++found;
+    }
+    if (found == 2) {
+      const glm::vec2 mid = sum * 0.5f;
+      const float r = std::max(22.0f * s, glm::distance(mid, a) + 14.0f * s);
+      canvas.Ring(mid, r, kCircleWidth * s, WithAlpha(kFail, traced));
+      canvas.Text(*frame.font, "nose to nose", mid + glm::vec2(0.0f, r + 12.0f * s), 13.0f * s, Align::Center,
+                  TextStyle::Outlined(kFail, ui_color::kBackground, traced));
+    }
+  }
+  if (jam.full_basin >= 0) {
+    const Node& basin = frame.level->nodes[static_cast<size_t>(jam.full_basin)];
+    const glm::vec2 c = frame.layout.ToCanvas(basin.at);
+    canvas.Ring(c, (BasinRadius(basin) + 7.0f) * s, kCircleWidth * s, WithAlpha(kFail, traced));
+    canvas.Text(*frame.font, "full both ways", c + glm::vec2(0.0f, (BasinRadius(basin) + 20.0f) * s), 13.0f * s,
+                Align::Center, TextStyle::Outlined(kFail, ui_color::kBackground, traced));
+  }
   if (jam.lonely >= 0) {
     const bool gate = frame.level->nodes[static_cast<size_t>(jam.lonely)].kind == NodeKind::Gate;
     canvas.Text(*frame.font, gate ? "never opens" : "waits forever", frame.At(jam.lonely) + glm::vec2(0.0f, 34.0f * s),
@@ -909,6 +954,7 @@ void CanalArt::DrawFront(Canvas& canvas, const ArtFrame& frame) {
         break;
       }
       case NodeKind::Cup: DrawPill(canvas, frame, static_cast<int>(n)); break;
+      case NodeKind::Pass: DrawSignalLamps(canvas, frame, static_cast<int>(n)); break;
       case NodeKind::Mill: DrawMillFront(canvas, frame, static_cast<int>(n)); break;
       case NodeKind::Gate: DrawGateFront(canvas, frame, static_cast<int>(n)); break;
       default: break;
@@ -935,6 +981,82 @@ glm::vec2 CanalArt::PipePoint(const ArtFrame& frame, int pipe, float distance) c
   if (level_ != frame.level || static_cast<size_t>(pipe) >= ways_.size() || rules.length <= 0.0f)
     return BoardArt::PipePoint(frame, pipe, distance);
   return frame.layout.ToCanvas(ways_[static_cast<size_t>(pipe)].PointAt(distance));
+}
+
+float CanalArt::BasinRadius(const Node& node) const { return 14.0f + 5.0f * static_cast<float>(std::max(1, node.berths)); }
+
+// Where a barge waiting in a basin, a passing place or a crossing sits: side by side round the middle, in the order
+// they came in.
+Vec2 CanalArt::Berth(const ArtFrame& frame, const Drop& drop, Vec2 at) const {
+  const int node = drop.loc.index;
+  const Node& n = frame.level->nodes[static_cast<size_t>(node)];
+  int k = 0, count = 0;
+  for (const Drop& other : frame.board->Drops()) {
+    if (!other.alive || other.loc.kind != Loc::InNode || other.loc.index != node) continue;
+    if (other.entered < drop.entered || (other.entered == drop.entered && other.id < drop.id)) ++k;
+    ++count;
+  }
+  if (count < 2 && n.kind != NodeKind::Basin) return at;
+  const Vec2 c = n.at;
+  if (n.kind == NodeKind::Basin) {
+    const int berths = std::max(1, n.berths);
+    if (berths == 1) return c;
+    const float a = -1.5708f + 6.2832f * (static_cast<float>(k) + 0.5f) / static_cast<float>(berths);
+    const float r = BasinRadius(n) * 0.55f;
+    return {c.x + std::cos(a) * r, c.y + std::sin(a) * r};
+  }
+  const float side = k == 0 ? -7.0f : 7.0f;  // a passing place or a bridged crossing: two abreast
+  return {at.x + side, at.y};
+}
+
+// A passing place widens its canal into a bay (under the barges).
+void CanalArt::DrawBays(Canvas& picture, const ArtFrame& frame) const {
+  const Level& level = *frame.level;
+  if (!level.two_way) return;
+  const float s = frame.Scale();
+  for (size_t n = 0; n < level.nodes.size(); ++n) {
+    const int piece = frame.board->PieceAt(static_cast<int>(n));
+    if (piece < 0 || frame.board->PieceInfo(piece).piece.type != PieceType::Passing) continue;
+    const glm::vec2 c = frame.layout.ToCanvas(level.nodes[n].at);
+    for (const auto& [r, color] : {std::pair{22.0f, kBank}, {20.0f, kQuay}, {18.0f, kWater}})
+      picture.Circle(c, r * s, color);
+  }
+}
+
+// A signal's lamps: one at each end of its stretch, green while a barge from that end may enter, red while one heads
+// the other way on it.
+void CanalArt::DrawSignalLamps(Canvas& canvas, const ArtFrame& frame, int node) const {
+  const Board& board = *frame.board;
+  const int piece = board.PieceAt(node);
+  if (!frame.level->two_way || piece < 0 || board.PieceInfo(piece).piece.type != PieceType::Signal) return;
+  if (!board.Started()) return;
+  const Node& n = frame.level->nodes[static_cast<size_t>(node)];
+  if (n.ins.empty()) return;
+  const int stretch = board.StretchOf(n.ins[0]);
+  if (stretch < 0) return;
+  const float s = frame.Scale();
+  const std::array<int, 2> ends = board.StretchEnds(stretch);
+  for (int k = 0; k < 2; ++k) {
+    if (ends[static_cast<size_t>(k)] < 0) continue;
+    const Vec2 e = frame.level->nodes[static_cast<size_t>(ends[static_cast<size_t>(k)])].at;
+    Vec2 toward = n.at;
+    // Along the stretch's canal nearest that end.
+    for (size_t p = 0; p < frame.level->pipes.size(); ++p) {
+      const Pipe& pipe = frame.level->pipes[p];
+      if (board.StretchOf(static_cast<int>(p)) != stretch) continue;
+      if (pipe.from == ends[static_cast<size_t>(k)]) toward = pipe.points.size() > 1 ? pipe.points[1] : n.at;
+      if (pipe.to == ends[static_cast<size_t>(k)]) toward = pipe.points.size() > 1 ? pipe.points[pipe.points.size() - 2] : n.at;
+    }
+    glm::vec2 d = glm::vec2(toward.x - e.x, toward.y - e.y);
+    d = glm::length(d) > 1e-3f ? glm::normalize(d) : glm::vec2(0.0f, 1.0f);
+    const glm::vec2 side{-d.y, d.x};
+    const glm::vec2 lamp = frame.layout.ToCanvas({e.x, e.y}) + (d * 34.0f + side * 20.0f) * s;
+    const bool open = board.StretchOpen(stretch, k);
+    const Rgba color = open ? kLampGreen : kLampRed;
+    canvas.Line(lamp, lamp + glm::vec2(0.0f, 9.0f * s), 2.0f * s, kPost);
+    glow_.Draw(canvas, lamp, 9.0f * s, WithAlpha(color, 0.45f));
+    canvas.Circle(lamp, 3.4f * s, color);
+  }
 }
 
 float CanalArt::SocketRadius(const Node& node) const {

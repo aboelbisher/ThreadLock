@@ -166,6 +166,29 @@ void DrawPiece(Canvas& canvas, const Piece& piece, glm::vec2 c, float s, const P
       canvas.Circle(c, 4.2f * s, liquid(Color::Green));
       break;
     }
+    case PieceType::Signal: {
+      // A lamp post: a dark housing with a red lamp over a green one; the arrow points at the end that wins a tie.
+      art::Medallion(canvas, c, 22.0f * s, alpha);
+      canvas.FillRect({c + glm::vec2(-5.5f, -11.0f) * s, c + glm::vec2(5.5f, 11.0f) * s}, WithAlpha(brass::kEnamel, alpha),
+                      3.0f * s);
+      canvas.Circle(c + glm::vec2(0.0f, -5.0f) * s, 3.2f * s, WithAlpha(Hex(0xFF4D4D), alpha));
+      canvas.Circle(c + glm::vec2(0.0f, 5.0f) * s, 3.2f * s, WithAlpha(Hex(0x5BE08A), alpha));
+      if (on_board && !node->ins.empty() && !node->outs.empty()) {
+        // The end that wins a tie: up its in-pipe (setting 0), else down its out-pipe.
+        const glm::vec2 d = look.setting == 0 ? -InDir(*level, *node, 0) : OutDir(*level, *node, 0);
+        Arrow(canvas, c + d * (30.0f * s), d, s, accent);
+      }
+      break;
+    }
+    case PieceType::Passing: {
+      // A bay: two lanes side by side, two barges passing the other way.
+      art::Medallion(canvas, c, 22.0f * s, alpha);
+      canvas.Line(c + glm::vec2(-4.0f, -12.0f) * s, c + glm::vec2(-4.0f, 12.0f) * s, 2.0f * s, mark);
+      canvas.Line(c + glm::vec2(4.0f, -12.0f) * s, c + glm::vec2(4.0f, 12.0f) * s, 2.0f * s, mark);
+      canvas.Triangle(c + glm::vec2(-4.0f, -9.0f) * s, c + glm::vec2(-8.0f, -3.0f) * s, c + glm::vec2(0.0f, -3.0f) * s, accent);
+      canvas.Triangle(c + glm::vec2(4.0f, 9.0f) * s, c + glm::vec2(0.0f, 3.0f) * s, c + glm::vec2(8.0f, 3.0f) * s, accent);
+      break;
+    }
     case PieceType::Bucket: {
       // A brass seesaw under a glass measure marked in n doses; it fills bottom up and tips toward its side.
       const int n = std::max(2, piece.n);

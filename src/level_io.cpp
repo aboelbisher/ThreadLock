@@ -848,13 +848,13 @@ bool InKit(int world, PieceType type) {
   switch (world) {
     case 1: return type == Separator || type == Turnstile || type == TankShort || type == TankTall;
     case 2: return type == Flipper || type == Overflow || type == Bucket;
-    case 3: return type == Bridge;
+    case 3: return type == Signal || type == Passing || type == Bridge;
     case 4: return type == Mixer || type == TwinGate || type == Candle;
     default: return true;  // the Lab
   }
 }
 
-bool KitEnforced(int world) { return world == 1 || world == 2 || world == 4; }
+bool KitEnforced(int world) { return world >= 1 && world <= 4; }
 
 std::vector<std::string> KitProblems(const Level& level) {
   std::vector<std::string> problems;

@@ -1232,6 +1232,13 @@ std::vector<float> Make(Sound sound, uint32_t rate) {
       Normalize(out.samples, 0.85f);
       return out.samples;
     }
+    case Sound::Standoff: {  // two horns a tritone apart, both held, neither giving way
+      Buffer out(rate, 1.6f);
+      Horn(out, 261.63f, 0.0f, 0.9f, 0.5f);
+      Horn(out, 369.99f, 0.05f, 0.85f, 0.45f);
+      Normalize(out.samples, 0.7f);
+      return out.samples;
+    }
     case Sound::LastOrders: {  // after the last harbour's horn: a vibes run, the bass walking, brushes, the 6/9
       const float start = barges::kWarmLength;
       Buffer out(rate, start + 4.4f);
@@ -1579,7 +1586,7 @@ const char* SoundName(Sound sound) {
       "PaidAmber",     "Sludge",       "JarTap",       "SpillWood",    "ShortDull",   "RackClack",  "Till",
       "MarketDay",     "CorkPop",      "ShopBell",     "BucketTip",     "VibesNote",    "BassNote",    "RhodesNote", "HarbourBlue",
       "HarbourAmber",  "HarbourGreen", "LockBrush",    "MillClunk",    "GateClank",   "Murk",       "Wash",
-      "ShortQuay",     "Gridlock",     "LastOrders",   "RushHour",     "HarpNote",    "ChoirNote",  "OrganNote",
+      "ShortQuay",     "Gridlock",     "LastOrders",   "RushHour",     "Standoff",     "HarpNote",    "ChoirNote",  "OrganNote",
       "BowlNote",      "PearlNote",    "PhialBlue",    "PhialAmber",   "PhialGreen",  "PhialRose",  "PhialPearl",
       "MixSwell",      "SealBell",     "FlaskPour",    "Clot",         "SealCrack",   "PhialSpill", "HollowPhial",
       "Amen",          "GreatWork",    "Kindle",       "ThreadSnap",   "Muddle"};

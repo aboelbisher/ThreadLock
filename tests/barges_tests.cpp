@@ -108,7 +108,7 @@ TEST_SUITE("barges") {
     CHECK(barges::CityAt(barges::kCityLength) == doctest::Approx(1.0f));
   }
 
-  TEST_CASE("the barges of 3-6 stay in their canals, head along them, and land in order at Lantern Row") {
+  TEST_CASE("the barges of 3-6 stay in their canals, head along them (both ways), and land in order") {
     const std::vector<World> worlds = LoadWorlds();
     const Level& level = Level36(worlds);
     const std::vector<canal::Way> ways = canal::Ways(level);
@@ -136,7 +136,7 @@ TEST_SUITE("barges") {
     CHECK(poses > 0);
     CHECK(board.GetOutcome().solved);
 
-    const int ca = NodeOf(level, "ca");  // Lantern Row
+    const int ca = NodeOf(level, "ha");  // the amber harbour
     REQUIRE(level.nodes[static_cast<size_t>(ca)].count > 0);
     const std::vector<barges::Landing>& row = landed[static_cast<size_t>(ca)];
     CHECK(static_cast<int>(row.size()) == level.nodes[static_cast<size_t>(ca)].count);

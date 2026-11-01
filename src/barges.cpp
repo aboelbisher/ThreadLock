@@ -40,7 +40,8 @@ bool JustPoured(const Level& level, const Drop& drop) {
 Vec2 HeadingOf(const Level& level, const std::vector<canal::Way>& ways, const Drop& drop, const Loc& loc) {
   if (loc.kind == Loc::OnPipe) {
     const size_t pipe = static_cast<size_t>(loc.index);
-    return Unit(ways[pipe].DirectionAt(CellDistance(level.pipes[pipe], loc.cell)));
+    const Vec2 along = Unit(ways[pipe].DirectionAt(CellDistance(level.pipes[pipe], loc.cell)));
+    return drop.dir < 0 ? Vec2{-along.x, -along.y} : along;
   }
   if (loc.kind == Loc::InNode && loc.index >= 0) {
     const Node& node = level.nodes[static_cast<size_t>(loc.index)];
@@ -79,6 +80,7 @@ Pose PoseOf(const Level& level, const std::vector<canal::Way>& ways, const Drop&
     const float d = d0 + (d1 - d0) * alpha;
     pose.at = ways[pipe].PointAt(d);
     pose.heading = Unit(ways[pipe].DirectionAt(d));
+    if (drop.dir < 0) pose.heading = {-pose.heading.x, -pose.heading.y};  // two-way canals: heading back up it
     pose.moving = !(drop.prev == drop.loc);
     return pose;
   }

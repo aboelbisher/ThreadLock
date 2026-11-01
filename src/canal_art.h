@@ -55,6 +55,10 @@ class CanalArt : public BoardArt {
   // Along the canals' round bends.
   glm::vec2 PipePoint(const ArtFrame& frame, int pipe, float distance) const override;
   float SocketRadius(const Node& node) const override;
+  float BasinRadius(const Node& node) const;
+  Vec2 Berth(const ArtFrame& frame, const Drop& drop, Vec2 at) const;
+  void DrawBays(wlw::ui::Canvas& picture, const ArtFrame& frame) const;
+  void DrawSignalLamps(wlw::ui::Canvas& canvas, const ArtFrame& frame, int node) const;
   Rgba Accent() const override { return Hex(0x7FE3D8); }
 
   const wlw::ui::Font& Street() const { return *street_; }

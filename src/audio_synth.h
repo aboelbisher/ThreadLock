@@ -100,6 +100,7 @@ enum class Sound : uint8_t {
   Gridlock,      // THREADLOCKED: horns honking into each other over the grinding stop
   LastOrders,    // solved: a vibes run, the bass walking, brushes, the 6/9
   RushHour,      // 3-15 solved: horns answer across the city as its light runs, the full chord at kCityLength
+  Standoff,      // two barges nose to nose: two horns a tritone apart, held against each other
   // The Sanctum set (World 4).
   HarpNote,     // blue: a concert harp, C4
   ChoirNote,    // amber: a choir singing "ah", C4 (a short swell)

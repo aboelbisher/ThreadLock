@@ -1302,7 +1302,19 @@ void Board::Finish(bool jammed) {
   } else {
     const JamReport jam = Jam();
     if (two_way_) {
-      Fail(Failure::Jam, jam.full_basin >= 0 ? jam.full_basin : jam.stuck_nodes.empty() ? -1 : jam.stuck_nodes.front());
+      // Where to look: a full basin, else the node a barge in the standoff was heading for, else a stuck node.
+      int where = jam.full_basin;
+      for (const Drop& drop : drops_) {
+        if (where >= 0) break;
+        if (!drop.alive || drop.id != jam.standoff_a) continue;
+        if (drop.loc.kind == Loc::InNode) where = drop.loc.index;
+        else if (drop.loc.kind == Loc::OnPipe) {
+          const Pipe& pipe = level_->pipes[Index(drop.loc.index)];
+          where = drop.dir > 0 ? pipe.to : pipe.from;
+        }
+      }
+      if (where < 0 && !jam.stuck_nodes.empty()) where = jam.stuck_nodes.front();
+      Fail(Failure::Jam, where);
     } else if (jam.half_full >= 0 && jam.lonely < 0 && jam.cycle.empty()) {
       Fail(Failure::HalfFull, jam.half_full);  // the last dose never filled its bucket: never tipped
     } else {
@@ -1756,6 +1768,22 @@ void Board::PrepareTwoWay() {
   }
 }
 
+int Board::EndFrom(int node, int pipe) const {
+  for (size_t guard = 0; guard <= level_->pipes.size(); ++guard) {
+    const int next = Other(level_->pipes[Index(pipe)], node);
+    if (StretchEnd(level_->nodes[Index(next)].kind)) return next;
+    int on = -1;
+    for (size_t q = 0; q < level_->pipes.size(); ++q) {
+      const Pipe& p = level_->pipes[q];
+      if (static_cast<int>(q) != pipe && (p.from == next || p.to == next)) on = static_cast<int>(q);
+    }
+    if (on < 0) return next;
+    node = next;
+    pipe = on;
+  }
+  return -1;
+}
+
 int Board::StretchSignal(int stretch) const {
   for (int node : stretches_[Index(stretch)].nodes) {
     if (Is(node, PieceType::Signal) && level_->nodes[Index(node)].kind == NodeKind::Pass) return node;
@@ -1928,13 +1956,16 @@ void Board::TickTwoWay(bool& pending) {
         }
       }
     }
-    // A signal's arrow: a barge entering its stretch from the arrow's end goes first.
+    // A signal's arrow: a barge entering its stretch from the arrow's end goes first (setting 0: the end up the
+    // socket's own in-pipe; 1: down its out-pipe).
     for (Intent& it : intents) {
       if (it.pipe < 0 || it.from < 0) continue;
       const int s = stretch_of_[Index(it.pipe)];
       const int signal = StretchSignal(s);
-      if (signal >= 0 && it.from == stretches_[Index(s)].ends[Index(pieces_[Index(node_piece_[Index(signal)])].setting & 1)])
-        it.prio = 0;
+      if (signal < 0) continue;
+      const Node& socket = level.nodes[Index(signal)];
+      const bool up = (pieces_[Index(node_piece_[Index(signal)])].setting & 1) == 0;
+      if (it.from == EndFrom(signal, up ? socket.ins[0] : socket.outs[0])) it.prio = 0;
     }
     std::stable_sort(intents.begin(), intents.end(), [](const Intent& a, const Intent& b) { return a.prio < b.prio; });
     bool any = false;
