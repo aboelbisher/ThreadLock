@@ -48,7 +48,8 @@ src/level_io.{h,cpp}          level files (JSON) + the pars file; WriteLevel (to
 src/apothecary_look.{h,cpp}   World 2's shop in board units (tool + art): orders, the cork board and its slips, the counter,
                               jars + slates, the bell, rack bottles + clock, the moments' timing (paid, spill, short)
 src/canal_look.{h,cpp}        World 3's canal city in board units (tool + art): districts (harbours), canal width + round bends,
-                              the canal map's look checks (canal::Problems: bends, locks on straight stretches, crossings, rods),
+                              the canal map's look checks (canal::Problems: bends, locks on straight stretches, crossings, rods,
+                              room round every socket for a piece),
                               the still city's generator (MakeCity; Rooftops, shared with the map's canal quarter)
 src/canal_art.{h,cpp}         World 3, The Canal City: the still city in tiles (roofs, canals, locks, harbours), the barges on
                               the picture, the harbours' pills and berths, the lock leaves (shut, or swung as it pours), the
@@ -64,7 +65,8 @@ src/sanctum_art.{h,cpp}       World 4, The Mixing Hall: the still sanctum in til
                               labels), the mixers' swirl, twin seals' bar and leaves, the payoff (elixir, the sigil igniting
                               back to the rim) and the moments (sludge, the lonely seal's crack, the circle of waiting, short, spill)
 src/canal_palette.h           World 3's night colours, shared by canal_art and the map's canal quarter
-src/barges.{h,cpp}            World 3's barges (plain C++, tested): a drop's pose along its canal, the landed barges' glides,
+src/barges.{h,cpp}            World 3's barges (plain C++, tested): a drop's pose along its canal, the moorings (a barge's
+                              own berth in a basin, its side in a passing place: no jumps), the landed barges' glides,
                               a lock's leaves
 src/polyline.{h,cpp}          paths (glm, header-only): round bends (RoundCorners), points by distance; the canals use it
 src/solver.{h,cpp}            every placement where each piece acts, run each: pars (Lean/Swift), solutions, NextHint
@@ -164,8 +166,9 @@ external/WLWengine/           the engine (v0.2.0 + KeepScreenOn + TextStyle::rot
   = HalfFull (`JamReport::half_full`). `Level::two_way` (`"traffic": "two-way"`, W3) switches Board::Tick to
   `TickTwoWay` (one-way runs are untouched): Drop::dir/dest/via/stretch/so, routes per harbour by fewest cells
   (Bellman-Ford, pipe-index ties), Basin nodes (`"berths"`), a spout's `"to"`, stretches between end nodes (not
-  Pass/Mill/Gate), standoffs only for opposite headings, a signal's arrow = setting 0 up its pass's in-pipe, 1 down
-  its out-pipe; `JamReport::standoff_a/b, full_basin`. `KitProblems`/`InKit` keep each world's tray to its kit
+  Pass/Mill/Gate, nor a crossing with a bridge: a bridged crossing carries each lane's stretch straight on, built at
+  Start from the placement: `IsStretchEnd`, `Onward`), standoffs only for opposite headings, a signal's arrow =
+  setting 0 up its pass's in-pipe, 1 down its out-pipe; `JamReport::standoff_a/b, full_basin`. `KitProblems`/`InKit` keep each world's tray to its kit
   (enforced for worlds 1-4; the Lab keeps the mixed kit); a shop (W2) has no crossings or merges.
 
 ## The level tool (PC)
@@ -263,6 +266,6 @@ open everything, hints, wipe, ads).
 DESIGN.md §11 is the build order. All four launch worlds are done (World 4, The Mixing Hall, 23 October), each with
 its district on the map. The Lab draws its boards in the Lantern Works' art without the rose window, tinted mint
 (world_look.h kLabLook). Round 4 is built (each world its own law and kit). Still to do for it: see it on the Pixel 4
-and run the ARM64 tests there (it wasn't connected); give the bridge a W3 level (crossings in a two-way narrow always
-deadlock: DESIGN §5 W3 "Open"); tighten the W3 levels that have several Lean machines. Then the World 1 playtest
-(step 4) and launch (step 5).
+and run the ARM64 tests there (it wasn't connected). World 3's levels were reworked (v4b, DESIGN §5 W3, decision 18:
+Lean 2-3 maps found by search, 3-12 Old Bridge on the bridge rule); see them on the phone too, with the bridge's art on a
+two-way crossing. Then the World 1 playtest (step 4) and launch (step 5).

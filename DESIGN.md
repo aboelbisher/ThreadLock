@@ -184,8 +184,10 @@ concurrency idea:
   (`"berths": 2`) join canals and hold that many barges; any barge whose way is free leaves (that's where
   barges pass). A crossing is a basin of one (a bridge makes it two lanes); a canal socket holds one barge.
   A **stretch** = the canals between two basins (or a wharf / harbour), joined through sockets, locks and
-  gates: what a signal guards. No forks, no merges, no mud: barges wait instead. Mills and gates work as
-  before, for barges either way (block signals).
+  gates: what a signal guards. A crossing ends its stretches, unless a bridge sits on it: then each canal runs
+  straight on over the bridge, one stretch from basin to basin, and one signal guards it end to end (v4b,
+  decision 18; without that, two-way traffic through a crossing always gridlocks, bridge or not). No forks, no
+  merges, no mud: barges wait instead. Mills and gates work as before, for barges either way (block signals).
 - **Recipes** (W4, v4; a phial's `"recipe": "G G R"`): layers land in order, bottom up. A drop out of turn,
   or a blend (two layers at once), = **Muddled**; too many = spill; short = dry. A candle (§3) makes a
   later layer wait for the earlier ones; never burning down (the phial never reaches N) = THREADLOCKED with
@@ -419,16 +421,25 @@ ambience plays.
   passing place widens its canal into a bay; the flow dashes go (they'd lie on a two-way canal); basins are
   wide water with berths and bollards. Sounds: the signal's clack when its lamps change, a standoff's two
   horns a tritone apart, a mooring creak in basins.
-  **v4 levels (built 1 November)**: all two-way canal maps on four layouts, every one with a wharf and a harbour at
-  each end meeting the canals in basins: one narrow (3-1 The Narrows, 3-2 Convoy, 3-3 The Passing Place, 3-5 The
-  Long Narrow, 3-12 Zipper Lane, 3-C3 Night Ferry), two narrows with a middle basin (3-4 Two Narrows, 3-10 The Long
-  Queue, 3-11 The Harbourmaster (repair: passing places where signals belong), 3-C2 Zipper), two narrows with a mill
-  in one geared to a gate in the other (3-6 The Mill Gate, 3-7 Every Other Barge, 3-9 The Shut Gate, 3-14 Signal Box,
-  and 3-15 Rush Hour stretched over two screens), and four basins round a block (3-8 The Roundabout, 3-13 Ring Road,
-  3-C1 Gridlock). Most are Lean 1-2; several have more than one Lean machine (a signal's arrow often doesn't matter).
-  **Open:** no level needs the bridge yet. A crossing in the middle of a two-way narrow always deadlocks (a barge held
-  in the crossing can't get onto a stretch filling from the far end, and each stretch's signal guards only itself),
-  so crossings need their own idea (a one-way axis, or a basin each side) before the bridge earns its place.
+  **v4 levels (built 1 November)** were mostly Lean 1 (15 of 18: one signal in the right narrow cleared the only
+  conflict), and no level could use the bridge.
+  **v4b levels (reworked 1 November, from the "Rush Hour Rework" page):** found by a search over canal grids and
+  chains (a JS copy of the rules, checked against the C++ tick for tick), then solved by the tool. The idea that makes
+  them hard: a signal only fails when the barge it holds back waits in a basin that the oncoming barge is heading into
+  (a one-berth basin, or a full one). That's what makes a passing place necessary, or a signal's arrow matter.
+  Room (owner, 1 November): a placed piece needs water round it, so every canal socket keeps clear of basins, other
+  sockets, mills, gates, locks and harbours (canal::Problems "crowded": a medallion of 22 and a gap of 10). That
+  rules out three-column grids; the maps are spines of three or four basins, two-column grids and the crossing.
+  Barges keep their berth in a basin from the tick they come in to the tick they leave, and slide in and out of it
+  (barges::Moorings; tested: where a tick ends, the next begins).
+  Kept: 3-1 The Narrows, 3-2 Convoy, 3-3 The Passing Place (Lean 1, the lessons), 3-4 Two Narrows, 3-5 Who Goes First
+  (one arrow matters), 3-11 The Harbourmaster. New, Lean 2: 3-6 The Mill Gate, 3-9 Every Other Barge (two passing
+  places, one answer), 3-13 The Shut Gate and 3-14 Signal Box (a mill in one narrow works the gate in the next: the
+  block signal does a piece's job), 3-7 Crosstown (two convoys on a two-column grid), 3-8 The Bay and 3-10 Single
+  File (a one-berth basin where only a passing place works, even with spare signals; 3-10 has one answer). 3-12 Old
+  Bridge (two two-way canals cross: the bridge plus a signal on each, both arrows fixed; Lean 3). **Finale 3-15 Rush
+  Hour** (a spine of five basins over two screens, eight barges, Lean 3). Challenges, all Lean 3 on four-basin spines:
+  3-C1 Four Basins (a passing place between two signals, one arrow fixed), 3-C2 Down the Line, 3-C3 Three Signals.
 
 ### World 4 · The Mixing Hall · The Sanctum
 - **Place:** the alchemists' sanctum, an obsidian table lit by candles.
@@ -650,6 +661,9 @@ Taken 1 November 2026 (v4, round 4), all as recommended:
 15. World 4: recipe phials and the candle; the mixer and twin seal stay.
 16. World 1 unchanged.
 17. Order: docs, mocks, World 4, World 2, World 3.
+18. (1 November, v4b) A bridge on a crossing carries each canal straight on: the crossing ends no stretch, so a
+    signal guards its canal over the bridge. World 3's levels were reworked so each needs two or three pieces
+    (but the first three lessons).
 
 ## 13. What moved from v2
 
