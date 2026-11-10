@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The app icon's background: the board's night blue. -->
+<!-- The app icon's background: the board's night blue, a little lighter round the junction. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#070B10" />
+    <gradient android:type="radial" android:gradientRadius="80%p" android:centerX="0.5" android:centerY="0.42"
+        android:startColor="#14202E" android:endColor="#070B10" />
 </shape>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed icons (Android 13+): the junction's shapes in one colour (the launcher tints it). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="9" android:strokeLineCap="round"
+        android:pathData="M22,26 C34,34 40,46 46,54" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="9" android:strokeLineCap="round"
+        android:pathData="M86,26 C74,34 68,46 62,54" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="6"
+        android:pathData="M54,44 a16,16 0 1 1 0,32 a16,16 0 1 1 0,-32 z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M49,55 a4,4 0 1 1 0,8 a4,4 0 1 1 0,-8 z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M59,57 a4,4 0 1 1 0,8 a4,4 0 1 1 0,-8 z" />
+</vector>
