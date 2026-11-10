@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- The feature graphic, 1024 x 500: the icon's junction, big, and the name. Play may crop the edges and
+     lay a play button over the middle on some pages, so the words sit left of centre and nothing is at the rim. -->
+<meta charset="utf-8">
+<link rel="stylesheet" href="page.css">
+<style>
+  body { width: 1024px; height: 500px; position: relative;
+    background: radial-gradient(70% 90% at 76% 46%, #1A2B3E 0%, #0D141C 55%, #070B10 100%); }
+  svg { position: absolute; right: -70px; top: -20px; overflow: visible; width: 540px; height: 540px; }
+  .words { position: absolute; left: 80px; top: 150px; }
+  h1 { margin: 0; font-weight: 400; font-size: 118px; line-height: 1; color: #fff; text-shadow: 0 6px 0 #0009; }
+  p { margin: 20px 0 0; font-size: 40px; color: #FFC24D; text-shadow: 0 4px 0 #0009; }
+</style>
+<svg viewBox="0 0 108 108">
+  <defs>
+    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2D08A"/><stop offset=".5" stop-color="#C9A15A"/><stop offset="1" stop-color="#7A5A2A"/></linearGradient>
+    <filter id="glow" filterUnits="userSpaceOnUse" x="-40" y="-40" width="188" height="200"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="soft" filterUnits="userSpaceOnUse" x="-40" y="-40" width="188" height="200"><feGaussianBlur stdDeviation="9"/></filter>
+  </defs>
+  <circle cx="54" cy="60" r="30" fill="#3DA1FF" opacity=".14" filter="url(#soft)"/>
+  <path d="M-10 4 C20 20 38 42 46 54" fill="none" stroke="#3DA1FF" stroke-width="7" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M118 4 C88 20 70 42 62 54" fill="none" stroke="#FFAB29" stroke-width="7" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M54 72 V120" stroke="#0A121A" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="54" cy="60" r="16" fill="#0A121A" stroke="url(#brass)" stroke-width="5"/>
+  <circle cx="49" cy="59" r="4" fill="#3DA1FF" filter="url(#glow)"/><circle cx="59" cy="61" r="4" fill="#FFAB29" filter="url(#glow)"/>
+</svg>
+<div class="words"><h1>Threadlock</h1><p>Place. Play. Watch it flow.</p></div>

@@ -237,14 +237,14 @@ Android (JAVA_HOME = a JDK 21 from `%USERPROFILE%\.jdks\jbr-21*`):
 ```
 cd android; .\gradlew.bat assembleDebug -q
 adb -s 9B221FFAZ002VK install -r app\build\outputs\apk\debug\app-debug.apk
-adb -s 9B221FFAZ002VK shell am start -n com.aboelbisher.threadlock/.ThreadlockActivity
+adb -s 9B221FFAZ002VK shell am start -n com.shmoffeestudios.threadlock/com.aboelbisher.threadlock.ThreadlockActivity
 adb -s 9B221FFAZ002VK logcat -s WLW
 ```
 Always `adb -s <serial>`: the owner's Pixel 4 (9B221FFAZ002VK, PIN-locked when idle: ask the owner to unlock
 it) has Bluzzle with saves (never uninstall it). Ask before using an emulator. Screenshots:
 `cmd /c "adb -s <serial> exec-out screencap -p > file.png"` (PowerShell's `>` corrupts PNGs). Wake the screen first
 (`adb shell input keyevent KEYCODE_WAKEUP`). Dev cvars to reach a state without tapping (quote the whole am command):
-`adb shell "am start -n com.aboelbisher.threadlock/.ThreadlockActivity --es wlw 'tl.open=1-4;tl.solve=1;tl.autoplay=1'"`
+`adb shell "am start -n com.shmoffeestudios.threadlock/com.aboelbisher.threadlock.ThreadlockActivity --es wlw 'tl.open=1-4;tl.solve=1;tl.autoplay=1'"`
 (open a level, place its Lean solution, tap play after 1 s). Also `tl.place=separator@gp/0,turnstile@ga/1,tank8@pk`
 (place these pieces), `tl.timescale=0.2` (the level screen runs five times slower: catch a moment in a
 screenshot), `tl.calm=1` (reduced motion), `tl.scroll=600` (a tall level opens scrolled this far, no intro pan)
@@ -253,6 +253,14 @@ nothing / everything but World 2's gate). The map's screen goes to sleep like an
 Ads: AdMob through the kit; **Google's sample app id and test units** until Threadlock has its own (manifest +
 MakeAdsConfig in threadlock_app.cpp). The debug build has the ImGui panel (Threadlock window: jump to any level,
 open everything, hints, wipe, ads).
+Release (Google Play): the app id is `com.shmoffeestudios.threadlock` (the Shmoffee Studios Play account, like Bluzzle;
+permanent once published; the code's namespace stays com.aboelbisher.threadlock). `.\gradlew.bat bundleRelease` = the AAB:
+R8, no debug UI, signed with the upload key from android/keystore.properties (not in git; the key is
+C:\Users\User\keys\threadlock-upload.jks), else the debug key. versionCode +1 for every upload. android/store/: listing.md
+(name, descriptions, contacts, release notes), make_store_art.ps1 (icon, feature graphic, captioned screenshots from
+raw release-build captures, via headless Edge and art/), play_upload.sh <shmoffee-play-publisher.json> <aab> [track]
+[--commit] (RELEASE_STATUS=draft until the app is first published). App icon = the junction (owner's pick, 10 Nov):
+res/drawable/ic_launcher_{foreground,background,monochrome}.xml, art/icon.svg for the store.
 
 ## How the owner works
 - Design first: concept + API + "how big engines do it", then wait for his go. Then build, verify (tests,

@@ -1,0 +1,4 @@
+/* Shared by the store art pages: the game's font and night colours. */
+@font-face { font-family: "Lilita One"; src: url("../../../assets/fonts/LilitaOne-Regular.ttf"); }
+html, body { margin: 0; overflow: hidden; background: #070B10; }
+body { font-family: "Lilita One", sans-serif; color: #fff; }
