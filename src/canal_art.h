@@ -55,8 +55,7 @@ class CanalArt : public BoardArt {
   // Along the canals' round bends.
   glm::vec2 PipePoint(const ArtFrame& frame, int pipe, float distance) const override;
   float SocketRadius(const Node& node) const override;
-  float BasinRadius(const Node& node) const;
-  Vec2 Berth(const ArtFrame& frame, const Drop& drop, Vec2 at) const;
+  float BasinRadius(const Node& node) const { return canal::BasinRadius(node.berths); }
   void DrawBays(wlw::ui::Canvas& picture, const ArtFrame& frame) const;
   void DrawSignalLamps(wlw::ui::Canvas& canvas, const ArtFrame& frame, int node) const;
   Rgba Accent() const override { return Hex(0x7FE3D8); }
@@ -131,6 +130,7 @@ class CanalArt : public BoardArt {
   std::vector<canal::Harbour> harbours_;  // per node (a cup's)
   std::vector<canal::Mill> mills_;        // per node (a mill's)
   std::vector<canal::Gate> gates_;        // per node (a gate's)
+  barges::Moorings moorings_;             // two-way: each barge's berth in its basin, its side in a passing place
   art::Glow glow_;
 };
 

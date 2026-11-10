@@ -509,11 +509,12 @@ void CanalArt::DrawDrops(Canvas& picture, const ArtFrame& frame) {
   // After murk, its barges sit dim with no wake; after a jam, the waiting ones' red tails pulse.
   const bool murk = Happened(frame, Marker::Mud), jam = Happened(frame, Marker::Jam);
   const float pulse = 0.55f + 0.45f * std::sin(7.0f * frame.time);
+  if (frame.level->two_way) moorings_.Update(*frame.level, ways_, *frame.board);
   if (frame.board->Started()) {
     for (const Drop& drop : frame.board->Drops()) {
       if (!drop.alive) continue;
-      barges::Pose pose = barges::PoseOf(*frame.level, ways_, drop, frame.alpha);
-      if (frame.level->two_way && drop.loc.kind == Loc::InNode) pose.at = Berth(frame, drop, pose.at);
+      const barges::Pose pose =
+          barges::PoseOf(*frame.level, ways_, drop, frame.alpha, frame.level->two_way ? &moorings_ : nullptr);
       BargeLook look{pose.fade, true};
       if (murk && drop.bead.IsMud()) look = {0.55f, false};
       if (jam && drop.waiting) look.tail_light = pulse;
@@ -884,7 +885,7 @@ void CanalArt::DrawJam(Canvas& canvas, const ArtFrame& frame, const Marker& mark
     int found = 0;
     for (const Drop& drop : frame.board->Drops()) {
       if (!drop.alive || (drop.id != jam.standoff_a && drop.id != jam.standoff_b)) continue;
-      const Vec2 p = barges::PoseOf(*frame.level, ways_, drop, 1.0f).at;
+      const Vec2 p = barges::PoseOf(*frame.level, ways_, drop, 1.0f, &moorings_).at;
       const glm::vec2 c = frame.layout.ToCanvas(p);
       if (found == 0) a = c;
       sum += c;
@@ -981,32 +982,6 @@ glm::vec2 CanalArt::PipePoint(const ArtFrame& frame, int pipe, float distance) c
   if (level_ != frame.level || static_cast<size_t>(pipe) >= ways_.size() || rules.length <= 0.0f)
     return BoardArt::PipePoint(frame, pipe, distance);
   return frame.layout.ToCanvas(ways_[static_cast<size_t>(pipe)].PointAt(distance));
-}
-
-float CanalArt::BasinRadius(const Node& node) const { return 14.0f + 5.0f * static_cast<float>(std::max(1, node.berths)); }
-
-// Where a barge waiting in a basin, a passing place or a crossing sits: side by side round the middle, in the order
-// they came in.
-Vec2 CanalArt::Berth(const ArtFrame& frame, const Drop& drop, Vec2 at) const {
-  const int node = drop.loc.index;
-  const Node& n = frame.level->nodes[static_cast<size_t>(node)];
-  int k = 0, count = 0;
-  for (const Drop& other : frame.board->Drops()) {
-    if (!other.alive || other.loc.kind != Loc::InNode || other.loc.index != node) continue;
-    if (other.entered < drop.entered || (other.entered == drop.entered && other.id < drop.id)) ++k;
-    ++count;
-  }
-  if (count < 2 && n.kind != NodeKind::Basin) return at;
-  const Vec2 c = n.at;
-  if (n.kind == NodeKind::Basin) {
-    const int berths = std::max(1, n.berths);
-    if (berths == 1) return c;
-    const float a = -1.5708f + 6.2832f * (static_cast<float>(k) + 0.5f) / static_cast<float>(berths);
-    const float r = BasinRadius(n) * 0.55f;
-    return {c.x + std::cos(a) * r, c.y + std::sin(a) * r};
-  }
-  const float side = k == 0 ? -7.0f : 7.0f;  // a passing place or a bridged crossing: two abreast
-  return {at.x + side, at.y};
 }
 
 // A passing place widens its canal into a bay (under the barges).

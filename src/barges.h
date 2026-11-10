@@ -18,8 +18,35 @@ struct Pose {
   bool moving = false;  // it changed place this tick (a wake trails it)
 };
 
-// Where `drop` is, `alpha` (0..1) of the way from its last tick to the next. `ways` = canal::Ways(level).
-Pose PoseOf(const Level& level, const std::vector<canal::Way>& ways, const Drop& drop, float alpha);
+// Where barges sit inside two-way canals' places. A basin gives each barge a berth of its own when it comes in and
+// keeps it there until it leaves (the others never shuffle round); a passing place puts each barge on its own side of
+// the canal, by the way it came. Update it after every tick (calling it each frame is cheap: it acts on a new tick);
+// a drop keeps its spot for the tick it leaves, so it slides out of its berth, not out of the basin's middle.
+class Moorings {
+ public:
+  void Update(const Level& level, const std::vector<canal::Way>& ways, const Board& board);
+  bool Has(int drop_id, int node) const;
+  Vec2 At(int drop_id) const;  // its spot (call Has first)
+  void Clear();
+
+ private:
+  struct Spot {
+    int node = -1;
+    int berth = -1;  // a basin's berth (-1: a passing place's side)
+    Vec2 at;
+  };
+  std::vector<std::pair<int, Spot>> spots_;  // per drop id (a few at a time: a flat list)
+  int tick_ = -1;
+  const Spot* Find(int drop_id) const;
+};
+
+// The berth `k` of a basin with `berths` berths, round its middle.
+Vec2 BerthPoint(const Node& basin, int k);
+
+// Where `drop` is, `alpha` (0..1) of the way from its last tick to the next. `ways` = canal::Ways(level). On a two-way
+// map, pass its moorings: barges then slide into their berths and out of them.
+Pose PoseOf(const Level& level, const std::vector<canal::Way>& ways, const Drop& drop, float alpha,
+            const Moorings* moorings = nullptr);
 
 // A barge that landed in a harbour: its colours and the tick it landed on.
 struct Landing {

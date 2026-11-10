@@ -146,6 +146,54 @@ TEST_SUITE("barges") {
     }
   }
 
+  TEST_CASE("barges never jump: where a tick ends, the next begins; a basin's barges keep their own berths") {
+    const std::vector<World> worlds = LoadWorlds();
+    int levels = 0, checked = 0;
+    for (const World& world : worlds) {
+      for (const Level& level : world.levels) {
+        if (!level.two_way) continue;
+        ++levels;
+        const std::vector<canal::Way> ways = canal::Ways(level);
+        for (const bool solved : {true, false}) {  // its answer, and the empty board (it gridlocks)
+          INFO("level " << level.id << (solved ? " (lean)" : " (empty)"));
+          Board board(level);
+          if (solved) board.SetPlacement(level.pars.lean);
+          board.Start();
+          barges::Moorings moorings;
+          std::vector<std::pair<int, Vec2>> last;  // per drop id: where it was at the end of the last tick
+          while (board.Running()) {
+            board.Tick();
+            moorings.Update(level, ways, board);
+            std::vector<std::pair<int, Vec2>> now;
+            for (const Drop& drop : board.Drops()) {
+              if (!drop.alive) continue;
+              const Vec2 start = barges::PoseOf(level, ways, drop, 0.0f, &moorings).at;
+              for (const auto& [id, at] : last) {
+                if (id != drop.id) continue;
+                INFO("drop " << drop.id << " at tick " << board.Ticks());
+                CHECK(std::hypot(start.x - at.x, start.y - at.y) < 0.01f);
+                ++checked;
+              }
+              now.push_back({drop.id, barges::PoseOf(level, ways, drop, 1.0f, &moorings).at});
+            }
+            // Two barges in one basin sit apart.
+            for (const Drop& a : board.Drops()) {
+              for (const Drop& b : board.Drops()) {
+                if (!a.alive || !b.alive || a.id >= b.id || a.loc.kind != Loc::InNode || !(a.loc == b.loc)) continue;
+                if (level.nodes[static_cast<size_t>(a.loc.index)].kind != NodeKind::Basin) continue;
+                const Vec2 p = moorings.At(a.id), q = moorings.At(b.id);
+                CHECK(std::hypot(p.x - q.x, p.y - q.y) > 5.0f);
+              }
+            }
+            last = std::move(now);
+          }
+        }
+      }
+    }
+    CHECK(levels == 18);
+    CHECK(checked > 1000);
+  }
+
   TEST_CASE("a gate's leaves swing over 0.6 tick once its flip lands, from the old state to the new") {
     CHECK(barges::GateOpenness(true, -1.0f) == doctest::Approx(0.0f));   // before the flip: the old (shut) state
     CHECK(barges::GateOpenness(false, -1.0f) == doctest::Approx(1.0f));  // the old state was open
