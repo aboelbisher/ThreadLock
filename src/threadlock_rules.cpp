@@ -1003,7 +1003,8 @@ bool Board::Admits(int node, int lane) const {
         return mixer_slot_[Index(node)][Index(lane)] < 0;
       }
       return !Is(node, PieceType::TwinGate);  // a twin gate lets in pairs only (Tick)
-    case NodeKind::Spout: return false;
+    case NodeKind::Spout:
+    case NodeKind::Basin: return false;  // basins are two-way only (TwoWayAdmits)
   }
   return false;
 }
