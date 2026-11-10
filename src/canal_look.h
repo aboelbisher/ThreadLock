@@ -85,6 +85,12 @@ struct Lock {
 };
 Lock LockAt(const Level& level, int spout);
 
+// A two-way basin (where canals meet): a round pool, wider the more berths it has.
+inline constexpr float BasinRadius(int berths) { return 14.0f + 5.0f * static_cast<float>(berths < 1 ? 1 : berths); }
+// Room for the pieces on a two-way map: a placed piece's medallion reaches this far from its socket, and needs this
+// much water between it and anything else drawn (Problems: "socket ... is crowded").
+inline constexpr float kPieceRoom = 22.0f, kRoomGap = 10.0f;
+
 // A harbour (a cup): a basin from 12 before the node to 60 past it (18 more per extra row of six berths),
 // 46 to each side, and its district's name in a pill under it.
 inline constexpr float kBasinHalf = 46.0f, kBasinBack = 12.0f, kBasinDeep = 60.0f, kBerthRow = 18.0f;

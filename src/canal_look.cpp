@@ -531,6 +531,47 @@ std::vector<std::string> Problems(const Level& level) {
     if (node.kind == NodeKind::Mill) sits(MillAt(level, i).house, i, "the mill " + node.id + "'s house", true);
   }
 
+  // Two-way maps: room for the pieces. A placed piece is a medallion over its socket; it must sit clear of the
+  // basins, the other sockets, mills and gates, and the locks and harbours, with water showing between them.
+  if (level.two_way) {
+    auto body = [&](const Node& n) {  // how far a node's own drawing reaches from its middle
+      switch (n.kind) {
+        case NodeKind::Basin: return BasinRadius(n.berths);
+        case NodeKind::Pass:
+        case NodeKind::Cross: return kPieceRoom;
+        case NodeKind::Mill:
+        case NodeKind::Gate: return 15.0f;
+        default: return 0.0f;
+      }
+    };
+    auto box_distance = [](Vec2 p, const Box& b) {
+      const float dx = std::max({b.min.x - p.x, 0.0f, p.x - b.max.x});
+      const float dy = std::max({b.min.y - p.y, 0.0f, p.y - b.max.y});
+      return std::sqrt(dx * dx + dy * dy);
+    };
+    for (size_t s = 0; s < level.nodes.size(); ++s) {
+      const Node& socket = level.nodes[s];
+      if (socket.kind != NodeKind::Pass && !(socket.kind == NodeKind::Cross && socket.socket)) continue;
+      for (size_t n = 0; n < level.nodes.size(); ++n) {
+        const Node& other = level.nodes[n];
+        if (n == s || (other.kind == NodeKind::Pass && n < s)) continue;  // each pair of sockets once
+        float gap = 0.0f;
+        if (other.kind == NodeKind::Spout) {
+          gap = box_distance(socket.at, LockAt(level, static_cast<int>(n)).chamber) - kPieceRoom;
+        } else if (other.kind == NodeKind::Cup) {
+          const Harbour harbour = HarbourAt(level, static_cast<int>(n));
+          gap = std::min(box_distance(socket.at, harbour.basin), box_distance(socket.at, harbour.pill)) - kPieceRoom;
+        } else {
+          gap = Distance(socket.at, other.at) - kPieceRoom - body(other);
+        }
+        if (gap < kRoomGap)
+          problems.push_back("socket " + socket.id + " is crowded by " + other.id + " (" +
+                             std::to_string(static_cast<int>(std::floor(gap))) + " apart, needs " +
+                             std::to_string(static_cast<int>(kRoomGap)) + ")");
+      }
+    }
+  }
+
   // The rods: along the streets (straight across or up and down), on the board, never along a canal.
   for (size_t m = 0; m < level.nodes.size(); ++m) {
     const Node& mill = level.nodes[m];
