@@ -571,6 +571,8 @@ class Board {
   bool EntryAllowed(const Drop& drop, int pipe, int node) const;  // a signal lets it onto that pipe from `node`
   void EnterStretch(Drop& drop, int pipe, int node);
   int EndFrom(int node, int pipe) const;  // along `pipe` from `node` (through sockets, mills, gates) to a stretch end
+  bool IsStretchEnd(int node) const;      // not a socket, mill or gate, nor a crossing with a bridge on it
+  int Onward(int node, int pipe) const;   // the pipe on from `node` (not an end) after coming by `pipe`, -1 = none
   JamReport JamTwoWay() const;
   std::vector<int> last_exit_tick_;
   std::vector<Bead> last_exit_bead_;

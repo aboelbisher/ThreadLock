@@ -38,6 +38,35 @@ std::string Narrows(const std::string& tray, int berths = 4) {
 
 const char* kTray = R"("signal", "passing")";
 
+// Old Bridge: an east-west canal and a north-south one cross at x, barges both ways on both. Without a bridge the
+// crossing is one place for both canals; with one, each canal runs straight on over it and its signal guards it end to
+// end.
+const std::string kOldBridge = R"({
+  "id": "t-bridge", "name": "Old Bridge", "traffic": "two-way",
+  "nodes": [
+    {"id": "kw", "kind": "basin", "at": [60, 300], "berths": 3},
+    {"id": "ke", "kind": "basin", "at": [300, 300], "berths": 4},
+    {"id": "kn", "kind": "basin", "at": [180, 130], "berths": 3},
+    {"id": "ks", "kind": "basin", "at": [180, 470], "berths": 1},
+    {"id": "x", "kind": "cross", "at": [180, 300], "socket": true},
+    {"id": "pw", "kind": "pass", "at": [120, 300]},
+    {"id": "pe", "kind": "pass", "at": [240, 300]},
+    {"id": "pn", "kind": "pass", "at": [180, 215]},
+    {"id": "ps", "kind": "pass", "at": [180, 385]},
+    {"id": "ww", "kind": "spout", "at": [60, 225], "beads": "B*3", "beat": 2, "start": 6},
+    {"id": "he", "kind": "cup", "at": [300, 210], "want": "B", "count": 3},
+    {"id": "we", "kind": "spout", "at": [300, 390], "beads": "A*3", "beat": 3, "start": 4},
+    {"id": "hw", "kind": "cup", "at": [60, 390], "want": "A", "count": 3},
+    {"id": "wn", "kind": "spout", "at": [180, 45], "beads": "G", "beat": 5, "start": 4},
+    {"id": "hs", "kind": "cup", "at": [270, 470], "want": "G", "count": 1},
+    {"id": "ws", "kind": "spout", "at": [180, 560], "beads": "R*3", "beat": 5, "start": 3},
+    {"id": "hn", "kind": "cup", "at": [90, 130], "want": "R", "count": 3}
+  ],
+  "pipes": [["kw", "pw"], ["pw", "x"], ["x", "pe"], ["pe", "ke"], ["kn", "pn"], ["pn", "x"], ["x", "ps"], ["ps", "ks"],
+            ["ww", "kw"], ["ke", "he"], ["we", "ke"], ["kw", "hw"], ["wn", "kn"], ["ks", "hs"], ["ws", "ks"], ["kn", "hn"]],
+  "tray": ["bridge", "signal", "signal", "passing"]
+})";
+
 }  // namespace
 
 TEST_SUITE("canal traffic") {
@@ -151,5 +180,53 @@ TEST_SUITE("canal traffic") {
     const SolveReport report = Solve(MakeLevel(Narrows(kTray)));
     CHECK(report.pars.pieces == 1);
     CHECK(report.solutions >= 1);
+  }
+
+  TEST_CASE("a bridge carries each canal straight on: one stretch from basin to basin, guarded by one signal") {
+    const Level level = MakeLevel(kOldBridge);
+    const int x = NodeOf(level, "x"), kw = NodeOf(level, "kw"), ke = NodeOf(level, "ke");
+    const int west = level.nodes[static_cast<size_t>(NodeOf(level, "pw"))].ins[0];
+    const int east = level.nodes[static_cast<size_t>(NodeOf(level, "pe"))].outs[0];
+    auto ends_are = [](std::array<int, 2> ends, int a, int b) {
+      return (ends[0] == a && ends[1] == b) || (ends[0] == b && ends[1] == a);
+    };
+    {  // no bridge: the crossing ends the stretches on both sides
+      Board board(level);
+      board.Start();
+      CHECK(ends_are(board.StretchEnds(board.StretchOf(west)), kw, x));
+      CHECK(board.StretchOf(west) != board.StretchOf(east));
+    }
+    Board board(level);
+    REQUIRE(board.Place(PieceOf(board, PieceType::Bridge), x));
+    board.Start();
+    CHECK(board.StretchOf(west) == board.StretchOf(east));
+    CHECK(ends_are(board.StretchEnds(board.StretchOf(west)), kw, ke));
+    // The other lane is a stretch of its own, north basin to south basin.
+    const int north = level.nodes[static_cast<size_t>(NodeOf(level, "pn"))].ins[0];
+    CHECK(board.StretchOf(north) != board.StretchOf(west));
+    CHECK(ends_are(board.StretchEnds(board.StretchOf(north)), NodeOf(level, "kn"), NodeOf(level, "ks")));
+  }
+
+  TEST_CASE("Old Bridge: the bridge and a signal on each canal, the arrows right; without the bridge, gridlock") {
+    const Level level = MakeLevel(kOldBridge);
+    auto play = [&](bool bridge, int west_arrow, int north_arrow) {
+      Board board(level);
+      if (bridge) REQUIRE(board.Place(PieceOf(board, PieceType::Bridge), NodeOf(level, "x")));
+      const int a = PieceOf(board, PieceType::Signal, 0), b = PieceOf(board, PieceType::Signal, 1);
+      REQUIRE(board.Place(a, NodeOf(level, "pw")));
+      REQUIRE(board.Place(b, NodeOf(level, "pn")));
+      board.SetSetting(a, west_arrow);
+      board.SetSetting(b, north_arrow);
+      return RunBoard(board).outcome;
+    };
+    CHECK(play(true, 0, 1).solved);
+    const Outcome no_bridge = play(false, 0, 1);
+    CHECK(no_bridge.jammed);
+    CHECK(no_bridge.fail_node == NodeOf(level, "x"));
+    CHECK(!play(true, 1, 1).solved);  // amber first: the blues fill the west basin
+    CHECK(!play(true, 0, 0).solved);  // green first: the roses fill the one-berth south basin
+    const SolveReport report = Solve(level);
+    CHECK(report.pars.pieces == 3);
+    CHECK(PlacementText(level, report.pars.lean).find("bridge@x") != std::string::npos);
   }
 }

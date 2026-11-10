@@ -1665,12 +1665,35 @@ JamReport Board::Jam() const {
 // pipe index), moves a cell when the cell ahead is free, and enters a node when the node has room. Two barges facing one
 // free cell from both sides both stop (a standoff). Basins hold berths and let any barge whose way is clear leave; a
 // crossing holds one (a bridge: one per lane); a canal socket one (a passing place: one from each side). A signal lets
-// barges onto its stretch only while none on it heads the other way. Nothing mixes. Integers only.
+// barges onto its stretch only while none on it heads the other way. A bridge on a crossing carries each canal straight
+// on: the crossing ends no stretch, so a signal guards its canal over the bridge. Nothing mixes. Integers only.
 
 namespace {
 bool StretchEnd(NodeKind kind) { return kind != NodeKind::Pass && kind != NodeKind::Mill && kind != NodeKind::Gate; }
 int Other(const Pipe& pipe, int node) { return pipe.from == node ? pipe.to : pipe.from; }
 }  // namespace
+
+bool Board::IsStretchEnd(int node) const {
+  const NodeKind kind = level_->nodes[Index(node)].kind;
+  return StretchEnd(kind) && !(kind == NodeKind::Cross && Is(node, PieceType::Bridge));
+}
+
+int Board::Onward(int node, int pipe) const {
+  const Node& n = level_->nodes[Index(node)];
+  if (n.kind == NodeKind::Cross) {  // a bridged crossing: along the lane
+    for (size_t k = 0; k < n.ins.size() && k < n.outs.size(); ++k) {
+      if (n.ins[k] == pipe) return n.outs[k];
+      if (n.outs[k] == pipe) return n.ins[k];
+    }
+    return -1;
+  }
+  int on = -1;
+  for (size_t q = 0; q < level_->pipes.size(); ++q) {
+    const Pipe& p = level_->pipes[q];
+    if (static_cast<int>(q) != pipe && (p.from == node || p.to == node)) on = static_cast<int>(q);
+  }
+  return on;
+}
 
 void Board::PrepareTwoWay() {
   const Level& level = *level_;
@@ -1681,11 +1704,11 @@ void Board::PrepareTwoWay() {
     at[Index(level.pipes[p].from)].push_back(static_cast<int>(p));
     at[Index(level.pipes[p].to)].push_back(static_cast<int>(p));
   }
-  // Stretches: from each end node along each of its pipes, through sockets, mills and gates, to the next end.
+  // Stretches: from each end node along each of its pipes, through sockets, mills, gates and bridges, to the next end.
   stretches_.clear();
   stretch_of_.assign(pipe_count, -1);
   for (size_t v = 0; v < level.nodes.size(); ++v) {
-    if (!StretchEnd(level.nodes[v].kind)) continue;
+    if (!IsStretchEnd(static_cast<int>(v))) continue;
     for (int first : at[v]) {
       if (stretch_of_[Index(first)] >= 0) continue;
       Stretch stretch;
@@ -1695,14 +1718,18 @@ void Board::PrepareTwoWay() {
         stretch.pipes.push_back(pipe);
         stretch_of_[Index(pipe)] = static_cast<int>(stretches_.size());
         const int next = Other(level.pipes[Index(pipe)], node);
-        if (StretchEnd(level.nodes[Index(next)].kind)) {
+        if (IsStretchEnd(next)) {
           stretch.ends[1] = next;
           break;
         }
         stretch.nodes.push_back(next);
         int on = -1;
-        for (int q : at[Index(next)]) {
-          if (q != pipe) on = q;
+        if (level.nodes[Index(next)].kind == NodeKind::Cross) {
+          on = Onward(next, pipe);
+        } else {
+          for (int q : at[Index(next)]) {
+            if (q != pipe) on = q;
+          }
         }
         if (on < 0 || stretch_of_[Index(on)] >= 0) {
           stretch.ends[1] = next;
@@ -1771,12 +1798,8 @@ void Board::PrepareTwoWay() {
 int Board::EndFrom(int node, int pipe) const {
   for (size_t guard = 0; guard <= level_->pipes.size(); ++guard) {
     const int next = Other(level_->pipes[Index(pipe)], node);
-    if (StretchEnd(level_->nodes[Index(next)].kind)) return next;
-    int on = -1;
-    for (size_t q = 0; q < level_->pipes.size(); ++q) {
-      const Pipe& p = level_->pipes[q];
-      if (static_cast<int>(q) != pipe && (p.from == next || p.to == next)) on = static_cast<int>(q);
-    }
+    if (IsStretchEnd(next)) return next;
+    const int on = Onward(next, pipe);
     if (on < 0) return next;
     node = next;
     pipe = on;
