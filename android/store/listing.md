@@ -8,7 +8,7 @@ name, both descriptions, the release notes and the graphics from this file and t
 Threadlock: Flow Logic Puzzle
 
 ## Short description (max 80)
-Place the pieces, tap play, watch the glowing liquid flow. Don't let colours mix!
+Place pieces, tap play, watch the glowing liquid flow. Don't let colours mix!
 
 ## Full description (max 4000)
 Threadlock is a puzzle about timing. Glowing liquid runs through a machine of pipes and junctions. You place the pieces, tap PLAY and watch it flow. The one rule: two colours must never meet in the same junction at the same moment, or they turn to mud.
