@@ -37,11 +37,10 @@
             </intent-filter>
         </activity>
 
-        <!-- The AdMob app id. This is GOOGLE'S SAMPLE APP ID (test ads only): replace it with
-             Threadlock's own from the AdMob console before a release, together with the real ad
-             units in threadlock_app.cpp (MakeAdsConfig). -->
+        <!-- The AdMob app id: Threadlock's own (AdMob, Shmoffee Studios). Debug builds still request
+             Google's test units (MakeAdsConfig in threadlock_app.cpp). -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="ca-app-pub-5760907653634756~3696787480" />
     </application>
 </manifest>

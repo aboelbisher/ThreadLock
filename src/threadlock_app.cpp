@@ -27,12 +27,17 @@ namespace {
 wlw::CVar<std::string> cv_open{"tl.open", "", "Open this level at startup (dev)"};
 wlw::CVar<bool> cv_calm{"tl.calm", false, "Reduced motion, whatever the setting (dev)"};
 
-// Ads: Google's test units in every build until Threadlock has its own AdMob app (DESIGN.md §10;
-// the app id in AndroidManifest.xml is Google's sample one too). Real units go here, release only,
-// exactly as Bluzzle does.
+// Ads: Threadlock's own AdMob units in release builds; debug builds keep Google's test units (the
+// kit's defaults). The app id is in AndroidManifest.xml.
 wlw::kit::AdsConfig MakeAdsConfig() {
   wlw::kit::AdsConfig config;
-  config.test_devices = {};
+#ifdef NDEBUG
+  config.rewarded_unit = "ca-app-pub-5760907653634756/2439721143";      // "Hint" (hints, solutions)
+  config.interstitial_unit = "ca-app-pub-5760907653634756/6706269218";  // "Between levels"
+#endif
+  // The owner's own phones: test ads even in release builds (ids from logcat, see AdsConfig).
+  config.test_devices = {"E9034850D68AC5A17692A2DA9862F1A0"};  // Pixel 4 (under the upload key)
+  // true: test devices see the EU consent form, wherever they are (to check the GDPR message).
   config.debug_consent_eea = false;
   return config;
 }

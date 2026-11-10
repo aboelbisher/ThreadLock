@@ -250,8 +250,9 @@ it) has Bluzzle with saves (never uninstall it). Ask before using an emulator. S
 screenshot), `tl.calm=1` (reduced motion), `tl.scroll=600` (a tall level opens scrolled this far, no intro pan)
 and `tl.map=seen:1-3` / `seen:none` / `gate:2` (the map replays its news as if it last saw every level up to 1-3, in map order, any world /
 nothing / everything but World 2's gate). The map's screen goes to sleep like any app: wake the phone before each screenshot.
-Ads: AdMob through the kit; **Google's sample app id and test units** until Threadlock has its own (manifest +
-MakeAdsConfig in threadlock_app.cpp). The debug build has the ImGui panel (Threadlock window: jump to any level,
+Ads: AdMob through the kit; Threadlock's own AdMob app (id in the manifest) with units "Hint" (rewarded) and "Between
+levels" (interstitial) in release builds only (MakeAdsConfig in threadlock_app.cpp; debug builds = Google's test units).
+The Pixel 4 is a test device (its id under the upload key; a debug-signed build has another). The debug build has the ImGui panel (Threadlock window: jump to any level,
 open everything, hints, wipe, ads).
 Release (Google Play): the app id is `com.shmoffeestudios.threadlock` (the Shmoffee Studios Play account, like Bluzzle;
 permanent once published; the code's namespace stays com.aboelbisher.threadlock). `.\gradlew.bat bundleRelease` = the AAB:
