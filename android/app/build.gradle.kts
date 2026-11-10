@@ -2,6 +2,8 @@
 // once per CPU architecture and packs libthreadlock.so into the APK together with ../../assets.
 // The only Kotlin is the native bridge (engine + kit) and ThreadlockActivity, which lists the SDK
 // services the game uses (ads); all game code is C++.
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -14,11 +16,11 @@ android {
     ndkVersion = "30.0.16248370"           // the NDK installed in Android Studio's SDK Manager
 
     defaultConfig {
-        applicationId = "com.aboelbisher.threadlock"
+        applicationId = "com.shmoffeestudios.threadlock"  // permanent once on Play (the Shmoffee Studios account, like Bluzzle)
         minSdk = 24                         // Android 7.0+
         targetSdk = 36
-        versionCode = 2                     // +1 for every upload to Play (it must always grow)
-        versionName = "0.2"
+        versionCode = 1                     // +1 for every upload to Play (it must always grow)
+        versionName = "1.0"               // what players see
 
         ndk {
             // arm64-v8a: real phones. x86_64: the emulator on a Windows/Intel/AMD PC.
@@ -53,11 +55,35 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // Release signing: the upload key's details live in android/keystore.properties, which is NOT
+    // in git (see .gitignore), next to the keystore file itself:
+    //   storeFile=C:/Users/<you>/keys/threadlock-upload.jks
+    //   storePassword=...
+    //   keyAlias=upload
+    //   keyPassword=...
+    // Without that file, release builds are signed with the debug key: fine for testing on a
+    // phone, refused by Google Play.
+    val keystoreFile = rootProject.file("keystore.properties")
+    signingConfigs {
+        if (keystoreFile.exists()) {
+            val keystore = Properties().apply { keystoreFile.inputStream().use { load(it) } }
+            create("upload") {
+                storeFile = file(keystore.getProperty("storeFile"))
+                storePassword = keystore.getProperty("storePassword")
+                keyAlias = keystore.getProperty("keyAlias")
+                keyPassword = keystore.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // R8 shrinks and obfuscates the Kotlin/Java side (ours is tiny; the SDKs are not).
+            // Classes that native code calls by name are kept in proguard-rules.pro.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("upload") ?: signingConfigs.getByName("debug")
         }
     }
 }
